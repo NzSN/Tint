@@ -170,7 +170,6 @@ SanitizedResult Sanitize(const Program* in,
     manager.Add<transform::PreservePadding>();  // Must come before DirectVariableAccess
 
     manager.Add<transform::Unshadow>();  // Must come before DirectVariableAccess
-    manager.Add<transform::DirectVariableAccess>();
 
     manager.Add<transform::PromoteSideEffectsToDecl>();
 
@@ -203,8 +202,10 @@ SanitizedResult Sanitize(const Program* in,
         polyfills.texture_sample_base_clamp_to_edge_2d_f32 = true;
         polyfills.workgroup_uniform_load = true;
         data.Add<transform::BuiltinPolyfill::Config>(polyfills);
-        manager.Add<transform::BuiltinPolyfill>();
+        manager.Add<transform::BuiltinPolyfill>();  // Must come before DirectVariableAccess
     }
+
+    manager.Add<transform::DirectVariableAccess>();
 
     if (!options.disable_workgroup_init) {
         // ZeroInitWorkgroupMemory must come before CanonicalizeEntryPointIO as
@@ -2147,9 +2148,8 @@ void GeneratorImpl::EmitConstant(utils::StringStream& out, const constant::Value
             }
         },
         [&](Default) {
-            diagnostics_.add_error(
-                diag::System::Writer,
-                "unhandled constant type: " + builder_.FriendlyName(constant->Type()));
+            diagnostics_.add_error(diag::System::Writer,
+                                   "unhandled constant type: " + constant->Type()->FriendlyName());
         });
 }
 

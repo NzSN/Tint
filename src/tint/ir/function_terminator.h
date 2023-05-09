@@ -1,4 +1,4 @@
-// Copyright 2023 The Tint Authors.
+// Copyright 2022 The Tint Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,31 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/converter.h"
+#ifndef SRC_TINT_IR_FUNCTION_TERMINATOR_H_
+#define SRC_TINT_IR_FUNCTION_TERMINATOR_H_
 
-#include "src/tint/ir/builder_impl.h"
-#include "src/tint/program.h"
+#include "src/tint/ir/flow_node.h"
 
 namespace tint::ir {
 
-// static
-Converter::Result Converter::FromProgram(const Program* program) {
-    if (!program->IsValid()) {
-        return Result{std::string("input program is not valid")};
-    }
-
-    BuilderImpl b(program);
-    auto r = b.Build();
-    if (!r) {
-        return b.Diagnostics().str();
-    }
-
-    return Result{r.Move()};
-}
-
-// static
-const Program* Converter::ToProgram() {
-    return nullptr;
-}
+/// Flow node used as the end of a function. Must only be used as the `end_target` in a function
+/// flow node. There are no instructions and no branches from this node.
+class FunctionTerminator : public utils::Castable<FunctionTerminator, FlowNode> {
+  public:
+    /// Constructor
+    FunctionTerminator();
+    ~FunctionTerminator() override;
+};
 
 }  // namespace tint::ir
+
+#endif  // SRC_TINT_IR_FUNCTION_TERMINATOR_H_

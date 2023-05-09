@@ -955,6 +955,8 @@ libtint_source_set("libtint_spv_writer_src") {
     "writer/spirv/generator_impl.h",
     "writer/spirv/instruction.cc",
     "writer/spirv/instruction.h",
+    "writer/spirv/module.cc",
+    "writer/spirv/module.h",
     "writer/spirv/operand.cc",
     "writer/spirv/operand.h",
     "writer/spirv/scalar_constant.h",
@@ -972,6 +974,17 @@ libtint_source_set("libtint_spv_writer_src") {
     ":libtint_utils_src",
     ":libtint_writer_src",
   ]
+
+  if (tint_build_ir) {
+    sources += [
+      "writer/spirv/generator_impl_ir.cc",
+      "writer/spirv/generator_impl_ir.h",
+    ]
+    deps += [
+      ":libtint_ir_builder_src",
+      ":libtint_ir_src",
+    ]
+  }
 }
 
 libtint_source_set("libtint_wgsl_reader_src") {
@@ -1109,8 +1122,8 @@ libtint_source_set("libtint_ir_builder_src") {
   sources = [
     "ir/builder_impl.cc",
     "ir/builder_impl.h",
-    "ir/converter.cc",
-    "ir/converter.h",
+    "ir/from_program.cc",
+    "ir/from_program.h",
   ]
   deps = [
     ":libtint_ast_src",
@@ -1118,6 +1131,7 @@ libtint_source_set("libtint_ir_builder_src") {
     ":libtint_ir_src",
     ":libtint_program_src",
     ":libtint_sem_src",
+    ":libtint_symbols_src",
     ":libtint_type_src",
     ":libtint_utils_src",
   ]
@@ -1153,6 +1167,8 @@ libtint_source_set("libtint_ir_src") {
     "ir/flow_node.h",
     "ir/function.cc",
     "ir/function.h",
+    "ir/function_terminator.cc",
+    "ir/function_terminator.h",
     "ir/if.cc",
     "ir/if.h",
     "ir/instruction.cc",
@@ -1161,12 +1177,12 @@ libtint_source_set("libtint_ir_src") {
     "ir/loop.h",
     "ir/module.cc",
     "ir/module.h",
+    "ir/root_terminator.cc",
+    "ir/root_terminator.h",
     "ir/store.cc",
     "ir/store.h",
     "ir/switch.cc",
     "ir/switch.h",
-    "ir/terminator.cc",
-    "ir/terminator.h",
     "ir/unary.cc",
     "ir/unary.h",
     "ir/user_call.cc",
@@ -1825,6 +1841,7 @@ if (tint_build_unittests) {
       "writer/spirv/builder_type_test.cc",
       "writer/spirv/builder_unary_op_expression_test.cc",
       "writer/spirv/instruction_test.cc",
+      "writer/spirv/module_test.cc",
       "writer/spirv/operand_test.cc",
       "writer/spirv/scalar_constant_test.cc",
       "writer/spirv/spv_dump.cc",
@@ -1839,6 +1856,15 @@ if (tint_build_unittests) {
       ":tint_unittests_ast_src",
       "${tint_spirv_tools_dir}/:spvtools",
     ]
+
+    if (tint_build_ir) {
+      sources += [
+        "writer/spirv/generator_impl_function_test.cc",
+        "writer/spirv/generator_impl_ir_test.cc",
+        "writer/spirv/generator_impl_type_test.cc",
+      ]
+      deps += [ ":libtint_ir_src" ]
+    }
   }
 
   tint_unittests_source_set("tint_unittests_wgsl_reader_src") {
@@ -2120,7 +2146,14 @@ if (tint_build_unittests) {
     sources = [
       "ir/binary_test.cc",
       "ir/bitcast_test.cc",
+      "ir/builder_impl_binary_test.cc",
+      "ir/builder_impl_call_test.cc",
+      "ir/builder_impl_literal_test.cc",
+      "ir/builder_impl_materialize_test.cc",
+      "ir/builder_impl_store_test.cc",
       "ir/builder_impl_test.cc",
+      "ir/builder_impl_unary_test.cc",
+      "ir/builder_impl_var_test.cc",
       "ir/constant_test.cc",
       "ir/discard_test.cc",
       "ir/store_test.cc",
