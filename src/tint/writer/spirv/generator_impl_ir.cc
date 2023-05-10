@@ -15,6 +15,9 @@
 #include "src/tint/writer/spirv/generator_impl_ir.h"
 
 #include "spirv/unified1/spirv.h"
+#include "src/tint/ir/binary.h"
+#include "src/tint/ir/block.h"
+#include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/module.h"
 #include "src/tint/switch.h"
 #include "src/tint/type/bool.h"
@@ -55,6 +58,40 @@ bool GeneratorImplIr::Generate() {
     return true;
 }
 
+uint32_t GeneratorImplIr::Constant(const ir::Constant* constant) {
+    return constants_.GetOrCreate(constant, [&]() {
+        auto id = module_.NextId();
+        auto* ty = constant->Type();
+        auto* value = constant->value;
+        Switch(
+            ty,  //
+            [&](const type::Bool*) {
+                module_.PushType(
+                    value->ValueAs<bool>() ? spv::Op::OpConstantTrue : spv::Op::OpConstantFalse,
+                    {Type(ty), id});
+            },
+            [&](const type::I32*) {
+                module_.PushType(spv::Op::OpConstant, {Type(ty), id, value->ValueAs<u32>()});
+            },
+            [&](const type::U32*) {
+                module_.PushType(spv::Op::OpConstant,
+                                 {Type(ty), id, U32Operand(value->ValueAs<i32>())});
+            },
+            [&](const type::F32*) {
+                module_.PushType(spv::Op::OpConstant, {Type(ty), id, value->ValueAs<f32>()});
+            },
+            [&](const type::F16*) {
+                module_.PushType(
+                    spv::Op::OpConstant,
+                    {Type(ty), id, U32Operand(value->ValueAs<f16>().BitsRepresentation())});
+            },
+            [&](Default) {
+                TINT_ICE(Writer, diagnostics_) << "unhandled constant type: " << ty->FriendlyName();
+            });
+        return id;
+    });
+}
+
 uint32_t GeneratorImplIr::Type(const type::Type* ty) {
     return types_.GetOrCreate(ty, [&]() {
         auto id = module_.NextId();
@@ -81,6 +118,24 @@ uint32_t GeneratorImplIr::Type(const type::Type* ty) {
     });
 }
 
+uint32_t GeneratorImplIr::Value(const ir::Value* value) {
+    return Switch(
+        value,  //
+        [&](const ir::Constant* constant) { return Constant(constant); },
+        [&](const ir::Instruction* inst) {
+            auto id = instructions_.Find(inst);
+            if (TINT_UNLIKELY(!id)) {
+                TINT_ICE(Writer, diagnostics_) << "missing instruction result";
+                return 0u;
+            }
+            return *id;
+        },
+        [&](Default) {
+            TINT_ICE(Writer, diagnostics_) << "unhandled value node: " << value->TypeInfo().name;
+            return 0u;
+        });
+}
+
 void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Make an ID for the function.
     auto id = module_.NextId();
@@ -88,7 +143,10 @@ void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Emit the function name.
     module_.PushDebug(spv::Op::OpName, {id, Operand(func->name.Name())});
 
-    // TODO(jrprice): Emit OpEntryPoint and OpExecutionMode declarations if needed.
+    // Emit OpEntryPoint and OpExecutionMode declarations if needed.
+    if (func->pipeline_stage != ir::Function::PipelineStage::kUndefined) {
+        EmitEntryPoint(func, id);
+    }
 
     // Get the ID for the return type.
     auto return_type_id = Type(func->return_type);
@@ -113,15 +171,92 @@ void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Create a function that we will add instructions to.
     // TODO(jrprice): Add the parameter declarations when they are supported in the IR.
     auto entry_block = module_.NextId();
-    Function current_function_(decl, entry_block, {});
+    current_function_ = Function(decl, entry_block, {});
+    TINT_DEFER(current_function_ = Function());
 
-    // TODO(jrprice): Emit the body of the function.
-
-    // TODO(jrprice): Remove this when we start emitting OpReturn for branches to the terminator.
-    current_function_.push_inst(spv::Op::OpReturn, {});
+    // Emit the body of the function.
+    EmitBlock(func->start_target);
 
     // Add the function to the module.
     module_.PushFunction(current_function_);
+}
+
+void GeneratorImplIr::EmitEntryPoint(const ir::Function* func, uint32_t id) {
+    SpvExecutionModel stage = SpvExecutionModelMax;
+    switch (func->pipeline_stage) {
+        case ir::Function::PipelineStage::kCompute: {
+            stage = SpvExecutionModelGLCompute;
+            module_.PushExecutionMode(
+                spv::Op::OpExecutionMode,
+                {id, U32Operand(SpvExecutionModeLocalSize), func->workgroup_size->at(0),
+                 func->workgroup_size->at(1), func->workgroup_size->at(2)});
+            break;
+        }
+        case ir::Function::PipelineStage::kFragment: {
+            stage = SpvExecutionModelFragment;
+            module_.PushExecutionMode(spv::Op::OpExecutionMode,
+                                      {id, U32Operand(SpvExecutionModeOriginUpperLeft)});
+            // TODO(jrprice): Add DepthReplacing execution mode if FragDepth is used.
+            break;
+        }
+        case ir::Function::PipelineStage::kVertex: {
+            stage = SpvExecutionModelVertex;
+            break;
+        }
+        case ir::Function::PipelineStage::kUndefined:
+            TINT_ICE(Writer, diagnostics_) << "undefined pipeline stage for entry point";
+            return;
+    }
+
+    // TODO(jrprice): Add the interface list of all referenced global variables.
+    module_.PushEntryPoint(spv::Op::OpEntryPoint, {U32Operand(stage), id, func->name.Name()});
+}
+
+void GeneratorImplIr::EmitBlock(const ir::Block* block) {
+    // Emit the instructions.
+    for (auto* inst : block->instructions) {
+        auto result = Switch(
+            inst,  //
+            [&](const ir::Binary* b) { return EmitBinary(b); },
+            [&](Default) {
+                TINT_ICE(Writer, diagnostics_)
+                    << "unimplemented instruction: " << inst->TypeInfo().name;
+                return 0u;
+            });
+        instructions_.Add(inst, result);
+    }
+
+    // Handle the branch at the end of the block.
+    Switch(
+        block->branch.target,
+        [&](const ir::FunctionTerminator*) {
+            // TODO(jrprice): Handle the return value, which will be a branch argument.
+            current_function_.push_inst(spv::Op::OpReturn, {});
+        },
+        [&](Default) { TINT_ICE(Writer, diagnostics_) << "unimplemented branch target"; });
+}
+
+uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
+    auto id = module_.NextId();
+
+    // Determine the opcode.
+    spv::Op op = spv::Op::Max;
+    switch (binary->GetKind()) {
+        case ir::Binary::Kind::kAdd: {
+            op = binary->Type()->is_integer_scalar_or_vector() ? spv::Op::OpIAdd : spv::Op::OpFAdd;
+            break;
+        }
+        default: {
+            TINT_ICE(Writer, diagnostics_)
+                << "unimplemented binary instruction: " << static_cast<uint32_t>(binary->GetKind());
+        }
+    }
+
+    // Emit the instruction.
+    current_function_.push_inst(
+        op, {Type(binary->Type()), id, Value(binary->LHS()), Value(binary->RHS())});
+
+    return id;
 }
 
 }  // namespace tint::writer::spirv
