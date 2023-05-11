@@ -94,7 +94,12 @@ size_t Disassembler::IdOf(const FlowNode* node) {
 
 std::string_view Disassembler::IdOf(const Value* value) {
     TINT_ASSERT(IR, value);
-    return value_ids_.GetOrCreate(value, [&] { return std::to_string(value_ids_.Count()); });
+    return value_ids_.GetOrCreate(value, [&] {
+        if (auto sym = mod_.NameOf(value)) {
+            return sym.Name();
+        }
+        return std::to_string(value_ids_.Count());
+    });
 }
 
 void Disassembler::Walk(const FlowNode* node) {
@@ -401,7 +406,11 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
         },
         [&](const ir::Var* v) {
             EmitValue(v);
-            out_ << " = var " << v->address_space << " " << v->access;
+            out_ << " = var " << v->address_space << ", " << v->access;
+            if (v->initializer) {
+                out_ << ", ";
+                EmitValue(v->initializer);
+            }
         });
 }
 
@@ -419,7 +428,7 @@ void Disassembler::EmitArgs(const Call* call) {
 void Disassembler::EmitBinary(const Binary* b) {
     EmitValue(b);
     out_ << " = ";
-    switch (b->GetKind()) {
+    switch (b->kind) {
         case Binary::Kind::kAdd:
             out_ << "add";
             break;
@@ -478,7 +487,7 @@ void Disassembler::EmitBinary(const Binary* b) {
 void Disassembler::EmitUnary(const Unary* u) {
     EmitValue(u);
     out_ << " = ";
-    switch (u->GetKind()) {
+    switch (u->kind) {
         case Unary::Kind::kAddressOf:
             out_ << "addr_of";
             break;
