@@ -26,6 +26,7 @@
 #include "src/tint/type/i32.h"
 #include "src/tint/type/type.h"
 #include "src/tint/type/u32.h"
+#include "src/tint/type/vector.h"
 #include "src/tint/type/void.h"
 #include "src/tint/writer/spirv/module.h"
 
@@ -67,31 +68,41 @@ bool GeneratorImplIr::Generate() {
 }
 
 uint32_t GeneratorImplIr::Constant(const ir::Constant* constant) {
+    return Constant(constant->value);
+}
+
+uint32_t GeneratorImplIr::Constant(const constant::Value* constant) {
     return constants_.GetOrCreate(constant, [&]() {
         auto id = module_.NextId();
         auto* ty = constant->Type();
-        auto* value = constant->value;
         Switch(
             ty,  //
             [&](const type::Bool*) {
                 module_.PushType(
-                    value->ValueAs<bool>() ? spv::Op::OpConstantTrue : spv::Op::OpConstantFalse,
+                    constant->ValueAs<bool>() ? spv::Op::OpConstantTrue : spv::Op::OpConstantFalse,
                     {Type(ty), id});
             },
             [&](const type::I32*) {
-                module_.PushType(spv::Op::OpConstant, {Type(ty), id, value->ValueAs<u32>()});
+                module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<u32>()});
             },
             [&](const type::U32*) {
                 module_.PushType(spv::Op::OpConstant,
-                                 {Type(ty), id, U32Operand(value->ValueAs<i32>())});
+                                 {Type(ty), id, U32Operand(constant->ValueAs<i32>())});
             },
             [&](const type::F32*) {
-                module_.PushType(spv::Op::OpConstant, {Type(ty), id, value->ValueAs<f32>()});
+                module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<f32>()});
             },
             [&](const type::F16*) {
                 module_.PushType(
                     spv::Op::OpConstant,
-                    {Type(ty), id, U32Operand(value->ValueAs<f16>().BitsRepresentation())});
+                    {Type(ty), id, U32Operand(constant->ValueAs<f16>().BitsRepresentation())});
+            },
+            [&](const type::Vector* vec) {
+                OperandList operands = {Type(ty), id};
+                for (uint32_t i = 0; i < vec->Width(); i++) {
+                    operands.push_back(Constant(constant->Index(i)));
+                }
+                module_.PushType(spv::Op::OpConstantComposite, operands);
             },
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_) << "unhandled constant type: " << ty->FriendlyName();
@@ -118,6 +129,9 @@ uint32_t GeneratorImplIr::Type(const type::Type* ty) {
             },
             [&](const type::F16*) {
                 module_.PushType(spv::Op::OpTypeFloat, {id, 16u});
+            },
+            [&](const type::Vector* vec) {
+                module_.PushType(spv::Op::OpTypeVector, {id, Type(vec->type()), vec->Width()});
             },
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_) << "unhandled type: " << ty->FriendlyName();
@@ -255,6 +269,10 @@ uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
     switch (binary->kind) {
         case ir::Binary::Kind::kAdd: {
             op = binary->Type()->is_integer_scalar_or_vector() ? spv::Op::OpIAdd : spv::Op::OpFAdd;
+            break;
+        }
+        case ir::Binary::Kind::kSubtract: {
+            op = binary->Type()->is_integer_scalar_or_vector() ? spv::Op::OpISub : spv::Op::OpFSub;
             break;
         }
         default: {

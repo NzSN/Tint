@@ -32,16 +32,21 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Bitcast) {
     auto* expr = Bitcast<f32>(Call("my_func"));
     WrapInFunction(expr);
 
-    auto& b = CreateBuilder();
-    InjectFlowBlock();
-    auto r = b.EmitExpression(expr);
-    ASSERT_THAT(b.Diagnostics(), testing::IsEmpty());
-    ASSERT_TRUE(r);
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    Disassembler d(b.builder.ir);
-    d.EmitBlockInstructions(b.current_flow_block->As<ir::Block>());
-    EXPECT_EQ(d.AsString(), R"(%1:f32 = call my_func
-%2:f32 = bitcast %1:f32
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = func my_func():f32 {
+  %fn2 = block {
+  } -> %func_end 0.0f # return
+} %func_end
+
+%fn3 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
+  %fn4 = block {
+    %1:f32 = call my_func
+    %tint_symbol:f32 = bitcast %1:f32
+  } -> %func_end # return
+} %func_end
+
 )");
 }
 
@@ -52,14 +57,15 @@ TEST_F(IR_BuilderImplTest, EmitStatement_Discard) {
              create<ast::StageAttribute>(ast::PipelineStage::kFragment),
          });
 
-    auto& b = CreateBuilder();
-    InjectFlowBlock();
-    b.EmitStatement(expr);
-    ASSERT_THAT(b.Diagnostics(), testing::IsEmpty());
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    Disassembler d(b.builder.ir);
-    d.EmitBlockInstructions(b.current_flow_block->As<ir::Block>());
-    EXPECT_EQ(d.AsString(), R"(discard
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = func test_function():void [@fragment] {
+  %fn2 = block {
+    discard
+  } -> %func_end # return
+} %func_end
+
 )");
 }
 
@@ -68,16 +74,20 @@ TEST_F(IR_BuilderImplTest, EmitStatement_UserFunction) {
 
     auto* stmt = CallStmt(Call("my_func", Mul(2_a, 3_a)));
     WrapInFunction(stmt);
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    auto& b = CreateBuilder();
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = func my_func():void {
+  %fn2 = block {
+  } -> %func_end # return
+} %func_end
 
-    InjectFlowBlock();
-    b.EmitStatement(stmt);
-    ASSERT_THAT(b.Diagnostics(), testing::IsEmpty());
+%fn3 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
+  %fn4 = block {
+    %1:void = call my_func, 6.0f
+  } -> %func_end # return
+} %func_end
 
-    Disassembler d(b.builder.ir);
-    d.EmitBlockInstructions(b.current_flow_block->As<ir::Block>());
-    EXPECT_EQ(d.AsString(), R"(%1:void = call my_func, 6.0f
 )");
 }
 
@@ -86,21 +96,19 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Convert) {
     auto* expr = Call(ty.f32(), i);
     WrapInFunction(expr);
 
-    auto r = Build();
-    ASSERT_TRUE(r) << Error();
-    auto m = r.Move();
-    ASSERT_TRUE(r);
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    EXPECT_EQ(Disassemble(m), R"(%fn1 = block
-%i:ref<private, i32, read_write> = var private, read_write, 1i
-
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
+  %i:ref<private, i32, read_write> = var private, read_write, 1i
+}
 
 
-%fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)]
-  %fn3 = block
-  %tint_symbol:f32 = convert i32, %i:ref<private, i32, read_write>
-  ret
-func_end
+%fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
+  %fn3 = block {
+    %tint_symbol:f32 = convert i32, %i:ref<private, i32, read_write>
+  } -> %func_end # return
+} %func_end
 
 )");
 }
@@ -109,14 +117,12 @@ TEST_F(IR_BuilderImplTest, EmitExpression_ConstructEmpty) {
     auto* expr = vec3(ty.f32());
     GlobalVar("i", builtin::AddressSpace::kPrivate, expr);
 
-    auto r = Build();
-    ASSERT_TRUE(r) << Error();
-    auto m = r.Move();
-    ASSERT_TRUE(r);
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    EXPECT_EQ(Disassemble(m), R"(%fn1 = block
-%i:ref<private, vec3<f32>, read_write> = var private, read_write, vec3<f32> 0.0f
-
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
+  %i:ref<private, vec3<f32>, read_write> = var private, read_write, vec3<f32> 0.0f
+}
 
 
 )");
@@ -127,21 +133,19 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Construct) {
     auto* expr = vec3(ty.f32(), 2_f, 3_f, i);
     WrapInFunction(expr);
 
-    auto r = Build();
-    ASSERT_TRUE(r) << Error();
-    auto m = r.Move();
-    ASSERT_TRUE(r);
+    auto m = Build();
+    ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
-    EXPECT_EQ(Disassemble(m), R"(%fn1 = block
-%i:ref<private, f32, read_write> = var private, read_write, 1.0f
-
+    EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
+  %i:ref<private, f32, read_write> = var private, read_write, 1.0f
+}
 
 
-%fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)]
-  %fn3 = block
-  %tint_symbol:vec3<f32> = construct 2.0f, 3.0f, %i:ref<private, f32, read_write>
-  ret
-func_end
+%fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
+  %fn3 = block {
+    %tint_symbol:vec3<f32> = construct 2.0f, 3.0f, %i:ref<private, f32, read_write>
+  } -> %func_end # return
+} %func_end
 
 )");
 }

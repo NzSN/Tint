@@ -62,7 +62,14 @@ class Function : public utils::Castable<Function, FlowNode> {
     };
 
     /// Constructor
-    Function();
+    /// @param n the function name
+    /// @param rt the function return type
+    /// @param stage the function stage
+    /// @param wg_size the workgroup_size
+    Function(Symbol n,
+             type::Type* rt,
+             PipelineStage stage = PipelineStage::kUndefined,
+             std::optional<std::array<uint32_t, 3>> wg_size = {});
     ~Function() override;
 
     /// The function name

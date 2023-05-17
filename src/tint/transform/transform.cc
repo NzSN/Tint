@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/builder.h"
-#include "src/tint/ir/instruction.h"
-#include "src/tint/ir/test_helper.h"
+#include "src/tint/transform/transform.h"
 
-namespace tint::ir {
-namespace {
+#include "src/tint/program_builder.h"
 
-using IR_InstructionTest = TestHelper;
+TINT_INSTANTIATE_TYPEINFO(tint::transform::Transform);
+TINT_INSTANTIATE_TYPEINFO(tint::transform::Data);
 
-TEST_F(IR_InstructionTest, Discard) {
-    Module mod;
-    Builder b{mod};
+namespace tint::transform {
 
-    const auto* inst = b.Discard();
-    ASSERT_TRUE(inst->Is<ir::Discard>());
-}
+Data::Data() = default;
+Data::Data(const Data&) = default;
+Data::~Data() = default;
+Data& Data::operator=(const Data&) = default;
 
-}  // namespace
-}  // namespace tint::ir
+DataMap::DataMap() = default;
+DataMap::DataMap(DataMap&&) = default;
+DataMap::~DataMap() = default;
+DataMap& DataMap::operator=(DataMap&&) = default;
+
+Transform::Transform() = default;
+Transform::~Transform() = default;
+
+}  // namespace tint::transform

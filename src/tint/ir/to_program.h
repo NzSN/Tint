@@ -12,22 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/builder.h"
-#include "src/tint/ir/instruction.h"
-#include "src/tint/ir/test_helper.h"
+#ifndef SRC_TINT_IR_TO_PROGRAM_H_
+#define SRC_TINT_IR_TO_PROGRAM_H_
+
+#include "src/tint/program.h"
 
 namespace tint::ir {
-namespace {
-
-using IR_InstructionTest = TestHelper;
-
-TEST_F(IR_InstructionTest, Discard) {
-    Module mod;
-    Builder b{mod};
-
-    const auto* inst = b.Discard();
-    ASSERT_TRUE(inst->Is<ir::Discard>());
+class Module;
 }
 
-}  // namespace
+namespace tint::ir {
+
+/// Builds a tint::Program from an ir::Module
+/// @param module the IR module
+/// @return the tint::Program.
+/// @note Check the returned Program::Diagnostics() for any errors.
+Program ToProgram(const Module& module);
+
 }  // namespace tint::ir
+
+#endif  // SRC_TINT_IR_TO_PROGRAM_H_

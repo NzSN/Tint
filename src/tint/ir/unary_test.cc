@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "src/tint/ir/builder.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/ir/test_helper.h"
 
@@ -23,14 +24,14 @@ using namespace tint::number_suffixes;  // NOLINT
 using IR_InstructionTest = TestHelper;
 
 TEST_F(IR_InstructionTest, CreateAddressOf) {
-    auto& b = CreateEmptyBuilder();
+    Module mod;
+    Builder b{mod};
 
     // TODO(dsinclair): This would be better as an identifier, but works for now.
-    const auto* inst =
-        b.builder.AddressOf(b.builder.ir.types.Get<type::Pointer>(
-                                b.builder.ir.types.Get<type::I32>(),
-                                builtin::AddressSpace::kPrivate, builtin::Access::kReadWrite),
-                            b.builder.Constant(4_i));
+    const auto* inst = b.AddressOf(
+        b.ir.types.Get<type::Pointer>(b.ir.types.Get<type::I32>(), builtin::AddressSpace::kPrivate,
+                                      builtin::Access::kReadWrite),
+        b.Constant(4_i));
 
     ASSERT_TRUE(inst->Is<Unary>());
     EXPECT_EQ(inst->kind, Unary::Kind::kAddressOf);
@@ -44,9 +45,9 @@ TEST_F(IR_InstructionTest, CreateAddressOf) {
 }
 
 TEST_F(IR_InstructionTest, CreateComplement) {
-    auto& b = CreateEmptyBuilder();
-    const auto* inst =
-        b.builder.Complement(b.builder.ir.types.Get<type::I32>(), b.builder.Constant(4_i));
+    Module mod;
+    Builder b{mod};
+    const auto* inst = b.Complement(b.ir.types.Get<type::I32>(), b.Constant(4_i));
 
     ASSERT_TRUE(inst->Is<Unary>());
     EXPECT_EQ(inst->kind, Unary::Kind::kComplement);
@@ -58,11 +59,11 @@ TEST_F(IR_InstructionTest, CreateComplement) {
 }
 
 TEST_F(IR_InstructionTest, CreateIndirection) {
-    auto& b = CreateEmptyBuilder();
+    Module mod;
+    Builder b{mod};
 
     // TODO(dsinclair): This would be better as an identifier, but works for now.
-    const auto* inst =
-        b.builder.Indirection(b.builder.ir.types.Get<type::I32>(), b.builder.Constant(4_i));
+    const auto* inst = b.Indirection(b.ir.types.Get<type::I32>(), b.Constant(4_i));
 
     ASSERT_TRUE(inst->Is<Unary>());
     EXPECT_EQ(inst->kind, Unary::Kind::kIndirection);
@@ -74,9 +75,9 @@ TEST_F(IR_InstructionTest, CreateIndirection) {
 }
 
 TEST_F(IR_InstructionTest, CreateNegation) {
-    auto& b = CreateEmptyBuilder();
-    const auto* inst =
-        b.builder.Negation(b.builder.ir.types.Get<type::I32>(), b.builder.Constant(4_i));
+    Module mod;
+    Builder b{mod};
+    const auto* inst = b.Negation(b.ir.types.Get<type::I32>(), b.Constant(4_i));
 
     ASSERT_TRUE(inst->Is<Unary>());
     EXPECT_EQ(inst->kind, Unary::Kind::kNegation);
@@ -88,9 +89,9 @@ TEST_F(IR_InstructionTest, CreateNegation) {
 }
 
 TEST_F(IR_InstructionTest, Unary_Usage) {
-    auto& b = CreateEmptyBuilder();
-    const auto* inst =
-        b.builder.Negation(b.builder.ir.types.Get<type::I32>(), b.builder.Constant(4_i));
+    Module mod;
+    Builder b{mod};
+    const auto* inst = b.Negation(b.ir.types.Get<type::I32>(), b.Constant(4_i));
 
     EXPECT_EQ(inst->kind, Unary::Kind::kNegation);
 

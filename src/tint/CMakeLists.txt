@@ -452,6 +452,8 @@ list(APPEND TINT_LIB_SRCS
   ast/transform/zero_init_workgroup_memory.h
   transform/manager.cc
   transform/manager.h
+  transform/transform.cc
+  transform/transform.h
   type/abstract_float.cc
   type/abstract_float.h
   type/abstract_int.cc
@@ -716,8 +718,6 @@ if(${TINT_BUILD_IR})
     ir/block.h
     ir/builder.cc
     ir/builder.h
-    ir/builder_impl.cc
-    ir/builder_impl.h
     ir/builtin.cc
     ir/builtin.h
     ir/call.cc
@@ -756,6 +756,8 @@ if(${TINT_BUILD_IR})
     ir/store.h
     ir/switch.cc
     ir/switch.h
+    ir/to_program.cc
+    ir/to_program.h
     ir/unary.cc
     ir/unary.h
     ir/user_call.cc
@@ -1447,22 +1449,29 @@ if(TINT_BUILD_TESTS)
     list(APPEND TINT_TEST_SRCS
       ir/binary_test.cc
       ir/bitcast_test.cc
-      ir/builder_impl_binary_test.cc
-      ir/builder_impl_call_test.cc
-      ir/builder_impl_literal_test.cc
-      ir/builder_impl_materialize_test.cc
-      ir/builder_impl_store_test.cc
-      ir/builder_impl_test.cc
-      ir/builder_impl_unary_test.cc
-      ir/builder_impl_var_test.cc
       ir/constant_test.cc
       ir/discard_test.cc
+      ir/from_program_binary_test.cc
+      ir/from_program_call_test.cc
+      ir/from_program_literal_test.cc
+      ir/from_program_materialize_test.cc
+      ir/from_program_store_test.cc
+      ir/from_program_test.cc
+      ir/from_program_unary_test.cc
+      ir/from_program_var_test.cc
       ir/module_test.cc
       ir/store_test.cc
       ir/test_helper.h
       ir/unary_test.cc
     )
   endif()
+
+  if (${TINT_BUILD_IR} AND ${TINT_BUILD_WGSL_READER} AND ${TINT_BUILD_WGSL_WRITER})
+    list(APPEND TINT_TEST_SRCS
+      ir/to_program_roundtrip_test.cc
+    )
+  endif()
+
 
   if (${TINT_BUILD_FUZZERS})
     list(APPEND TINT_TEST_SRCS

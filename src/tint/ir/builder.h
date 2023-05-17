@@ -50,10 +50,8 @@ namespace tint::ir {
 class Builder {
   public:
     /// Constructor
-    Builder();
-    /// Constructor
     /// @param mod the ir::Module to wrap with this builder
-    explicit Builder(Module&& mod);
+    explicit Builder(Module& mod);
     /// Destructor
     ~Builder();
 
@@ -67,20 +65,29 @@ class Builder {
     FunctionTerminator* CreateFunctionTerminator();
 
     /// Creates a function flow node
+    /// @param name the function name
+    /// @param return_type the function return type
+    /// @param stage the function stage
+    /// @param wg_size the workgroup_size
     /// @returns the flow node
-    Function* CreateFunction();
+    Function* CreateFunction(Symbol name,
+                             type::Type* return_type,
+                             Function::PipelineStage stage = Function::PipelineStage::kUndefined,
+                             std::optional<std::array<uint32_t, 3>> wg_size = {});
 
     /// Creates an if flow node
+    /// @param condition the if condition
     /// @returns the flow node
-    If* CreateIf();
+    If* CreateIf(Value* condition);
 
     /// Creates a loop flow node
     /// @returns the flow node
     Loop* CreateLoop();
 
     /// Creates a switch flow node
+    /// @param condition the switch condition
     /// @returns the flow node
-    Switch* CreateSwitch();
+    Switch* CreateSwitch(Value* condition);
 
     /// Creates a case flow node for the given case branch.
     /// @param s the switch to create the case into
@@ -92,7 +99,7 @@ class Builder {
     /// @param from the block to branch from
     /// @param to the node to branch too
     /// @param args arguments to the branch
-    void Branch(Block* from, FlowNode* to, utils::VectorRef<Value*> args);
+    void Branch(Block* from, FlowNode* to, utils::VectorRef<Value*> args = {});
 
     /// Creates a constant::Value
     /// @param args the arguments
@@ -363,7 +370,7 @@ class Builder {
     ir::Block* CreateRootBlockIfNeeded();
 
     /// The IR module.
-    Module ir;
+    Module& ir;
 };
 
 }  // namespace tint::ir
