@@ -40,6 +40,13 @@ class IRToProgramRoundtripTest : public TestHelper {
         ASSERT_TRUE(ir_module);
 
         auto output_program = ToProgram(ir_module.Get());
+        if (!output_program.IsValid()) {
+            tint::ir::Disassembler d{ir_module.Get()};
+            FAIL() << output_program.Diagnostics().str() << std::endl
+                   << "IR:" << std::endl
+                   << d.Disassemble();
+        }
+
         ASSERT_TRUE(output_program.IsValid()) << output_program.Diagnostics().str();
 
         auto output = writer::wgsl::Generate(&output_program, {});
@@ -60,9 +67,40 @@ TEST_F(IRToProgramRoundtripTest, EmptyModule) {
     Test("");
 }
 
-TEST_F(IRToProgramRoundtripTest, EmptySingleFunction) {
+TEST_F(IRToProgramRoundtripTest, SingleFunction_Empty) {
     Test(R"(
 fn f() {
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, SingleFunction_Return) {
+    Test(R"(
+fn f() {
+  return;
+}
+)",
+         R"(
+fn f() {
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, SingleFunction_Return_i32) {
+    Test(R"(
+fn f() -> i32 {
+  return 42i;
+}
+)");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Function-scope var
+////////////////////////////////////////////////////////////////////////////////
+TEST_F(IRToProgramRoundtripTest, FunctionScopeVar_i32) {
+    Test(R"(
+fn f() {
+  var i : i32;
 }
 )");
 }
@@ -71,6 +109,257 @@ TEST_F(IRToProgramRoundtripTest, FunctionScopeVar_i32_InitLiteral) {
     Test(R"(
 fn f() {
   var i : i32 = 42i;
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, FunctionScopeVar_Chained) {
+    Test(R"(
+fn f() {
+  var a : i32 = 42i;
+  var b : i32 = a;
+  var c : i32 = b;
+}
+)");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// If
+////////////////////////////////////////////////////////////////////////////////
+TEST_F(IRToProgramRoundtripTest, If_CallFn) {
+    Test(R"(
+fn a() {
+}
+
+fn f() {
+  var cond : bool = true;
+  if (cond) {
+    a();
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_Return) {
+    Test(R"(
+fn f() {
+  var cond : bool = true;
+  if (cond) {
+    return;
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_Return_i32) {
+    Test(R"(
+fn f() -> i32 {
+  var cond : bool = true;
+  if (cond) {
+    return 42i;
+  }
+  return 10i;
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_CallFn_Else_CallFn) {
+    Test(R"(
+fn a() {
+}
+
+fn b() {
+}
+
+fn f() {
+  var cond : bool = true;
+  if (cond) {
+    a();
+  } else {
+    b();
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_Return_f32_Else_Return_f32) {
+    Test(R"(
+fn f() -> f32 {
+  var cond : bool = true;
+  if (cond) {
+    return 1.0f;
+  } else {
+    return 2.0f;
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_Return_u32_Else_CallFn) {
+    Test(R"(
+fn a() {
+}
+
+fn b() {
+}
+
+fn f() -> u32 {
+  var cond : bool = true;
+  if (cond) {
+    return 1u;
+  } else {
+    a();
+  }
+  b();
+  return 2u;
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, If_CallFn_ElseIf_CallFn) {
+    Test(R"(
+fn a() {
+}
+
+fn b() {
+}
+
+fn c() {
+}
+
+fn f() {
+  var cond_a : bool = true;
+  var cond_b : bool = true;
+  if (cond_a) {
+    a();
+  } else if (cond_b) {
+    b();
+  }
+  c();
+}
+)");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Switch
+////////////////////////////////////////////////////////////////////////////////
+TEST_F(IRToProgramRoundtripTest, Switch_Default) {
+    Test(R"(
+fn a() {
+}
+
+fn f() {
+  var v : i32 = 42i;
+  switch(v) {
+    default: {
+      a();
+    }
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Switch_3_Cases) {
+    Test(R"(
+fn a() {
+}
+
+fn b() {
+}
+
+fn c() {
+}
+
+fn f() {
+  var v : i32 = 42i;
+  switch(v) {
+    case 0i: {
+      a();
+    }
+    case 1i, default: {
+      b();
+    }
+    case 2i: {
+      c();
+    }
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Switch_3_Cases_AllReturn) {
+    Test(R"(
+fn a() {
+}
+
+fn f() {
+  var v : i32 = 42i;
+  switch(v) {
+    case 0i: {
+      return;
+    }
+    case 1i, default: {
+      return;
+    }
+    case 2i: {
+      return;
+    }
+  }
+  a();
+}
+)",
+         R"(
+fn a() {
+}
+
+fn f() {
+  var v : i32 = 42i;
+  switch(v) {
+    case 0i: {
+      return;
+    }
+    case 1i, default: {
+      return;
+    }
+    case 2i: {
+      return;
+    }
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Switch_Nested) {
+    Test(R"(
+fn a() {
+}
+
+fn b() {
+}
+
+fn c() {
+}
+
+fn f() {
+  var v1 : i32 = 42i;
+  var v2 : i32 = 24i;
+  switch(v1) {
+    case 0i: {
+      a();
+    }
+    case 1i, default: {
+      switch(v2) {
+        case 0i: {
+        }
+        case 1i, default: {
+          return;
+        }
+      }
+    }
+    case 2i: {
+      c();
+    }
+  }
 }
 )");
 }

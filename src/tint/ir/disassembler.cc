@@ -27,6 +27,7 @@
 #include "src/tint/ir/discard.h"
 #include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
+#include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/root_terminator.h"
 #include "src/tint/ir/store.h"
@@ -154,7 +155,19 @@ void Disassembler::Walk(const FlowNode* node) {
                 return;
             }
 
-            Indent() << "%fn" << IdOf(b) << " = block {" << std::endl;
+            Indent() << "%fn" << IdOf(b) << " = block";
+            if (!b->params.IsEmpty()) {
+                out_ << " (";
+                for (auto* p : b->params) {
+                    if (p != b->params.Front()) {
+                        out_ << ", ";
+                    }
+                    EmitValue(p);
+                }
+                out_ << ")";
+            }
+
+            out_ << " {" << std::endl;
             {
                 ScopedIndent si(indent_size_);
                 EmitBlockInstructions(b);
@@ -248,7 +261,20 @@ void Disassembler::Walk(const FlowNode* node) {
         [&](const ir::If* i) {
             Indent() << "%fn" << IdOf(i) << " = if ";
             EmitValue(i->condition);
-            out_ << " [t: %fn" << IdOf(i->true_.target) << ", f: %fn" << IdOf(i->false_.target);
+
+            bool has_true = !i->true_.target->IsDead();
+            bool has_false = !i->false_.target->IsDead();
+
+            out_ << " [";
+            if (has_true) {
+                out_ << "t: %fn" << IdOf(i->true_.target);
+            }
+            if (has_false) {
+                if (has_true) {
+                    out_ << ", ";
+                }
+                out_ << "f: %fn" << IdOf(i->false_.target);
+            }
             if (i->merge.target->IsConnected()) {
                 out_ << ", m: %fn" << IdOf(i->merge.target);
             }
@@ -258,10 +284,12 @@ void Disassembler::Walk(const FlowNode* node) {
                 ScopedIndent if_indent(indent_size_);
                 ScopedStopNode scope(stop_nodes_, i->merge.target);
 
-                Indent() << "# true branch" << std::endl;
-                Walk(i->true_.target);
+                if (has_true) {
+                    Indent() << "# true branch" << std::endl;
+                    Walk(i->true_.target);
+                }
 
-                if (!i->false_.target->IsDead()) {
+                if (has_false) {
                     Indent() << "# false branch" << std::endl;
                     Walk(i->false_.target);
                 }
@@ -324,6 +352,13 @@ std::string Disassembler::Disassemble() {
     return out_.str();
 }
 
+void Disassembler::EmitValueWithType(const Value* val) {
+    EmitValue(val);
+    if (auto* i = val->As<ir::Instruction>(); i->Type() != nullptr) {
+        out_ << ":" << i->Type()->FriendlyName();
+    }
+}
+
 void Disassembler::EmitValue(const Value* val) {
     tint::Switch(
         val,
@@ -368,12 +403,11 @@ void Disassembler::EmitValue(const Value* val) {
             };
             emit(constant->value);
         },
-        [&](const ir::Instruction* i) {
-            out_ << "%" << IdOf(i);
-            if (i->Type() != nullptr) {
-                out_ << ":" << i->Type()->FriendlyName();
-            }
-        });
+        [&](const ir::Instruction* i) { out_ << "%" << IdOf(i); },
+        [&](const ir::BlockParam* p) {
+            out_ << "%" << IdOf(p) << ":" << p->Type()->FriendlyName();
+        },
+        [&](Default) { out_ << "Unknown value: " << val->TypeInfo().name; });
 }
 
 void Disassembler::EmitInstruction(const Instruction* inst) {
@@ -381,25 +415,30 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
         inst,  //
         [&](const ir::Binary* b) { EmitBinary(b); }, [&](const ir::Unary* u) { EmitUnary(u); },
         [&](const ir::Bitcast* b) {
-            EmitValue(b);
+            EmitValueWithType(b);
             out_ << " = bitcast ";
             EmitArgs(b);
         },
         [&](const ir::Discard*) { out_ << "discard"; },
         [&](const ir::Builtin* b) {
-            EmitValue(b);
+            EmitValueWithType(b);
             out_ << " = " << builtin::str(b->Func()) << " ";
             EmitArgs(b);
         },
         [&](const ir::Construct* c) {
-            EmitValue(c);
+            EmitValueWithType(c);
             out_ << " = construct ";
             EmitArgs(c);
         },
         [&](const ir::Convert* c) {
-            EmitValue(c);
+            EmitValueWithType(c);
             out_ << " = convert " << c->FromType()->FriendlyName() << ", ";
             EmitArgs(c);
+        },
+        [&](const ir::Load* l) {
+            EmitValueWithType(l);
+            out_ << " = load ";
+            EmitValue(l->from);
         },
         [&](const ir::Store* s) {
             out_ << "store ";
@@ -408,7 +447,7 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
             EmitValue(s->from);
         },
         [&](const ir::UserCall* uc) {
-            EmitValue(uc);
+            EmitValueWithType(uc);
             out_ << " = call " << uc->name.Name();
             if (uc->args.Length() > 0) {
                 out_ << ", ";
@@ -416,8 +455,8 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
             EmitArgs(uc);
         },
         [&](const ir::Var* v) {
-            EmitValue(v);
-            out_ << " = var " << v->address_space << ", " << v->access;
+            EmitValueWithType(v);
+            out_ << " = var";
             if (v->initializer) {
                 out_ << ", ";
                 EmitValue(v->initializer);
@@ -437,7 +476,7 @@ void Disassembler::EmitArgs(const Call* call) {
 }
 
 void Disassembler::EmitBinary(const Binary* b) {
-    EmitValue(b);
+    EmitValueWithType(b);
     out_ << " = ";
     switch (b->kind) {
         case Binary::Kind::kAdd:
@@ -496,17 +535,11 @@ void Disassembler::EmitBinary(const Binary* b) {
 }
 
 void Disassembler::EmitUnary(const Unary* u) {
-    EmitValue(u);
+    EmitValueWithType(u);
     out_ << " = ";
     switch (u->kind) {
-        case Unary::Kind::kAddressOf:
-            out_ << "addr_of";
-            break;
         case Unary::Kind::kComplement:
             out_ << "complement";
-            break;
-        case Unary::Kind::kIndirection:
-            out_ << "indirection";
             break;
         case Unary::Kind::kNegation:
             out_ << "negation";

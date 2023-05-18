@@ -43,7 +43,7 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Bitcast) {
 %fn3 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
   %fn4 = block {
     %1:f32 = call my_func
-    %tint_symbol:f32 = bitcast %1:f32
+    %tint_symbol:f32 = bitcast %1
   } -> %func_end # return
 } %func_end
 
@@ -100,13 +100,14 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Convert) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
-  %i:ref<private, i32, read_write> = var private, read_write, 1i
+  %i:ptr<private, i32, read_write> = var, 1i
 }
 
 
 %fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
   %fn3 = block {
-    %tint_symbol:f32 = convert i32, %i:ref<private, i32, read_write>
+    %2:i32 = load %i
+    %tint_symbol:f32 = convert i32, %2
   } -> %func_end # return
 } %func_end
 
@@ -121,7 +122,7 @@ TEST_F(IR_BuilderImplTest, EmitExpression_ConstructEmpty) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
-  %i:ref<private, vec3<f32>, read_write> = var private, read_write, vec3<f32> 0.0f
+  %i:ptr<private, vec3<f32>, read_write> = var, vec3<f32> 0.0f
 }
 
 
@@ -137,13 +138,14 @@ TEST_F(IR_BuilderImplTest, EmitExpression_Construct) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
-  %i:ref<private, f32, read_write> = var private, read_write, 1.0f
+  %i:ptr<private, f32, read_write> = var, 1.0f
 }
 
 
 %fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
   %fn3 = block {
-    %tint_symbol:vec3<f32> = construct 2.0f, 3.0f, %i:ref<private, f32, read_write>
+    %2:f32 = load %i
+    %tint_symbol:vec3<f32> = construct 2.0f, 3.0f, %2
   } -> %func_end # return
 } %func_end
 

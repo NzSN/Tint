@@ -48,6 +48,7 @@
 #include "src/tint/ast/literal_expression.h"
 #include "src/tint/ast/loop_statement.h"
 #include "src/tint/ast/override.h"
+#include "src/tint/ast/phony_expression.h"
 #include "src/tint/ast/return_statement.h"
 #include "src/tint/ast/statement.h"
 #include "src/tint/ast/struct.h"
@@ -59,6 +60,7 @@
 #include "src/tint/ast/var.h"
 #include "src/tint/ast/variable_decl_statement.h"
 #include "src/tint/ast/while_statement.h"
+#include "src/tint/ir/block_param.h"
 #include "src/tint/ir/builder.h"
 #include "src/tint/ir/function.h"
 #include "src/tint/ir/if.h"
@@ -72,6 +74,7 @@
 #include "src/tint/sem/builtin.h"
 #include "src/tint/sem/call.h"
 #include "src/tint/sem/function.h"
+#include "src/tint/sem/load.h"
 #include "src/tint/sem/materialize.h"
 #include "src/tint/sem/module.h"
 #include "src/tint/sem/switch_statement.h"
@@ -80,6 +83,8 @@
 #include "src/tint/sem/value_expression.h"
 #include "src/tint/sem/variable.h"
 #include "src/tint/switch.h"
+#include "src/tint/type/pointer.h"
+#include "src/tint/type/reference.h"
 #include "src/tint/type/void.h"
 #include "src/tint/utils/defer.h"
 #include "src/tint/utils/result.h"
@@ -336,7 +341,6 @@ class Impl {
             current_flow_block_ = ir_func->start_target;
             EmitBlock(ast_func->body);
 
-            // TODO(dsinclair): Store return type and attributes
             // TODO(dsinclair): Store parameters
 
             // If the branch target has already been set then a `return` was called. Only set in the
@@ -390,6 +394,16 @@ class Impl {
     }
 
     void EmitAssignment(const ast::AssignmentStatement* stmt) {
+        // If assigning to a phony, just generate the RHS and we're done. Note that, because this
+        // isn't used, a subsequent transform could remove it due to it being dead code. This could
+        // then change the interface for the program (i.e. a global var no longer used). If that
+        // happens we have to either fix this to store to a phony value, or make sure we pull the
+        // interface before doing the dead code elimination.
+        if (stmt->lhs->Is<ast::PhonyExpression>()) {
+            (void)EmitExpression(stmt->rhs);
+            return;
+        }
+
         auto lhs = EmitExpression(stmt->lhs);
         if (!lhs) {
             return;
@@ -409,15 +423,20 @@ class Impl {
             return;
         }
 
-        auto* ty = lhs.Get()->Type();
-        auto* rhs = ty->UnwrapRef()->is_signed_integer_scalar() ? builder_.Constant(1_i)
-                                                                : builder_.Constant(1_u);
+        // Load from the LHS.
+        auto* lhs_value = builder_.Load(lhs.Get());
+        current_flow_block_->instructions.Push(lhs_value);
+
+        auto* ty = lhs_value->Type();
+
+        auto* rhs =
+            ty->is_signed_integer_scalar() ? builder_.Constant(1_i) : builder_.Constant(1_u);
 
         Binary* inst = nullptr;
         if (stmt->increment) {
-            inst = builder_.Add(ty, lhs.Get(), rhs);
+            inst = builder_.Add(ty, lhs_value, rhs);
         } else {
-            inst = builder_.Subtract(ty, lhs.Get(), rhs);
+            inst = builder_.Subtract(ty, lhs_value, rhs);
         }
         current_flow_block_->instructions.Push(inst);
 
@@ -435,38 +454,44 @@ class Impl {
         if (!rhs) {
             return;
         }
-        auto* ty = lhs.Get()->Type();
+
+        // Load from the LHS.
+        auto* lhs_value = builder_.Load(lhs.Get());
+        current_flow_block_->instructions.Push(lhs_value);
+
+        auto* ty = lhs_value->Type();
+
         Binary* inst = nullptr;
         switch (stmt->op) {
             case ast::BinaryOp::kAnd:
-                inst = builder_.And(ty, lhs.Get(), rhs.Get());
+                inst = builder_.And(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kOr:
-                inst = builder_.Or(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Or(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kXor:
-                inst = builder_.Xor(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Xor(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kShiftLeft:
-                inst = builder_.ShiftLeft(ty, lhs.Get(), rhs.Get());
+                inst = builder_.ShiftLeft(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kShiftRight:
-                inst = builder_.ShiftRight(ty, lhs.Get(), rhs.Get());
+                inst = builder_.ShiftRight(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kAdd:
-                inst = builder_.Add(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Add(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kSubtract:
-                inst = builder_.Subtract(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Subtract(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kMultiply:
-                inst = builder_.Multiply(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Multiply(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kDivide:
-                inst = builder_.Divide(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Divide(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kModulo:
-                inst = builder_.Modulo(ty, lhs.Get(), rhs.Get());
+                inst = builder_.Modulo(ty, lhs_value, rhs.Get());
                 break;
             case ast::BinaryOp::kLessThanEqual:
             case ast::BinaryOp::kGreaterThanEqual:
@@ -796,7 +821,8 @@ class Impl {
 
     utils::Result<Value*> EmitExpression(const ast::Expression* expr) {
         // If this is a value that has been const-eval'd return the result.
-        if (auto* sem = program_->Sem().Get(expr)->As<sem::ValueExpression>()) {
+        auto* sem = program_->Sem().GetVal(expr);
+        if (sem) {
             if (auto* v = sem->ConstantValue()) {
                 if (auto* cv = v->Clone(clone_ctx_)) {
                     return builder_.Constant(cv);
@@ -804,7 +830,7 @@ class Impl {
             }
         }
 
-        return tint::Switch(
+        auto result = tint::Switch(
             expr,
             // [&](const ast::IndexAccessorExpression* a) {
             // TODO(dsinclair): Implement
@@ -825,15 +851,23 @@ class Impl {
             // [&](const ast::MemberAccessorExpression* m) {
             // TODO(dsinclair): Implement
             // },
-            // [&](const ast::PhonyExpression*) {
-            // TODO(dsinclair): Implement. The call may have side effects so has to be made.
-            // },
             [&](const ast::UnaryOpExpression* u) { return EmitUnary(u); },
+            // Note, ast::PhonyExpression is explicitly not handled here as it should never get into
+            // this method. The assignment statement should have filtered it out already.
             [&](Default) {
                 add_error(expr->source,
                           "unknown expression type: " + std::string(expr->TypeInfo().name));
                 return utils::Failure;
             });
+
+        // If this expression maps to sem::Load, insert a load instruction to get the result.
+        if (result && sem->Is<sem::Load>()) {
+            auto* load = builder_.Load(result.Get());
+            current_flow_block_->instructions.Push(load);
+            return load;
+        }
+
+        return result;
     }
 
     void EmitVariable(const ast::Variable* var) {
@@ -842,8 +876,12 @@ class Impl {
         return tint::Switch(  //
             var,
             [&](const ast::Var* v) {
-                auto* ty = sem->Type()->Clone(clone_ctx_.type_ctx);
-                auto* val = builder_.Declare(ty, sem->AddressSpace(), sem->Access());
+                auto* ref = sem->Type()->As<type::Reference>();
+                auto* ty = builder_.ir.types.Get<type::Pointer>(
+                    ref->StoreType()->Clone(clone_ctx_.type_ctx), ref->AddressSpace(),
+                    ref->Access());
+
+                auto* val = builder_.Declare(ty);
                 current_flow_block_->instructions.Push(val);
 
                 if (v->initializer) {
@@ -904,13 +942,11 @@ class Impl {
         Instruction* inst = nullptr;
         switch (expr->op) {
             case ast::UnaryOp::kAddressOf:
-                inst = builder_.AddressOf(ty, val.Get());
-                break;
+            case ast::UnaryOp::kIndirection:
+                // 'address-of' and 'indirection' just fold away and we propagate the pointer.
+                return val;
             case ast::UnaryOp::kComplement:
                 inst = builder_.Complement(ty, val.Get());
-                break;
-            case ast::UnaryOp::kIndirection:
-                inst = builder_.Indirection(ty, val.Get());
                 break;
             case ast::UnaryOp::kNegation:
                 inst = builder_.Negation(ty, val.Get());
@@ -943,27 +979,34 @@ class Impl {
             return utils::Failure;
         }
 
-        // Generate a variable to store the short-circut into
-        auto* ty = builder_.ir.types.Get<type::Bool>();
-        auto* result_var =
-            builder_.Declare(ty, builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
-        current_flow_block_->instructions.Push(result_var);
-
-        auto* lhs_store = builder_.Store(result_var, lhs.Get());
-        current_flow_block_->instructions.Push(lhs_store);
-
         auto* if_node = builder_.CreateIf(lhs.Get());
         BranchTo(if_node);
+
+        auto* result = builder_.BlockParam(builder_.ir.types.Get<type::Bool>());
+        if_node->merge.target->As<Block>()->params.Push(result);
 
         utils::Result<Value*> rhs;
         {
             FlowStackScope scope(this, if_node);
 
+            utils::Vector<Value*, 1> alt_args;
+            alt_args.Push(lhs.Get());
+
             // If this is an `&&` then we only evaluate the RHS expression in the true block.
             // If this is an `||` then we only evaluate the RHS expression in the false block.
             if (expr->op == ast::BinaryOp::kLogicalAnd) {
+                // If the lhs is false, then that is the result we want to pass to the merge block
+                // as our argument
+                current_flow_block_ = if_node->false_.target->As<Block>();
+                BranchTo(if_node->merge.target, std::move(alt_args));
+
                 current_flow_block_ = if_node->true_.target->As<Block>();
             } else {
+                // If the lhs is true, then that is the result we want to pass to the merge block
+                // as our argument
+                current_flow_block_ = if_node->true_.target->As<Block>();
+                BranchTo(if_node->merge.target, std::move(alt_args));
+
                 current_flow_block_ = if_node->false_.target->As<Block>();
             }
 
@@ -971,14 +1014,14 @@ class Impl {
             if (!rhs) {
                 return utils::Failure;
             }
-            auto* rhs_store = builder_.Store(result_var, rhs.Get());
-            current_flow_block_->instructions.Push(rhs_store);
+            utils::Vector<Value*, 1> args;
+            args.Push(rhs.Get());
 
-            BranchTo(if_node->merge.target);
+            BranchTo(if_node->merge.target, std::move(args));
         }
         current_flow_block_ = if_node->merge.target->As<Block>();
 
-        return result_var;
+        return result;
     }
 
     utils::Result<Value*> EmitBinary(const ast::BinaryExpression* expr) {

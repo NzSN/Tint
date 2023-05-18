@@ -12,24 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/transform/transform.h"
+#include "src/tint/ir/block_param.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::transform::Transform);
-TINT_INSTANTIATE_TYPEINFO(tint::transform::Data);
+TINT_INSTANTIATE_TYPEINFO(tint::ir::BlockParam);
 
-namespace tint::transform {
+namespace tint::ir {
 
-Data::Data() = default;
-Data::Data(const Data&) = default;
-Data::~Data() = default;
-Data& Data::operator=(const Data&) = default;
+BlockParam::BlockParam(const type::Type* ty) : type(ty) {}
 
-DataMap::DataMap() = default;
-DataMap::DataMap(DataMap&&) = default;
-DataMap::~DataMap() = default;
-DataMap& DataMap::operator=(DataMap&&) = default;
+BlockParam::~BlockParam() = default;
 
-Transform::Transform() = default;
-Transform::~Transform() = default;
-
-}  // namespace tint::transform
+}  // namespace tint::ir

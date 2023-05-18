@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_WRITER_SPIRV_GENERATOR_IMPL_IR_H_
-#define SRC_TINT_WRITER_SPIRV_GENERATOR_IMPL_IR_H_
+#ifndef SRC_TINT_WRITER_SPIRV_IR_GENERATOR_IMPL_IR_H_
+#define SRC_TINT_WRITER_SPIRV_IR_GENERATOR_IMPL_IR_H_
 
 #include <vector>
 
@@ -30,9 +30,12 @@
 namespace tint::ir {
 class Binary;
 class Block;
+class If;
 class Function;
 class Module;
+class Store;
 class Value;
+class Var;
 }  // namespace tint::ir
 namespace tint::type {
 class Type;
@@ -47,7 +50,7 @@ class GeneratorImplIr {
     /// @param module the Tint IR module to generate
     /// @param zero_init_workgroup_memory `true` to initialize all the variables in the Workgroup
     ///                                   storage class with OpConstantNull
-    GeneratorImplIr(const ir::Module* module, bool zero_init_workgroup_memory);
+    GeneratorImplIr(ir::Module* module, bool zero_init_workgroup_memory);
 
     /// @returns true on successful generation; false otherwise
     bool Generate();
@@ -76,6 +79,11 @@ class GeneratorImplIr {
     /// @returns the result ID of the value
     uint32_t Value(const ir::Value* value);
 
+    /// Get the ID of the label for `block`.
+    /// @param block the block to get the label ID for
+    /// @returns the ID of the block's label
+    uint32_t Label(const ir::Block* block);
+
     /// Emit a function.
     /// @param func the function to emit
     void EmitFunction(const ir::Function* func);
@@ -89,10 +97,23 @@ class GeneratorImplIr {
     /// @param block the block to emit
     void EmitBlock(const ir::Block* block);
 
+    /// Emit an `if` flow node.
+    /// @param i the if node to emit
+    void EmitIf(const ir::If* i);
+
     /// Emit a binary instruction.
     /// @param binary the binary instruction to emit
     /// @returns the result ID of the instruction
     uint32_t EmitBinary(const ir::Binary* binary);
+
+    /// Emit a store instruction.
+    /// @param store the store instruction to emit
+    void EmitStore(const ir::Store* store);
+
+    /// Emit a var instruction.
+    /// @param var the var instruction to emit
+    /// @returns the result ID of the instruction
+    uint32_t EmitVar(const ir::Var* var);
 
   private:
     /// Get the result ID of the constant `constant`, emitting its instruction if necessary.
@@ -100,7 +121,7 @@ class GeneratorImplIr {
     /// @returns the result ID of the constant
     uint32_t Constant(const constant::Value* constant);
 
-    const ir::Module* ir_;
+    ir::Module* ir_;
     spirv::Module module_;
     BinaryWriter writer_;
     diag::List diagnostics_;
@@ -161,6 +182,9 @@ class GeneratorImplIr {
     /// The map of instructions to their result IDs.
     utils::Hashmap<const ir::Instruction*, uint32_t, 8> instructions_;
 
+    /// The map of blocks to the IDs of their label instructions.
+    utils::Hashmap<const ir::Block*, uint32_t, 8> block_labels_;
+
     /// The current function that is being emitted.
     Function current_function_;
 
@@ -169,4 +193,4 @@ class GeneratorImplIr {
 
 }  // namespace tint::writer::spirv
 
-#endif  // SRC_TINT_WRITER_SPIRV_GENERATOR_IMPL_IR_H_
+#endif  // SRC_TINT_WRITER_SPIRV_IR_GENERATOR_IMPL_IR_H_

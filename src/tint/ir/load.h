@@ -12,51 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_UNARY_H_
-#define SRC_TINT_IR_UNARY_H_
+#ifndef SRC_TINT_IR_LOAD_H_
+#define SRC_TINT_IR_LOAD_H_
 
 #include "src/tint/ir/instruction.h"
 #include "src/tint/utils/castable.h"
 
 namespace tint::ir {
 
-/// An instruction in the IR.
-class Unary : public utils::Castable<Unary, Instruction> {
+/// A load instruction in the IR.
+class Load : public utils::Castable<Load, Instruction> {
   public:
-    /// The kind of instruction.
-    enum class Kind {
-        kComplement,
-        kNegation,
-    };
-
     /// Constructor
-    /// @param kind the kind of unary instruction
-    /// @param result_type the result type
-    /// @param val the input value for the instruction
-    Unary(Kind kind, const type::Type* result_type, Value* val);
-    Unary(const Unary& inst) = delete;
-    Unary(Unary&& inst) = delete;
-    ~Unary() override;
+    /// @param type the result type
+    /// @param from the value being loaded from
+    Load(const type::Type* type, Value* from);
+    Load(const Load& inst) = delete;
+    Load(Load&& inst) = delete;
+    ~Load() override;
 
-    Unary& operator=(const Unary& inst) = delete;
-    Unary& operator=(Unary&& inst) = delete;
+    Load& operator=(const Load& inst) = delete;
+    Load& operator=(Load&& inst) = delete;
 
     /// @returns the type of the value
     const type::Type* Type() const override { return result_type; }
 
-    /// @returns the value for the instruction
-    const Value* Val() const { return val_; }
-
-    /// the kind of unary instruction
-    Kind kind = Kind::kNegation;
-
     /// the result type of the instruction
     const type::Type* result_type = nullptr;
 
-  private:
-    Value* val_ = nullptr;
+    /// the value being loaded
+    Value* from = nullptr;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_UNARY_H_
+#endif  // SRC_TINT_IR_LOAD_H_

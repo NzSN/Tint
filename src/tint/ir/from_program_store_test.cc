@@ -36,13 +36,13 @@ TEST_F(IR_BuilderImplTest, EmitStatement_Assign) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%fn1 = block {
-  %a:ref<private, u32, read_write> = var private, read_write
+  %a:ptr<private, u32, read_write> = var
 }
 
 
 %fn2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] {
   %fn3 = block {
-    store %a:ref<private, u32, read_write>, 4u
+    store %a, 4u
   } -> %func_end # return
 } %func_end
 

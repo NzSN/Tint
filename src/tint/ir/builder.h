@@ -28,6 +28,7 @@
 #include "src/tint/ir/function.h"
 #include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
+#include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
 #include "src/tint/ir/root_terminator.h"
@@ -279,23 +280,11 @@ class Builder {
     /// @returns the operation
     Unary* CreateUnary(Unary::Kind kind, const type::Type* type, Value* val);
 
-    /// Creates an AddressOf operation
-    /// @param type the result type of the expression
-    /// @param val the value
-    /// @returns the operation
-    Unary* AddressOf(const type::Type* type, Value* val);
-
     /// Creates a Complement operation
     /// @param type the result type of the expression
     /// @param val the value
     /// @returns the operation
     Unary* Complement(const type::Type* type, Value* val);
-
-    /// Creates an Indirection operation
-    /// @param type the result type of the expression
-    /// @param val the value
-    /// @returns the operation
-    Unary* Indirection(const type::Type* type, Value* val);
 
     /// Creates a Negation operation
     /// @param type the result type of the expression
@@ -350,7 +339,12 @@ class Builder {
                          builtin::Function func,
                          utils::VectorRef<Value*> args);
 
-    /// Creates an store instruction
+    /// Creates a load instruction
+    /// @param from the expression being loaded from
+    /// @returns the instruction
+    ir::Load* Load(Value* from);
+
+    /// Creates a store instruction
     /// @param to the expression being stored too
     /// @param from the expression being stored
     /// @returns the instruction
@@ -358,12 +352,13 @@ class Builder {
 
     /// Creates a new `var` declaration
     /// @param type the var type
-    /// @param address_space the address space
-    /// @param access the access mode
     /// @returns the instruction
-    ir::Var* Declare(const type::Type* type,
-                     builtin::AddressSpace address_space,
-                     builtin::Access access);
+    ir::Var* Declare(const type::Type* type);
+
+    /// Creates a new `BlockParam`
+    /// @param type the parameter type
+    /// @returns the value
+    ir::BlockParam* BlockParam(const type::Type* type);
 
     /// Retrieves the root block for the module, creating if necessary
     /// @returns the root block

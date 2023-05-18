@@ -12,39 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_VAR_H_
-#define SRC_TINT_IR_VAR_H_
+#ifndef SRC_TINT_IR_BLOCK_PARAM_H_
+#define SRC_TINT_IR_BLOCK_PARAM_H_
 
-#include "src/tint/builtin/access.h"
-#include "src/tint/builtin/address_space.h"
-#include "src/tint/ir/instruction.h"
+#include "src/tint/ir/value.h"
 #include "src/tint/utils/castable.h"
 
 namespace tint::ir {
 
 /// An instruction in the IR.
-class Var : public utils::Castable<Var, Instruction> {
+class BlockParam : public utils::Castable<BlockParam, Value> {
   public:
     /// Constructor
     /// @param type the type of the var
-    explicit Var(const type::Type* type);
-    Var(const Var& inst) = delete;
-    Var(Var&& inst) = delete;
-    ~Var() override;
+    explicit BlockParam(const type::Type* type);
+    BlockParam(const BlockParam& inst) = delete;
+    BlockParam(BlockParam&& inst) = delete;
+    ~BlockParam() override;
 
-    Var& operator=(const Var& inst) = delete;
-    Var& operator=(Var&& inst) = delete;
+    BlockParam& operator=(const BlockParam& inst) = delete;
+    BlockParam& operator=(BlockParam&& inst) = delete;
 
     /// @returns the type of the var
     const type::Type* Type() const override { return type; }
 
     /// the result type of the instruction
     const type::Type* type = nullptr;
-
-    /// The optional initializer
-    Value* initializer = nullptr;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_VAR_H_
+#endif  // SRC_TINT_IR_BLOCK_PARAM_H_

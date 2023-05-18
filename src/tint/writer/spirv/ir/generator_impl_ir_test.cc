@@ -12,24 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/transform/transform.h"
+#include "src/tint/writer/spirv/ir/test_helper_ir.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::transform::Transform);
-TINT_INSTANTIATE_TYPEINFO(tint::transform::Data);
+#include "gmock/gmock.h"
 
-namespace tint::transform {
+namespace tint::writer::spirv {
+namespace {
 
-Data::Data() = default;
-Data::Data(const Data&) = default;
-Data::~Data() = default;
-Data& Data::operator=(const Data&) = default;
+TEST_F(SpvGeneratorImplTest, ModuleHeader) {
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    auto got = Disassemble(generator_.Result());
+    EXPECT_THAT(got, testing::StartsWith(R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+)"));
+}
 
-DataMap::DataMap() = default;
-DataMap::DataMap(DataMap&&) = default;
-DataMap::~DataMap() = default;
-DataMap& DataMap::operator=(DataMap&&) = default;
-
-Transform::Transform() = default;
-Transform::~Transform() = default;
-
-}  // namespace tint::transform
+}  // namespace
+}  // namespace tint::writer::spirv

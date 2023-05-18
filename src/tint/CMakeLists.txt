@@ -656,8 +656,8 @@ if(${TINT_BUILD_SPV_WRITER})
 
   if(${TINT_BUILD_IR})
     list(APPEND TINT_LIB_SRCS
-      writer/spirv/generator_impl_ir.cc
-      writer/spirv/generator_impl_ir.h
+      writer/spirv/ir/generator_impl_ir.cc
+      writer/spirv/ir/generator_impl_ir.h
     )
   endif()
 endif()
@@ -716,6 +716,8 @@ if(${TINT_BUILD_IR})
     ir/bitcast.h
     ir/block.cc
     ir/block.h
+    ir/block_param.cc
+    ir/block_param.h
     ir/builder.cc
     ir/builder.h
     ir/builtin.cc
@@ -746,6 +748,8 @@ if(${TINT_BUILD_IR})
     ir/if.h
     ir/instruction.cc
     ir/instruction.h
+    ir/load.cc
+    ir/load.h
     ir/loop.cc
     ir/loop.h
     ir/module.cc
@@ -766,6 +770,10 @@ if(${TINT_BUILD_IR})
     ir/value.h
     ir/var.cc
     ir/var.h
+    ir/transform/add_empty_entry_point.cc
+    ir/transform/add_empty_entry_point.h
+    ir/transform/transform.cc
+    ir/transform/transform.h
   )
 endif()
 
@@ -996,6 +1004,7 @@ if(TINT_BUILD_TESTS)
     symbol_test.cc
     test_main.cc
     ast/transform/transform_test.cc
+    transform/manager_test.cc
     type/array_test.cc
     type/atomic_test.cc
     type/bool_test.cc
@@ -1231,12 +1240,14 @@ if(TINT_BUILD_TESTS)
 
     if(${TINT_BUILD_IR})
       list(APPEND TINT_TEST_SRCS
-        writer/spirv/generator_impl_binary_test.cc
-        writer/spirv/generator_impl_constant_test.cc
-        writer/spirv/generator_impl_function_test.cc
-        writer/spirv/generator_impl_ir_test.cc
-        writer/spirv/generator_impl_type_test.cc
-        writer/spirv/test_helper_ir.h
+        writer/spirv/ir/generator_impl_ir_binary_test.cc
+        writer/spirv/ir/generator_impl_ir_constant_test.cc
+        writer/spirv/ir/generator_impl_ir_function_test.cc
+        writer/spirv/ir/generator_impl_ir_if_test.cc
+        writer/spirv/ir/generator_impl_ir_test.cc
+        writer/spirv/ir/generator_impl_ir_type_test.cc
+        writer/spirv/ir/generator_impl_ir_var_test.cc
+        writer/spirv/ir/test_helper_ir.h
       )
     endif()
   endif()
@@ -1459,6 +1470,7 @@ if(TINT_BUILD_TESTS)
       ir/from_program_test.cc
       ir/from_program_unary_test.cc
       ir/from_program_var_test.cc
+      ir/load_test.cc
       ir/module_test.cc
       ir/store_test.cc
       ir/test_helper.h
