@@ -12,35 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_BLOCK_PARAM_H_
-#define SRC_TINT_IR_BLOCK_PARAM_H_
+#ifndef SRC_TINT_IR_FUNCTION_PARAM_H_
+#define SRC_TINT_IR_FUNCTION_PARAM_H_
 
 #include "src/tint/ir/value.h"
 #include "src/tint/utils/castable.h"
 
 namespace tint::ir {
 
-/// An instruction in the IR.
-class BlockParam : public utils::Castable<BlockParam, Value> {
+/// A function parameter in the IR.
+class FunctionParam : public utils::Castable<FunctionParam, Value> {
   public:
     /// Constructor
     /// @param type the type of the var
-    explicit BlockParam(const type::Type* type);
-    BlockParam(const BlockParam& inst) = delete;
-    BlockParam(BlockParam&& inst) = delete;
-    ~BlockParam() override;
+    explicit FunctionParam(const type::Type* type);
+    FunctionParam(const FunctionParam& inst) = delete;
+    FunctionParam(FunctionParam&& inst) = delete;
+    ~FunctionParam() override;
 
-    BlockParam& operator=(const BlockParam& inst) = delete;
-    BlockParam& operator=(BlockParam&& inst) = delete;
+    FunctionParam& operator=(const FunctionParam& inst) = delete;
+    FunctionParam& operator=(FunctionParam&& inst) = delete;
 
     /// @returns the type of the var
     const type::Type* Type() const override { return type_; }
 
   private:
-    /// the result type of the instruction
+    /// The type of the parameter
     const type::Type* type_;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_BLOCK_PARAM_H_
+#endif  // SRC_TINT_IR_FUNCTION_PARAM_H_

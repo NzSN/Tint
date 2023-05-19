@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/unary.h"
-#include "src/tint/debug.h"
+#include "src/tint/ir/function_param.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Unary);
+TINT_INSTANTIATE_TYPEINFO(tint::ir::FunctionParam);
 
 namespace tint::ir {
 
-Unary::Unary(enum Kind k, const type::Type* res_ty, Value* val)
-    : kind_(k), result_type_(res_ty), val_(val) {
-    TINT_ASSERT(IR, val_);
-    val_->AddUsage(this);
-}
+FunctionParam::FunctionParam(const type::Type* ty) : type_(ty) {}
 
-Unary::~Unary() = default;
+FunctionParam::~FunctionParam() = default;
 
 }  // namespace tint::ir

@@ -742,6 +742,8 @@ if(${TINT_BUILD_IR})
     ir/flow_node.h
     ir/function.cc
     ir/function.h
+    ir/function_param.cc
+    ir/function_param.h
     ir/function_terminator.cc
     ir/function_terminator.h
     ir/if.cc
@@ -1474,6 +1476,7 @@ if(TINT_BUILD_TESTS)
       ir/module_test.cc
       ir/store_test.cc
       ir/test_helper.h
+      ir/transform/add_empty_entry_point_test.cc
       ir/unary_test.cc
     )
   endif()
