@@ -21,12 +21,11 @@ namespace tint::writer::spirv {
 namespace {
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_NoInit) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* ty = mod.types.Get<type::Pointer>(
         mod.types.Get<type::I32>(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
-    func->StartTarget()->SetInstructions(utils::Vector{b.Declare(ty)});
+    func->StartTarget()->SetInstructions(utils::Vector{b.Declare(ty), b.Branch(func->EndTarget())});
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -43,15 +42,14 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_WithInit) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* ty = mod.types.Get<type::Pointer>(
         mod.types.Get<type::I32>(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
     auto* v = b.Declare(ty);
     v->SetInitializer(b.Constant(42_i));
 
-    func->StartTarget()->SetInstructions(utils::Vector{v});
+    func->StartTarget()->SetInstructions(utils::Vector{v, b.Branch(func->EndTarget())});
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -70,13 +68,12 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_Name) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* ty = mod.types.Get<type::Pointer>(
         mod.types.Get<type::I32>(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
     auto* v = b.Declare(ty);
-    func->StartTarget()->SetInstructions(utils::Vector{v});
+    func->StartTarget()->SetInstructions(utils::Vector{v, b.Branch(func->EndTarget())});
     mod.SetName(v, "myvar");
 
     generator_.EmitFunction(func);
@@ -95,8 +92,7 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_DeclInsideBlock) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* ty = mod.types.Get<type::Pointer>(
         mod.types.Get<type::I32>(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
@@ -104,14 +100,11 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_DeclInsideBlock) {
     v->SetInitializer(b.Constant(42_i));
 
     auto* i = b.CreateIf(b.Constant(true));
-    i->False().target->As<ir::Block>()->BranchTo(func->EndTarget());
-    i->Merge().target->As<ir::Block>()->BranchTo(func->EndTarget());
+    i->True()->SetInstructions(utils::Vector{v, b.Branch(i->Merge())});
+    i->False()->SetInstructions(utils::Vector{b.Branch(func->EndTarget())});
+    i->Merge()->SetInstructions(utils::Vector{b.Branch(func->EndTarget())});
 
-    auto* true_block = i->True().target->As<ir::Block>();
-    true_block->SetInstructions(utils::Vector{v});
-    true_block->BranchTo(i->Merge().target);
-
-    func->StartTarget()->BranchTo(i);
+    func->StartTarget()->SetInstructions(utils::Vector{i});
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -139,14 +132,13 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_Load) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* store_ty = mod.types.Get<type::I32>();
     auto* ty = mod.types.Get<type::Pointer>(store_ty, builtin::AddressSpace::kFunction,
                                             builtin::Access::kReadWrite);
     auto* v = b.Declare(ty);
-    func->StartTarget()->SetInstructions(utils::Vector{v, b.Load(v)});
+    func->StartTarget()->SetInstructions(utils::Vector{v, b.Load(v), b.Branch(func->EndTarget())});
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -164,13 +156,13 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_Store) {
-    auto* func = b.CreateFunction(mod.symbols.Register("foo"), mod.types.Get<type::Void>());
-    func->StartTarget()->BranchTo(func->EndTarget());
+    auto* func = b.CreateFunction("foo", mod.types.Get<type::Void>());
 
     auto* ty = mod.types.Get<type::Pointer>(
         mod.types.Get<type::I32>(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite);
     auto* v = b.Declare(ty);
-    func->StartTarget()->SetInstructions(utils::Vector{v, b.Store(v, b.Constant(42_i))});
+    func->StartTarget()->SetInstructions(
+        utils::Vector{v, b.Store(v, b.Constant(42_i)), b.Branch(func->EndTarget())});
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"

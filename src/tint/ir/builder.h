@@ -30,6 +30,7 @@
 #include "src/tint/ir/function_param.h"
 #include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
+#include "src/tint/ir/jump.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
@@ -45,6 +46,7 @@
 #include "src/tint/type/f32.h"
 #include "src/tint/type/i32.h"
 #include "src/tint/type/u32.h"
+#include "src/tint/type/vector.h"
 #include "src/tint/type/void.h"
 
 namespace tint::ir {
@@ -66,6 +68,17 @@ class Builder {
 
     /// @returns a new function terminator flow node
     FunctionTerminator* CreateFunctionTerminator();
+
+    /// Creates a function flow node
+    /// @param name the function name
+    /// @param return_type the function return type
+    /// @param stage the function stage
+    /// @param wg_size the workgroup_size
+    /// @returns the flow node
+    Function* CreateFunction(std::string_view name,
+                             type::Type* return_type,
+                             Function::PipelineStage stage = Function::PipelineStage::kUndefined,
+                             std::optional<std::array<uint32_t, 3>> wg_size = {});
 
     /// Creates a function flow node
     /// @param name the function name
@@ -105,6 +118,41 @@ class Builder {
     utils::traits::EnableIf<utils::traits::IsTypeOrDerived<T, constant::Value>, const T>* create(
         ARGS&&... args) {
         return ir.constants_arena.Create<T>(std::forward<ARGS>(args)...);
+    }
+
+    /// @param v the value
+    /// @returns the constant value
+    const constant::Value* Bool(bool v) {
+        // TODO(dsinclair): Replace when constant::Value is uniqed by the arena.
+        return Constant(create<constant::Scalar<bool>>(ir.types.Get<type::Bool>(), v))->Value();
+    }
+
+    /// @param v the value
+    /// @returns the constant value
+    const constant::Value* U32(uint32_t v) {
+        // TODO(dsinclair): Replace when constant::Value is uniqed by the arena.
+        return Constant(create<constant::Scalar<u32>>(ir.types.Get<type::U32>(), u32(v)))->Value();
+    }
+
+    /// @param v the value
+    /// @returns the constant value
+    const constant::Value* I32(int32_t v) {
+        // TODO(dsinclair): Replace when constant::Value is uniqed by the arena.
+        return Constant(create<constant::Scalar<i32>>(ir.types.Get<type::I32>(), i32(v)))->Value();
+    }
+
+    /// @param v the value
+    /// @returns the constant value
+    const constant::Value* F16(float v) {
+        // TODO(dsinclair): Replace when constant::Value is uniqed by the arena.
+        return Constant(create<constant::Scalar<f16>>(ir.types.Get<type::F16>(), f16(v)))->Value();
+    }
+
+    /// @param v the value
+    /// @returns the constant value
+    const constant::Value* F32(float v) {
+        // TODO(dsinclair): Replace when constant::Value is uniqed by the arena.
+        return Constant(create<constant::Scalar<f32>>(ir.types.Get<type::F32>(), f32(v)))->Value();
     }
 
     /// Creates a new ir::Constant
@@ -350,6 +398,18 @@ class Builder {
     /// @param type the var type
     /// @returns the instruction
     ir::Var* Declare(const type::Type* type);
+
+    /// Creates a branch declaration
+    /// @param to the node being branched too
+    /// @param args the branch arguments
+    /// @returns the instruction
+    ir::Branch* Branch(FlowNode* to, utils::VectorRef<Value*> args = {});
+
+    /// Creates a jump declaration
+    /// @param to the node being branched too
+    /// @param args the branch arguments
+    /// @returns the instruction
+    ir::Jump* Jump(FlowNode* to, utils::VectorRef<Value*> args = {});
 
     /// Creates a new `BlockParam`
     /// @param type the parameter type
