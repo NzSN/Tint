@@ -19,23 +19,22 @@
 
 #include "src/tint/ir/block_param.h"
 #include "src/tint/ir/branch.h"
-#include "src/tint/ir/flow_node.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/utils/vector.h"
 
 namespace tint::ir {
 
-/// A flow node comprising a block of statements. The instructions in the block are a linear list of
-/// instructions to execute. The block will branch at the end. The only blocks which do not branch
-/// are the end blocks of functions.
-class Block : public utils::Castable<Block, FlowNode> {
+/// A block of statements. The instructions in the block are a linear list of instructions to
+/// execute. The block will branch at the end. The only blocks which do not branch are the end
+/// blocks of functions.
+class Block : public utils::Castable<Block> {
   public:
     /// Constructor
     Block();
     ~Block() override;
 
     /// @returns true if this is block has a branch target set
-    bool HasBranchTarget() const override {
+    bool HasBranchTarget() const {
         return !instructions_.IsEmpty() && instructions_.Back()->Is<ir::Branch>();
     }
 
@@ -49,7 +48,7 @@ class Block : public utils::Castable<Block, FlowNode> {
 
     /// @param target the block to see if we trampoline too
     /// @returns if this block just branches to the provided target.
-    bool IsTrampoline(const FlowNode* target) const {
+    bool IsTrampoline(const Block* target) const {
         if (instructions_.Length() != 1) {
             return false;
         }
@@ -78,9 +77,23 @@ class Block : public utils::Castable<Block, FlowNode> {
     /// @returns the params to the block
     utils::Vector<const BlockParam*, 0>& Params() { return params_; }
 
+    /// @returns the inbound branch list for the block
+    utils::VectorRef<ir::Branch*> InboundBranches() const { return inbound_branches_; }
+
+    /// Adds the given node to the inbound branches
+    /// @param node the node to add
+    void AddInboundBranch(ir::Branch* node) { inbound_branches_.Push(node); }
+
   private:
     utils::Vector<const Instruction*, 16> instructions_;
     utils::Vector<const BlockParam*, 0> params_;
+
+    /// The list of branches into this node. This list maybe empty for several
+    /// reasons:
+    ///   - Node is a start node
+    ///   - Node is a merge target outside control flow (e.g. an if that returns in both branches)
+    ///   - Node is a continue target outside control flow (e.g. a loop that returns)
+    utils::Vector<ir::Branch*, 2> inbound_branches_;
 };
 
 }  // namespace tint::ir

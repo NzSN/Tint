@@ -237,6 +237,8 @@ list(APPEND TINT_LIB_SRCS
   constant/clone_context.h
   constant/composite.cc
   constant/composite.h
+  constant/manager.cc
+  constant/manager.h
   constant/scalar.cc
   constant/scalar.h
   constant/splat.cc
@@ -740,8 +742,6 @@ if(${TINT_BUILD_IR})
     ir/discard.h
     ir/from_program.cc
     ir/from_program.h
-    ir/flow_node.cc
-    ir/flow_node.h
     ir/function.cc
     ir/function.h
     ir/function_param.cc
@@ -752,8 +752,6 @@ if(${TINT_BUILD_IR})
     ir/if.h
     ir/instruction.cc
     ir/instruction.h
-    ir/jump.cc
-    ir/jump.h
     ir/load.cc
     ir/load.h
     ir/loop.cc
@@ -925,6 +923,7 @@ if(TINT_BUILD_TESTS)
     ast/workgroup_attribute_test.cc
     clone_context_test.cc
     constant/composite_test.cc
+    constant/manager_test.cc
     constant/scalar_test.cc
     constant/splat_test.cc
     debug_test.cc

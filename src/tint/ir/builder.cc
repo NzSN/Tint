@@ -34,31 +34,31 @@ ir::Block* Builder::CreateRootBlockIfNeeded() {
 }
 
 Block* Builder::CreateBlock() {
-    return ir.flow_nodes.Create<Block>();
+    return ir.blocks.Create<Block>();
 }
 
 RootTerminator* Builder::CreateRootTerminator() {
-    return ir.flow_nodes.Create<RootTerminator>();
+    return ir.blocks.Create<RootTerminator>();
 }
 
 FunctionTerminator* Builder::CreateFunctionTerminator() {
-    return ir.flow_nodes.Create<FunctionTerminator>();
+    return ir.blocks.Create<FunctionTerminator>();
 }
 
 Function* Builder::CreateFunction(std::string_view name,
-                                  type::Type* return_type,
+                                  const type::Type* return_type,
                                   Function::PipelineStage stage,
                                   std::optional<std::array<uint32_t, 3>> wg_size) {
     return CreateFunction(ir.symbols.Register(name), return_type, stage, wg_size);
 }
 
 Function* Builder::CreateFunction(Symbol name,
-                                  type::Type* return_type,
+                                  const type::Type* return_type,
                                   Function::PipelineStage stage,
                                   std::optional<std::array<uint32_t, 3>> wg_size) {
     TINT_ASSERT(IR, return_type);
 
-    auto* ir_func = ir.flow_nodes.Create<Function>(name, return_type, stage, wg_size);
+    auto* ir_func = ir.values.Create<Function>(name, return_type, stage, wg_size);
     ir_func->SetStartTarget(CreateBlock());
     ir_func->SetEndTarget(CreateFunctionTerminator());
 
@@ -170,7 +170,7 @@ Unary* Builder::Negation(const type::Type* type, Value* val) {
 }
 
 Binary* Builder::Not(const type::Type* type, Value* val) {
-    return Equal(type, val, Constant(create<constant::Scalar<bool>>(type, false)));
+    return Equal(type, val, Constant(false));
 }
 
 ir::Bitcast* Builder::Bitcast(const type::Type* type, Value* val) {
@@ -217,12 +217,8 @@ ir::Var* Builder::Declare(const type::Type* type) {
     return ir.values.Create<ir::Var>(type);
 }
 
-ir::Branch* Builder::Branch(FlowNode* to, utils::VectorRef<Value*> args) {
+ir::Branch* Builder::Branch(Block* to, utils::VectorRef<Value*> args) {
     return ir.values.Create<ir::Branch>(to, args);
-}
-
-ir::Jump* Builder::Jump(FlowNode* to, utils::VectorRef<Value*> args) {
-    return ir.values.Create<ir::Jump>(to, args);
 }
 
 ir::BlockParam* Builder::BlockParam(const type::Type* type) {

@@ -25,43 +25,43 @@ namespace tint::writer::spirv {
 namespace {
 
 TEST_F(SpvGeneratorImplTest, Type_Void) {
-    auto id = generator_.Type(mod.types.Get<type::Void>());
+    auto id = generator_.Type(mod.Types().void_());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeVoid\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Bool) {
-    auto id = generator_.Type(mod.types.Get<type::Bool>());
+    auto id = generator_.Type(mod.Types().bool_());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeBool\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_I32) {
-    auto id = generator_.Type(mod.types.Get<type::I32>());
+    auto id = generator_.Type(mod.Types().i32());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeInt 32 1\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_U32) {
-    auto id = generator_.Type(mod.types.Get<type::U32>());
+    auto id = generator_.Type(mod.Types().u32());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeInt 32 0\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_F32) {
-    auto id = generator_.Type(mod.types.Get<type::F32>());
+    auto id = generator_.Type(mod.Types().f32());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeFloat 32\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_F16) {
-    auto id = generator_.Type(mod.types.Get<type::F16>());
+    auto id = generator_.Type(mod.Types().f16());
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(), "%1 = OpTypeFloat 16\n");
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Vec2i) {
-    auto* vec = b.ir.types.Get<type::Vector>(b.ir.types.Get<type::I32>(), 2u);
+    auto* vec = mod.Types().Get<type::Vector>(mod.Types().i32(), 2u);
     auto id = generator_.Type(vec);
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(),
@@ -70,7 +70,7 @@ TEST_F(SpvGeneratorImplTest, Type_Vec2i) {
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Vec3u) {
-    auto* vec = b.ir.types.Get<type::Vector>(b.ir.types.Get<type::U32>(), 3u);
+    auto* vec = mod.Types().Get<type::Vector>(mod.Types().u32(), 3u);
     auto id = generator_.Type(vec);
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(),
@@ -79,7 +79,7 @@ TEST_F(SpvGeneratorImplTest, Type_Vec3u) {
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Vec4f) {
-    auto* vec = b.ir.types.Get<type::Vector>(b.ir.types.Get<type::F32>(), 4u);
+    auto* vec = mod.Types().Get<type::Vector>(mod.Types().f32(), 4u);
     auto id = generator_.Type(vec);
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(),
@@ -88,7 +88,7 @@ TEST_F(SpvGeneratorImplTest, Type_Vec4f) {
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Vec4h) {
-    auto* vec = b.ir.types.Get<type::Vector>(b.ir.types.Get<type::F16>(), 2u);
+    auto* vec = mod.Types().Get<type::Vector>(mod.Types().f16(), 2u);
     auto id = generator_.Type(vec);
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(),
@@ -97,7 +97,7 @@ TEST_F(SpvGeneratorImplTest, Type_Vec4h) {
 }
 
 TEST_F(SpvGeneratorImplTest, Type_Vec4Bool) {
-    auto* vec = b.ir.types.Get<type::Vector>(b.ir.types.Get<type::Bool>(), 4u);
+    auto* vec = mod.Types().Get<type::Vector>(mod.Types().bool_(), 4u);
     auto id = generator_.Type(vec);
     EXPECT_EQ(id, 1u);
     EXPECT_EQ(DumpTypes(),
@@ -105,13 +105,33 @@ TEST_F(SpvGeneratorImplTest, Type_Vec4Bool) {
               "%1 = OpTypeVector %2 4\n");
 }
 
+TEST_F(SpvGeneratorImplTest, Type_Mat2x3f) {
+    auto* vec = mod.Types().mat2x3(mod.Types().f32());
+    auto id = generator_.Type(vec);
+    EXPECT_EQ(id, 1u);
+    EXPECT_EQ(DumpTypes(),
+              "%3 = OpTypeFloat 32\n"
+              "%2 = OpTypeVector %3 3\n"
+              "%1 = OpTypeMatrix %2 2\n");
+}
+
+TEST_F(SpvGeneratorImplTest, Type_Mat4x2h) {
+    auto* vec = mod.Types().mat4x2(mod.Types().f16());
+    auto id = generator_.Type(vec);
+    EXPECT_EQ(id, 1u);
+    EXPECT_EQ(DumpTypes(),
+              "%3 = OpTypeFloat 16\n"
+              "%2 = OpTypeVector %3 2\n"
+              "%1 = OpTypeMatrix %2 4\n");
+}
+
 // Test that we can emit multiple types.
 // Includes types with the same opcode but different parameters.
 TEST_F(SpvGeneratorImplTest, Type_Multiple) {
-    EXPECT_EQ(generator_.Type(mod.types.Get<type::I32>()), 1u);
-    EXPECT_EQ(generator_.Type(mod.types.Get<type::U32>()), 2u);
-    EXPECT_EQ(generator_.Type(mod.types.Get<type::F32>()), 3u);
-    EXPECT_EQ(generator_.Type(mod.types.Get<type::F16>()), 4u);
+    EXPECT_EQ(generator_.Type(mod.Types().i32()), 1u);
+    EXPECT_EQ(generator_.Type(mod.Types().u32()), 2u);
+    EXPECT_EQ(generator_.Type(mod.Types().f32()), 3u);
+    EXPECT_EQ(generator_.Type(mod.Types().f16()), 4u);
     EXPECT_EQ(DumpTypes(), R"(%1 = OpTypeInt 32 1
 %2 = OpTypeInt 32 0
 %3 = OpTypeFloat 32
@@ -121,7 +141,7 @@ TEST_F(SpvGeneratorImplTest, Type_Multiple) {
 
 // Test that we do not emit the same type more than once.
 TEST_F(SpvGeneratorImplTest, Type_Deduplicate) {
-    auto* i32 = mod.types.Get<type::I32>();
+    auto* i32 = mod.Types().i32();
     EXPECT_EQ(generator_.Type(i32), 1u);
     EXPECT_EQ(generator_.Type(i32), 1u);
     EXPECT_EQ(generator_.Type(i32), 1u);

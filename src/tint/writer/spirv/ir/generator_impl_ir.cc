@@ -14,6 +14,8 @@
 
 #include "src/tint/writer/spirv/ir/generator_impl_ir.h"
 
+#include <utility>
+
 #include "spirv/unified1/spirv.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/block.h"
@@ -23,6 +25,7 @@
 #include "src/tint/ir/module.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/transform/add_empty_entry_point.h"
+#include "src/tint/ir/user_call.h"
 #include "src/tint/ir/var.h"
 #include "src/tint/switch.h"
 #include "src/tint/transform/manager.h"
@@ -30,6 +33,7 @@
 #include "src/tint/type/f16.h"
 #include "src/tint/type/f32.h"
 #include "src/tint/type/i32.h"
+#include "src/tint/type/matrix.h"
 #include "src/tint/type/pointer.h"
 #include "src/tint/type/type.h"
 #include "src/tint/type/u32.h"
@@ -146,6 +150,13 @@ uint32_t GeneratorImplIr::Constant(const constant::Value* constant) {
                 }
                 module_.PushType(spv::Op::OpConstantComposite, operands);
             },
+            [&](const type::Matrix* mat) {
+                OperandList operands = {Type(ty), id};
+                for (uint32_t i = 0; i < mat->columns(); i++) {
+                    operands.push_back(Constant(constant->Index(i)));
+                }
+                module_.PushType(spv::Op::OpConstantComposite, operands);
+            },
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_) << "unhandled constant type: " << ty->FriendlyName();
             });
@@ -175,6 +186,10 @@ uint32_t GeneratorImplIr::Type(const type::Type* ty) {
             [&](const type::Vector* vec) {
                 module_.PushType(spv::Op::OpTypeVector, {id, Type(vec->type()), vec->Width()});
             },
+            [&](const type::Matrix* mat) {
+                module_.PushType(spv::Op::OpTypeMatrix,
+                                 {id, Type(mat->ColumnType()), mat->columns()});
+            },
             [&](const type::Pointer* ptr) {
                 module_.PushType(
                     spv::Op::OpTypePointer,
@@ -191,17 +206,13 @@ uint32_t GeneratorImplIr::Value(const ir::Value* value) {
     return Switch(
         value,  //
         [&](const ir::Constant* constant) { return Constant(constant); },
-        [&](const ir::Instruction* inst) {
-            auto id = instructions_.Find(inst);
+        [&](const ir::Value*) {
+            auto id = values_.Find(value);
             if (TINT_UNLIKELY(!id)) {
-                TINT_ICE(Writer, diagnostics_) << "missing instruction result";
+                TINT_ICE(Writer, diagnostics_) << "missing result ID for value";
                 return 0u;
             }
             return *id;
-        },
-        [&](Default) {
-            TINT_ICE(Writer, diagnostics_) << "unhandled value node: " << value->TypeInfo().name;
-            return 0u;
         });
 }
 
@@ -212,6 +223,7 @@ uint32_t GeneratorImplIr::Label(const ir::Block* block) {
 void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Make an ID for the function.
     auto id = module_.NextId();
+    functions_.Add(func->Name(), id);
 
     // Emit the function name.
     module_.PushDebug(spv::Op::OpName, {id, Operand(func->Name().Name())});
@@ -224,9 +236,22 @@ void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Get the ID for the return type.
     auto return_type_id = Type(func->ReturnType());
 
-    // Get the ID for the function type (creating it if needed).
-    // TODO(jrprice): Add the parameter types when they are supported in the IR.
     FunctionType function_type{return_type_id, {}};
+    InstructionList params;
+
+    // Generate function parameter declarations and add their type IDs to the function signature.
+    for (auto* param : func->Params()) {
+        auto param_type_id = Type(param->Type());
+        auto param_id = module_.NextId();
+        params.push_back(Instruction(spv::Op::OpFunctionParameter, {param_type_id, param_id}));
+        values_.Add(param, param_id);
+        function_type.param_type_ids.Push(param_type_id);
+        if (auto name = ir_->NameOf(param)) {
+            module_.PushDebug(spv::Op::OpName, {param_id, Operand(name.Name())});
+        }
+    }
+
+    // Get the ID for the function type (creating it if needed).
     auto function_type_id = function_types_.GetOrCreate(function_type, [&]() {
         auto func_ty_id = module_.NextId();
         OperandList operands = {func_ty_id, return_type_id};
@@ -242,9 +267,8 @@ void GeneratorImplIr::EmitFunction(const ir::Function* func) {
                     {return_type_id, id, U32Operand(SpvFunctionControlMaskNone), function_type_id}};
 
     // Create a function that we will add instructions to.
-    // TODO(jrprice): Add the parameter declarations when they are supported in the IR.
     auto entry_block = module_.NextId();
-    current_function_ = Function(decl, entry_block, {});
+    current_function_ = Function(decl, entry_block, std::move(params));
     TINT_DEFER(current_function_ = Function());
 
     // Emit the body of the function.
@@ -309,6 +333,7 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
                 EmitStore(s);
                 return 0u;
             },
+            [&](const ir::UserCall* c) { return EmitUserCall(c); },
             [&](const ir::Var* v) { return EmitVar(v); },
             [&](const ir::If* i) {
                 EmitIf(i);
@@ -323,21 +348,24 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
                     << "unimplemented instruction: " << inst->TypeInfo().name;
                 return 0u;
             });
-        instructions_.Add(inst, result);
+        values_.Add(inst, result);
     }
 }
 
 void GeneratorImplIr::EmitBranch(const ir::Branch* b) {
     Switch(
         b->To(),
-        [&](const ir::Block* blk) { current_function_.push_inst(spv::Op::OpBranch, {Label(blk)}); },
         [&](const ir::FunctionTerminator*) {
-            // TODO(jrprice): Handle the return value, which will be a branch argument.
             if (!b->Args().IsEmpty()) {
-                TINT_ICE(Writer, diagnostics_) << "unimplemented return value";
+                TINT_ASSERT(Writer, b->Args().Length() == 1u);
+                OperandList operands;
+                operands.push_back(Value(b->Args()[0]));
+                current_function_.push_inst(spv::Op::OpReturnValue, operands);
+            } else {
+                current_function_.push_inst(spv::Op::OpReturn, {});
             }
-            current_function_.push_inst(spv::Op::OpReturn, {});
         },
+        [&](const ir::Block* blk) { current_function_.push_inst(spv::Op::OpBranch, {Label(blk)}); },
         [&](Default) {
             // A block may not have an outward branch (e.g. an unreachable merge
             // block).
@@ -384,6 +412,7 @@ void GeneratorImplIr::EmitIf(const ir::If* i) {
 
 uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
     auto id = module_.NextId();
+    auto* lhs_ty = binary->LHS()->Type();
 
     // Determine the opcode.
     spv::Op op = spv::Op::Max;
@@ -396,6 +425,81 @@ uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
             op = binary->Type()->is_integer_scalar_or_vector() ? spv::Op::OpISub : spv::Op::OpFSub;
             break;
         }
+
+        case ir::Binary::Kind::kAnd: {
+            op = spv::Op::OpBitwiseAnd;
+            break;
+        }
+        case ir::Binary::Kind::kOr: {
+            op = spv::Op::OpBitwiseOr;
+            break;
+        }
+        case ir::Binary::Kind::kXor: {
+            op = spv::Op::OpBitwiseXor;
+            break;
+        }
+
+        case ir::Binary::Kind::kEqual: {
+            if (lhs_ty->is_bool_scalar_or_vector()) {
+                op = spv::Op::OpLogicalEqual;
+            } else if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdEqual;
+            } else if (lhs_ty->is_integer_scalar_or_vector()) {
+                op = spv::Op::OpIEqual;
+            }
+            break;
+        }
+        case ir::Binary::Kind::kNotEqual: {
+            if (lhs_ty->is_bool_scalar_or_vector()) {
+                op = spv::Op::OpLogicalNotEqual;
+            } else if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdNotEqual;
+            } else if (lhs_ty->is_integer_scalar_or_vector()) {
+                op = spv::Op::OpINotEqual;
+            }
+            break;
+        }
+        case ir::Binary::Kind::kGreaterThan: {
+            if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdGreaterThan;
+            } else if (lhs_ty->is_signed_integer_scalar_or_vector()) {
+                op = spv::Op::OpSGreaterThan;
+            } else if (lhs_ty->is_unsigned_integer_scalar_or_vector()) {
+                op = spv::Op::OpUGreaterThan;
+            }
+            break;
+        }
+        case ir::Binary::Kind::kGreaterThanEqual: {
+            if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdGreaterThanEqual;
+            } else if (lhs_ty->is_signed_integer_scalar_or_vector()) {
+                op = spv::Op::OpSGreaterThanEqual;
+            } else if (lhs_ty->is_unsigned_integer_scalar_or_vector()) {
+                op = spv::Op::OpUGreaterThanEqual;
+            }
+            break;
+        }
+        case ir::Binary::Kind::kLessThan: {
+            if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdLessThan;
+            } else if (lhs_ty->is_signed_integer_scalar_or_vector()) {
+                op = spv::Op::OpSLessThan;
+            } else if (lhs_ty->is_unsigned_integer_scalar_or_vector()) {
+                op = spv::Op::OpULessThan;
+            }
+            break;
+        }
+        case ir::Binary::Kind::kLessThanEqual: {
+            if (lhs_ty->is_float_scalar_or_vector()) {
+                op = spv::Op::OpFOrdLessThanEqual;
+            } else if (lhs_ty->is_signed_integer_scalar_or_vector()) {
+                op = spv::Op::OpSLessThanEqual;
+            } else if (lhs_ty->is_unsigned_integer_scalar_or_vector()) {
+                op = spv::Op::OpULessThanEqual;
+            }
+            break;
+        }
+
         default: {
             TINT_ICE(Writer, diagnostics_)
                 << "unimplemented binary instruction: " << static_cast<uint32_t>(binary->Kind());
@@ -417,6 +521,16 @@ uint32_t GeneratorImplIr::EmitLoad(const ir::Load* load) {
 
 void GeneratorImplIr::EmitStore(const ir::Store* store) {
     current_function_.push_inst(spv::Op::OpStore, {Value(store->To()), Value(store->From())});
+}
+
+uint32_t GeneratorImplIr::EmitUserCall(const ir::UserCall* call) {
+    auto id = module_.NextId();
+    OperandList operands = {Type(call->Type()), id, functions_.Get(call->Name()).value()};
+    for (auto* arg : call->Args()) {
+        operands.push_back(Value(arg));
+    }
+    current_function_.push_inst(spv::Op::OpFunctionCall, operands);
+    return id;
 }
 
 uint32_t GeneratorImplIr::EmitVar(const ir::Var* var) {

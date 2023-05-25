@@ -19,8 +19,8 @@
 #include <optional>
 #include <utility>
 
-#include "src/tint/ir/flow_node.h"
 #include "src/tint/ir/function_param.h"
+#include "src/tint/ir/value.h"
 #include "src/tint/symbol.h"
 #include "src/tint/type/type.h"
 
@@ -33,7 +33,7 @@ class FunctionTerminator;
 namespace tint::ir {
 
 /// An IR representation of a function
-class Function : public utils::Castable<Function, FlowNode> {
+class Function : public utils::Castable<Function, Value> {
   public:
     /// The pipeline stage for an entry point
     enum class PipelineStage {
@@ -69,7 +69,7 @@ class Function : public utils::Castable<Function, FlowNode> {
     /// @param stage the function stage
     /// @param wg_size the workgroup_size
     Function(Symbol n,
-             type::Type* rt,
+             const type::Type* rt,
              PipelineStage stage = PipelineStage::kUndefined,
              std::optional<std::array<uint32_t, 3>> wg_size = {});
     ~Function() override;

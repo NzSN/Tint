@@ -101,11 +101,7 @@ using ResultType = utils::Result<Module, diag::List>;
 // For an `if` and `switch` block, the merge has a registered incoming branch instruction of the
 // `if` and `switch. So, to determine if the merge is connected to any of the branches that happend
 // in the `if` or `switch` we need a `count` value that is larger then 1.
-bool IsConnected(const FlowNode* b, uint32_t count) {
-    // Function is always connected as it's the start.
-    if (b->Is<ir::Function>()) {
-        return true;
-    }
+bool IsConnected(const Block* b, uint32_t count) {
     return b->InboundBranches().Length() > count;
 }
 
@@ -136,9 +132,9 @@ class Impl {
     constant::CloneContext clone_ctx_{
         /* type_ctx */ type::CloneContext{
             /* src */ {&program_->Symbols()},
-            /* dst */ {&builder_.ir.symbols, &builder_.ir.types},
+            /* dst */ {&builder_.ir.symbols, &builder_.ir.Types()},
         },
-        /* dst */ {&builder_.ir.constants_arena},
+        /* dst */ {builder_.ir.constant_values},
     };
 
     /// The stack of control blocks.
@@ -170,21 +166,7 @@ class Impl {
         diagnostics_.add_error(tint::diag::System::IR, err, s);
     }
 
-    void JumpTo(FlowNode* node, utils::VectorRef<Value*> args = {}) {
-        TINT_ASSERT(IR, current_flow_block_);
-        TINT_ASSERT(IR, !current_flow_block_->HasBranchTarget());
-
-        current_flow_block_->Instructions().Push(builder_.Jump(node, args));
-        current_flow_block_ = nullptr;
-    }
-    void JumpToIfNeeded(FlowNode* node) {
-        if (!current_flow_block_ || current_flow_block_->HasBranchTarget()) {
-            return;
-        }
-        JumpTo(node);
-    }
-
-    void BranchTo(FlowNode* node, utils::VectorRef<Value*> args = {}) {
+    void BranchTo(Block* node, utils::VectorRef<Value*> args = {}) {
         TINT_ASSERT(IR, current_flow_block_);
         TINT_ASSERT(IR, !current_flow_block_->HasBranchTarget());
 
@@ -192,7 +174,7 @@ class Impl {
         current_flow_block_ = nullptr;
     }
 
-    void BranchToIfNeeded(FlowNode* node) {
+    void BranchToIfNeeded(Block* node) {
         if (!current_flow_block_ || current_flow_block_->HasBranchTarget()) {
             return;
         }
@@ -357,7 +339,7 @@ class Impl {
 
             // If the branch target has already been set then a `return` was called. Only set in
             // the case where `return` wasn't called.
-            JumpToIfNeeded(current_function_->EndTarget());
+            BranchToIfNeeded(current_function_->EndTarget());
         }
 
         TINT_ASSERT(IR, control_stack_.IsEmpty());
@@ -587,7 +569,7 @@ class Impl {
 
             // The current block didn't `break`, `return` or `continue`, go to the continuing
             // block.
-            JumpToIfNeeded(loop_inst->Continuing());
+            BranchToIfNeeded(loop_inst->Continuing());
 
             current_flow_block_ = loop_inst->Continuing();
             if (stmt->continuing) {
@@ -634,7 +616,7 @@ class Impl {
             current_flow_block_ = if_inst->Merge();
             EmitBlock(stmt->body);
 
-            JumpToIfNeeded(loop_inst->Continuing());
+            BranchToIfNeeded(loop_inst->Continuing());
         }
         // The while loop always has a path to the Merge().target as the break statement comes
         // before anything inside the loop.
@@ -678,7 +660,7 @@ class Impl {
             }
 
             EmitBlock(stmt->body);
-            JumpToIfNeeded(loop_inst->Continuing());
+            BranchToIfNeeded(loop_inst->Continuing());
 
             if (stmt->continuing) {
                 current_flow_block_ = loop_inst->Continuing();
@@ -766,7 +748,7 @@ class Impl {
 
     // Discard is being treated as an instruction. The semantics in WGSL is demote_to_helper, so
     // the code has to continue as before it just predicates writes. If WGSL grows some kind of
-    // terminating discard that would probably make sense as a FlowNode but would then require
+    // terminating discard that would probably make sense as a Block but would then require
     // figuring out the multi-level exit that is triggered.
     void EmitDiscard(const ast::DiscardStatement*) {
         auto* inst = builder_.Discard();
@@ -859,7 +841,7 @@ class Impl {
             var,
             [&](const ast::Var* v) {
                 auto* ref = sem->Type()->As<type::Reference>();
-                auto* ty = builder_.ir.types.Get<type::Pointer>(
+                auto* ty = builder_.ir.Types().Get<type::Pointer>(
                     ref->StoreType()->Clone(clone_ctx_.type_ctx), ref->AddressSpace(),
                     ref->Access());
 
@@ -964,7 +946,7 @@ class Impl {
         auto* if_inst = builder_.CreateIf(lhs.Get());
         current_flow_block_->Instructions().Push(if_inst);
 
-        auto* result = builder_.BlockParam(builder_.ir.types.Get<type::Bool>());
+        auto* result = builder_.BlockParam(builder_.ir.Types().bool_());
         if_inst->Merge()->SetParams(utils::Vector{result});
 
         utils::Result<Value*> rhs;
