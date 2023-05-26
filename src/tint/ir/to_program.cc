@@ -20,11 +20,11 @@
 #include "src/tint/ir/block.h"
 #include "src/tint/ir/call.h"
 #include "src/tint/ir/constant.h"
-#include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/module.h"
+#include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
 #include "src/tint/ir/user_call.h"
@@ -91,7 +91,7 @@ class State {
     const ast::Function* Fn(const Function* fn) {
         SCOPED_NESTING();
 
-        auto name = Sym(fn->Name());
+        auto name = NameOf(fn);
         // TODO(crbug.com/tint/1915): Properly implement this when we've fleshed out Function
         utils::Vector<const ast::Parameter*, 1> params{};
         auto ret_ty = Type(fn->ReturnType());
@@ -125,8 +125,6 @@ class State {
 
             Status status = tint::Switch(
                 block,
-
-                [&](const ir::FunctionTerminator*) { return kStop; },
 
                 [&](const ir::Block* blk) {
                     for (auto* inst : blk->Instructions()) {
@@ -240,9 +238,9 @@ class State {
         return b.Switch(cond, std::move(cases));
     }
 
-    utils::Result<const ast::ReturnStatement*> FunctionTerminator(const ir::Branch* branch) {
-        if (branch->Args().IsEmpty()) {
-            // Branch to function terminator has no arguments.
+    utils::Result<const ast::ReturnStatement*> Return(const ir::Return* ret) {
+        if (ret->Args().IsEmpty()) {
+            // Return has no arguments.
             // If this block is nested withing some control flow, then we must
             // emit a 'return' statement, otherwise we've just naturally reached
             // the end of the function where the 'return' is redundant.
@@ -252,16 +250,14 @@ class State {
             return nullptr;
         }
 
-        // Branch to function terminator has arguments - this is the return
-        // value.
-        if (branch->Args().Length() != 1) {
-            TINT_ICE(IR, b.Diagnostics()) << "expected 1 value for function "
-                                             "terminator (return value), got "
-                                          << branch->Args().Length();
+        // Return has arguments - this is the return value.
+        if (ret->Args().Length() != 1) {
+            TINT_ICE(IR, b.Diagnostics())
+                << "expected 1 value for return, got " << ret->Args().Length();
             return utils::Failure;
         }
 
-        auto* val = Expr(branch->Args().Front());
+        auto* val = Expr(ret->Args().Front());
         if (TINT_UNLIKELY(!val)) {
             return utils::Failure;
         }
@@ -275,10 +271,8 @@ class State {
             return true;
         }
         if (auto* br = node->Instructions().Front()->As<Branch>()) {
-            return br->To() == stop_at;
+            return !br->Is<ir::Return>() && br->To() == stop_at;
         }
-        // TODO(dsinclair): This should possibly walk over Jump instructions that
-        // just jump to empty blocks if we want to be comprehensive.
         return false;
     }
 
@@ -291,12 +285,9 @@ class State {
             [&](const ir::Store* i) { return Store(i); },  //
             [&](const ir::If* if_) { return If(if_); },
             [&](const ir::Switch* switch_) { return Switch(switch_); },
-            [&](const ir::Branch* branch) {
-                if (branch->To()->Is<ir::FunctionTerminator>()) {
-                    return utils::Result<const ast::Statement*>{FunctionTerminator(branch)};
-                }
-                return utils::Result<const ast::Statement*>{nullptr};
-            },
+            [&](const ir::Return* ret) { return Return(ret); },
+            // TODO(dsinclair): Remove when branch is only a parent ...
+            [&](const ir::Branch*) { return utils::Result<const ast::Statement*>{nullptr}; },
             [&](Default) {
                 UNHANDLED_CASE(inst);
                 return utils::Failure;
@@ -349,7 +340,7 @@ class State {
         }
         return tint::Switch(
             call,  //
-            [&](const ir::UserCall* c) { return b.Call(Sym(c->Name()), std::move(args)); },
+            [&](const ir::UserCall* c) { return b.Call(NameOf(c->Func()), std::move(args)); },
             [&](Default) {
                 UNHANDLED_CASE(call);
                 return nullptr;
@@ -496,8 +487,6 @@ class State {
             return b.Symbols().New("v" + std::to_string(value_names_.Count()));
         });
     }
-
-    Symbol Sym(const Symbol& s) { return b.Symbols().Register(s.NameView()); }
 
     void Err(std::string str) { b.Diagnostics().add_error(diag::System::IR, std::move(str)); }
 };

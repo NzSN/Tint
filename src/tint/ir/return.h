@@ -12,32 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_USER_CALL_H_
-#define SRC_TINT_IR_USER_CALL_H_
+#ifndef SRC_TINT_IR_RETURN_H_
+#define SRC_TINT_IR_RETURN_H_
 
-#include "src/tint/ir/call.h"
-#include "src/tint/ir/function.h"
+#include "src/tint/ir/branch.h"
 #include "src/tint/utils/castable.h"
+
+// Forward declarations
+namespace tint::ir {
+class Function;
+}  // namespace tint::ir
 
 namespace tint::ir {
 
-/// A user call instruction in the IR.
-class UserCall : public utils::Castable<UserCall, Call> {
+/// A return instruction.
+class Return : public utils::Castable<Return, Branch> {
   public:
     /// Constructor
-    /// @param type the result type
-    /// @param func the function being called
-    /// @param args the function arguments
-    UserCall(const type::Type* type, Function* func, utils::VectorRef<Value*> args);
-    ~UserCall() override;
+    /// @param func the function being returned
+    /// @param args the branch arguments
+    explicit Return(Function* func, utils::VectorRef<Value*> args = {});
+    ~Return() override;
 
-    /// @returns the called function name
+    /// @returns the function being returned
     const Function* Func() const { return func_; }
 
   private:
-    const Function* func_ = nullptr;
+    Function* func_ = nullptr;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_USER_CALL_H_
+#endif  // SRC_TINT_IR_RETURN_H_

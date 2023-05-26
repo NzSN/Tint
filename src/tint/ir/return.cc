@@ -1,4 +1,4 @@
-// Copyright 2022 The Tint Authors.
+// Copyright 2023 The Tint Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/function_terminator.h"
+#include "src/tint/ir/return.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::FunctionTerminator);
+#include "src/tint/ir/function.h"
+
+TINT_INSTANTIATE_TYPEINFO(tint::ir::Return);
 
 namespace tint::ir {
 
-FunctionTerminator::FunctionTerminator() : Base() {}
+Return::Return(Function* func, utils::VectorRef<Value*> args) : Base(args), func_(func) {
+    TINT_ASSERT(IR, func_);
+    func_->AddUsage(this);
+}
 
-FunctionTerminator::~FunctionTerminator() = default;
+Return::~Return() = default;
 
 }  // namespace tint::ir

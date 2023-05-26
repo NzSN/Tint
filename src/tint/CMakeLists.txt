@@ -732,6 +732,8 @@ if(${TINT_BUILD_IR})
     ir/constant.h
     ir/construct.cc
     ir/construct.h
+    ir/continue.cc
+    ir/continue.h
     ir/convert.cc
     ir/convert.h
     ir/debug.cc
@@ -746,8 +748,6 @@ if(${TINT_BUILD_IR})
     ir/function.h
     ir/function_param.cc
     ir/function_param.h
-    ir/function_terminator.cc
-    ir/function_terminator.h
     ir/if.cc
     ir/if.h
     ir/instruction.cc
@@ -758,6 +758,8 @@ if(${TINT_BUILD_IR})
     ir/loop.h
     ir/module.cc
     ir/module.h
+    ir/return.cc
+    ir/return.h
     ir/root_terminator.cc
     ir/root_terminator.h
     ir/store.cc
@@ -1468,7 +1470,9 @@ if(TINT_BUILD_TESTS)
       ir/constant_test.cc
       ir/discard_test.cc
       ir/from_program_binary_test.cc
+      ir/from_program_builtin_test.cc
       ir/from_program_call_test.cc
+      ir/from_program_function_test.cc
       ir/from_program_literal_test.cc
       ir/from_program_materialize_test.cc
       ir/from_program_store_test.cc

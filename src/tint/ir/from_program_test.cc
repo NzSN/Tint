@@ -19,7 +19,6 @@
 #include "src/tint/ast/int_literal_expression.h"
 #include "src/tint/constant/scalar.h"
 #include "src/tint/ir/block.h"
-#include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/switch.h"
@@ -64,17 +63,13 @@ TEST_F(IR_BuilderImplTest, Func) {
 
     auto* f = m->functions[0];
     ASSERT_NE(f->StartTarget(), nullptr);
-    ASSERT_NE(f->EndTarget(), nullptr);
-
-    EXPECT_EQ(1u, f->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(m->functions[0]->Stage(), Function::PipelineStage::kUndefined);
 
-    EXPECT_EQ(Disassemble(m.Get()), R"(%1 = func f():void -> %fn1 {
-  %fn1 = block {
-    br %fn2  # return
+    EXPECT_EQ(Disassemble(m.Get()), R"(%f = func():void -> %b1 {
+  %b1 = block {
+    ret
   }
-  %fn2 = func_terminator
 }
 )");
 }
@@ -89,17 +84,13 @@ TEST_F(IR_BuilderImplTest, Func_WithParam) {
 
     auto* f = m->functions[0];
     ASSERT_NE(f->StartTarget(), nullptr);
-    ASSERT_NE(f->EndTarget(), nullptr);
-
-    EXPECT_EQ(1u, f->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(m->functions[0]->Stage(), Function::PipelineStage::kUndefined);
 
-    EXPECT_EQ(Disassemble(m.Get()), R"(%1 = func f(%a:u32):u32 -> %fn1 {
-  %fn1 = block {
-    br %fn2 %a  # return
+    EXPECT_EQ(Disassemble(m.Get()), R"(%f = func(%a:u32):u32 -> %b1 {
+  %b1 = block {
+    ret %a
   }
-  %fn2 = func_terminator
 }
 )");
 }
@@ -115,17 +106,13 @@ TEST_F(IR_BuilderImplTest, Func_WithMultipleParam) {
 
     auto* f = m->functions[0];
     ASSERT_NE(f->StartTarget(), nullptr);
-    ASSERT_NE(f->EndTarget(), nullptr);
-
-    EXPECT_EQ(1u, f->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(m->functions[0]->Stage(), Function::PipelineStage::kUndefined);
 
-    EXPECT_EQ(Disassemble(m.Get()), R"(%1 = func f(%a:u32, %b:i32, %c:bool):void -> %fn1 {
-  %fn1 = block {
-    br %fn2  # return
+    EXPECT_EQ(Disassemble(m.Get()), R"(%f = func(%a:u32, %b:i32, %c:bool):void -> %b1 {
+  %b1 = block {
+    ret
   }
-  %fn2 = func_terminator
 }
 )");
 }
@@ -151,35 +138,32 @@ TEST_F(IR_BuilderImplTest, IfStatement) {
     auto* flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(1u, flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->False()->InboundBranches().Length());
     EXPECT_EQ(3u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    if true [t: %fn2, f: %fn3, m: %fn4]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    if true [t: %b2, f: %b3, m: %b4]
       # True block
-      %fn2 = block {
-        br %fn4
+      %b2 = block {
+        br %b4
       }
 
       # False block
-      %fn3 = block {
-        br %fn4
+      %b3 = block {
+        br %b4
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -195,34 +179,31 @@ TEST_F(IR_BuilderImplTest, IfStatement_TrueReturns) {
     auto* flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(1u, flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->False()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(2u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    if true [t: %fn2, f: %fn3, m: %fn4]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    if true [t: %b2, f: %b3, m: %b4]
       # True block
-      %fn2 = block {
-        br %fn5  # return
+      %b2 = block {
+        ret
       }
       # False block
-      %fn3 = block {
-        br %fn4
+      %b3 = block {
+        br %b4
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -238,34 +219,31 @@ TEST_F(IR_BuilderImplTest, IfStatement_FalseReturns) {
     auto* flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(1u, flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->False()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(2u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    if true [t: %fn2, f: %fn3, m: %fn4]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    if true [t: %b2, f: %b3, m: %b4]
       # True block
-      %fn2 = block {
-        br %fn4
+      %b2 = block {
+        br %b4
       }
 
       # False block
-      %fn3 = block {
-        br %fn5  # return
+      %b3 = block {
+        ret
       }
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -281,29 +259,26 @@ TEST_F(IR_BuilderImplTest, IfStatement_BothReturn) {
     auto* flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(1u, flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->False()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(2u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    if true [t: %fn2, f: %fn3]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    if true [t: %b2, f: %b3]
       # True block
-      %fn2 = block {
-        br %fn4  # return
+      %b2 = block {
+        ret
       }
       # False block
-      %fn3 = block {
-        br %fn4  # return
+      %b3 = block {
+        ret
       }
 
   }
 
-  %fn4 = func_terminator
 }
 )");
 }
@@ -324,42 +299,36 @@ TEST_F(IR_BuilderImplTest, IfStatement_JumpChainToMerge) {
     ASSERT_NE(loop_flow, nullptr);
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    if true [t: %fn2, f: %fn3, m: %fn4]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    if true [t: %b2, f: %b3, m: %b4]
       # True block
-      %fn2 = block {
-        loop [s: %fn5, c: %fn6, m: %fn7]
-          %fn5 = block {
-            br %fn7
-          }
-
-          # Continuing block
-          %fn6 = block {
-            br %fn5
+      %b2 = block {
+        loop [s: %b5, m: %b6]
+          %b5 = block {
+            br %b6
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn4
+        %b6 = block {
+          br %b4
         }
 
 
       }
 
       # False block
-      %fn3 = block {
-        br %fn4
+      %b3 = block {
+        br %b4
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -375,34 +344,26 @@ TEST_F(IR_BuilderImplTest, Loop_WithBreak) {
     auto* flow = FindSingleValue<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, flow->Start()->InboundBranches().Length());
+    EXPECT_EQ(1u, flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        br %fn4
-      }
-
-      # Continuing block
-      %fn3 = block {
-        br %fn2
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, m: %b3]
+      %b2 = block {
+        br %b3
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b3 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -421,7 +382,6 @@ TEST_F(IR_BuilderImplTest, Loop_WithContinue) {
     auto* if_flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(1u, loop_flow->Continuing()->InboundBranches().Length());
@@ -429,45 +389,43 @@ TEST_F(IR_BuilderImplTest, Loop_WithContinue) {
     EXPECT_EQ(1u, if_flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, if_flow->False()->InboundBranches().Length());
     EXPECT_EQ(2u, if_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        if true [t: %fn5, f: %fn6, m: %fn7]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        if true [t: %b5, f: %b6, m: %b7]
           # True block
-          %fn5 = block {
-            br %fn4
+          %b5 = block {
+            br %b4
           }
 
           # False block
-          %fn6 = block {
-            br %fn7
+          %b6 = block {
+            br %b7
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn3
+        %b7 = block {
+          continue %b3
         }
 
 
       }
 
       # Continuing block
-      %fn3 = block {
-        br %fn2
+      %b3 = block {
+        br %b2
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -485,7 +443,6 @@ TEST_F(IR_BuilderImplTest, Loop_WithContinuing_BreakIf) {
     auto* break_if_flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(1u, loop_flow->Continuing()->InboundBranches().Length());
@@ -493,45 +450,43 @@ TEST_F(IR_BuilderImplTest, Loop_WithContinuing_BreakIf) {
     EXPECT_EQ(1u, break_if_flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, break_if_flow->False()->InboundBranches().Length());
     EXPECT_EQ(2u, break_if_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        br %fn3
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        continue %b3
       }
 
       # Continuing block
-      %fn3 = block {
-        if true [t: %fn5, f: %fn6, m: %fn7]
+      %b3 = block {
+        if true [t: %b5, f: %b6, m: %b7]
           # True block
-          %fn5 = block {
-            br %fn4
+          %b5 = block {
+            br %b4
           }
 
           # False block
-          %fn6 = block {
-            br %fn7
+          %b6 = block {
+            br %b7
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn2
+        %b7 = block {
+          br %b2
         }
 
 
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -547,42 +502,41 @@ TEST_F(IR_BuilderImplTest, Loop_Continuing_Body_Scope) {
 
     auto m = res.Move();
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        br %fn3
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        continue %b3
       }
 
       # Continuing block
-      %fn3 = block {
-        if true [t: %fn5, f: %fn6, m: %fn7]
+      %b3 = block {
+        if true [t: %b5, f: %b6, m: %b7]
           # True block
-          %fn5 = block {
-            br %fn4
+          %b5 = block {
+            br %b4
           }
 
           # False block
-          %fn6 = block {
-            br %fn7
+          %b6 = block {
+            br %b7
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn2
+        %b7 = block {
+          br %b2
         }
 
 
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -600,7 +554,6 @@ TEST_F(IR_BuilderImplTest, Loop_WithReturn) {
     auto* if_flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(1u, loop_flow->Continuing()->InboundBranches().Length());
@@ -608,40 +561,38 @@ TEST_F(IR_BuilderImplTest, Loop_WithReturn) {
     EXPECT_EQ(1u, if_flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, if_flow->False()->InboundBranches().Length());
     EXPECT_EQ(2u, if_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3]
-      %fn2 = block {
-        if true [t: %fn4, f: %fn5, m: %fn6]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3]
+      %b2 = block {
+        if true [t: %b4, f: %b5, m: %b6]
           # True block
-          %fn4 = block {
-            br %fn7  # return
+          %b4 = block {
+            ret
           }
           # False block
-          %fn5 = block {
-            br %fn6
+          %b5 = block {
+            br %b6
           }
 
         # Merge block
-        %fn6 = block {
-          br %fn3
+        %b6 = block {
+          continue %b3
         }
 
 
       }
 
       # Continuing block
-      %fn3 = block {
-        br %fn2
+      %b3 = block {
+        br %b2
       }
 
 
   }
 
-  %fn7 = func_terminator
 }
 )");
 }
@@ -657,29 +608,21 @@ TEST_F(IR_BuilderImplTest, Loop_WithOnlyReturn) {
     auto* loop_flow = FindSingleValue<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
+    EXPECT_EQ(1u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, loop_flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(0u, loop_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3]
-      %fn2 = block {
-        br %fn4  # return
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2]
+      %b2 = block {
+        ret
       }
-      # Continuing block
-      %fn3 = block {
-        br %fn2
-      }
-
 
   }
 
-  %fn4 = func_terminator
 }
 )");
 }
@@ -704,64 +647,21 @@ TEST_F(IR_BuilderImplTest, Loop_WithOnlyReturn_ContinuingBreakIf) {
     auto* loop_flow = FindSingleValue<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
+    EXPECT_EQ(1u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, loop_flow->Continuing()->InboundBranches().Length());
-    EXPECT_EQ(1u, loop_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(3u, func->EndTarget()->InboundBranches().Length());
+    EXPECT_EQ(0u, loop_flow->Merge()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        br %fn5  # return
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2]
+      %b2 = block {
+        ret
       }
-      # Continuing block
-      %fn3 = block {
-        if true [t: %fn6, f: %fn7, m: %fn8]
-          # True block
-          %fn6 = block {
-            br %fn4
-          }
-
-          # False block
-          %fn7 = block {
-            br %fn8
-          }
-
-        # Merge block
-        %fn8 = block {
-          br %fn2
-        }
-
-
-      }
-
-    # Merge block
-    %fn4 = block {
-      if true [t: %fn9, f: %fn10, m: %fn11]
-        # True block
-        %fn9 = block {
-          br %fn5  # return
-        }
-        # False block
-        %fn10 = block {
-          br %fn11
-        }
-
-      # Merge block
-      %fn11 = block {
-        br %fn5  # return
-      }
-
-    }
-
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -779,48 +679,40 @@ TEST_F(IR_BuilderImplTest, Loop_WithIf_BothBranchesBreak) {
     auto* if_flow = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, loop_flow->Start()->InboundBranches().Length());
+    EXPECT_EQ(1u, loop_flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, loop_flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(2u, loop_flow->Merge()->InboundBranches().Length());
     EXPECT_EQ(1u, if_flow->True()->InboundBranches().Length());
     EXPECT_EQ(1u, if_flow->False()->InboundBranches().Length());
     EXPECT_EQ(1u, if_flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        if true [t: %fn5, f: %fn6]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, m: %b3]
+      %b2 = block {
+        if true [t: %b4, f: %b5]
           # True block
-          %fn5 = block {
-            br %fn4
+          %b4 = block {
+            br %b3
           }
 
           # False block
-          %fn6 = block {
-            br %fn4
+          %b5 = block {
+            br %b3
           }
 
 
       }
 
-      # Continuing block
-      %fn3 = block {
-        br %fn2
-      }
-
     # Merge block
-    %fn4 = block {
-      br %fn7  # return
+    %b3 = block {
+      ret
     }
 
   }
 
-  %fn7 = func_terminator
 }
 )");
 }
@@ -843,39 +735,39 @@ TEST_F(IR_BuilderImplTest, Loop_Nested) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        loop [s: %fn5, c: %fn6, m: %fn7]
-          %fn5 = block {
-            if true [t: %fn8, f: %fn9, m: %fn10]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        loop [s: %b5, c: %b6, m: %b7]
+          %b5 = block {
+            if true [t: %b8, f: %b9, m: %b10]
               # True block
-              %fn8 = block {
-                br %fn7
+              %b8 = block {
+                br %b7
               }
 
               # False block
-              %fn9 = block {
-                br %fn10
+              %b9 = block {
+                br %b10
               }
 
             # Merge block
-            %fn10 = block {
-              if true [t: %fn11, f: %fn12, m: %fn13]
+            %b10 = block {
+              if true [t: %b11, f: %b12, m: %b13]
                 # True block
-                %fn11 = block {
-                  br %fn6
+                %b11 = block {
+                  continue %b6
                 }
 
                 # False block
-                %fn12 = block {
-                  br %fn13
+                %b12 = block {
+                  br %b13
                 }
 
               # Merge block
-              %fn13 = block {
-                br %fn6
+              %b13 = block {
+                continue %b6
               }
 
 
@@ -885,48 +777,43 @@ TEST_F(IR_BuilderImplTest, Loop_Nested) {
           }
 
           # Continuing block
-          %fn6 = block {
-            loop [s: %fn14, c: %fn15, m: %fn16]
-              %fn14 = block {
-                br %fn16
-              }
-
-              # Continuing block
-              %fn15 = block {
-                br %fn14
+          %b6 = block {
+            loop [s: %b14, m: %b15]
+              %b14 = block {
+                br %b15
               }
 
             # Merge block
-            %fn16 = block {
-              loop [s: %fn17, c: %fn18, m: %fn19]
-                %fn17 = block {
-                  br %fn18
+            %b15 = block {
+              loop [s: %b16, c: %b17, m: %b18]
+                %b16 = block {
+                  continue %b17
                 }
 
                 # Continuing block
-                %fn18 = block {
-                  if true [t: %fn20, f: %fn21, m: %fn22]
+                %b17 = block {
+                  if true [t: %b19, f: %b20, m: %b21]
                     # True block
-                    %fn20 = block {
-                      br %fn19
+                    %b19 = block {
+                      br %b18
                     }
 
                     # False block
-                    %fn21 = block {
-                      br %fn22
+                    %b20 = block {
+                      br %b21
                     }
 
                   # Merge block
-                  %fn22 = block {
-                    br %fn17
+                  %b21 = block {
+                    br %b16
                   }
 
 
                 }
 
               # Merge block
-              %fn19 = block {
-                br %fn5
+              %b18 = block {
+                br %b5
               }
 
 
@@ -936,21 +823,21 @@ TEST_F(IR_BuilderImplTest, Loop_Nested) {
           }
 
         # Merge block
-        %fn7 = block {
-          if true [t: %fn23, f: %fn24, m: %fn25]
+        %b7 = block {
+          if true [t: %b22, f: %b23, m: %b24]
             # True block
-            %fn23 = block {
-              br %fn4
+            %b22 = block {
+              br %b4
             }
 
             # False block
-            %fn24 = block {
-              br %fn25
+            %b23 = block {
+              br %b24
             }
 
           # Merge block
-          %fn25 = block {
-            br %fn3
+          %b24 = block {
+            continue %b3
           }
 
 
@@ -960,18 +847,17 @@ TEST_F(IR_BuilderImplTest, Loop_Nested) {
       }
 
       # Continuing block
-      %fn3 = block {
-        br %fn2
+      %b3 = block {
+        br %b2
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn26  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn26 = func_terminator
 }
 )");
 }
@@ -991,9 +877,7 @@ TEST_F(IR_BuilderImplTest, While) {
     auto* if_flow = flow->Start()->Branch()->As<ir::If>();
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Start()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
@@ -1002,42 +886,41 @@ TEST_F(IR_BuilderImplTest, While) {
     EXPECT_EQ(2u, if_flow->Merge()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        if false [t: %fn5, f: %fn6, m: %fn7]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        if false [t: %b5, f: %b6, m: %b7]
           # True block
-          %fn5 = block {
-            br %fn7
+          %b5 = block {
+            br %b7
           }
 
           # False block
-          %fn6 = block {
-            br %fn4
+          %b6 = block {
+            br %b4
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn3
+        %b7 = block {
+          continue %b3
         }
 
 
       }
 
       # Continuing block
-      %fn3 = block {
-        br %fn2
+      %b3 = block {
+        br %b2
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -1057,9 +940,7 @@ TEST_F(IR_BuilderImplTest, While_Return) {
     auto* if_flow = flow->Start()->Branch()->As<ir::If>();
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, func->EndTarget()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
@@ -1068,41 +949,40 @@ TEST_F(IR_BuilderImplTest, While_Return) {
     EXPECT_EQ(2u, if_flow->Merge()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        if true [t: %fn5, f: %fn6, m: %fn7]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, c: %b3, m: %b4]
+      %b2 = block {
+        if true [t: %b5, f: %b6, m: %b7]
           # True block
-          %fn5 = block {
-            br %fn7
+          %b5 = block {
+            br %b7
           }
 
           # False block
-          %fn6 = block {
-            br %fn4
+          %b6 = block {
+            br %b4
           }
 
         # Merge block
-        %fn7 = block {
-          br %fn8  # return
+        %b7 = block {
+          ret
         }
 
       }
 
       # Continuing block
-      %fn3 = block {
-        br %fn2
+      %b3 = block {
+        br %b2
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn8  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn8 = func_terminator
 }
 )");
 }
@@ -1135,9 +1015,7 @@ TEST_F(IR_BuilderImplTest, DISABLED_For) {
     auto* if_flow = flow->Start()->Branch()->As<ir::If>();
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Start()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Merge()->InboundBranches().Length());
@@ -1159,34 +1037,26 @@ TEST_F(IR_BuilderImplTest, For_NoInitCondOrContinuing) {
     auto* flow = FindSingleValue<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
-    EXPECT_EQ(2u, flow->Start()->InboundBranches().Length());
+    EXPECT_EQ(1u, flow->Start()->InboundBranches().Length());
     EXPECT_EQ(0u, flow->Continuing()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    loop [s: %fn2, c: %fn3, m: %fn4]
-      %fn2 = block {
-        br %fn4
-      }
-
-      # Continuing block
-      %fn3 = block {
-        br %fn2
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    loop [s: %b2, m: %b3]
+      %b2 = block {
+        br %b3
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b3 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -1205,7 +1075,6 @@ TEST_F(IR_BuilderImplTest, Switch) {
     auto* flow = FindSingleValue<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     auto cases = flow->Cases();
     ASSERT_EQ(3u, cases.Length());
@@ -1227,35 +1096,33 @@ TEST_F(IR_BuilderImplTest, Switch) {
     EXPECT_EQ(1u, cases[1].Start()->InboundBranches().Length());
     EXPECT_EQ(1u, cases[2].Start()->InboundBranches().Length());
     EXPECT_EQ(4u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    switch 1i [c: (0i, %fn2), c: (1i, %fn3), c: (default, %fn4), m: %fn5]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    switch 1i [c: (0i, %b2), c: (1i, %b3), c: (default, %b4), m: %b5]
       # Case block
-      %fn2 = block {
-        br %fn5
+      %b2 = block {
+        br %b5
       }
 
       # Case block
-      %fn3 = block {
-        br %fn5
+      %b3 = block {
+        br %b5
       }
 
       # Case block
-      %fn4 = block {
-        br %fn5
+      %b4 = block {
+        br %b5
       }
 
     # Merge block
-    %fn5 = block {
-      br %fn6  # return
+    %b5 = block {
+      ret
     }
 
   }
 
-  %fn6 = func_terminator
 }
 )");
 }
@@ -1275,7 +1142,6 @@ TEST_F(IR_BuilderImplTest, Switch_MultiSelector) {
     auto* flow = FindSingleValue<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     auto cases = flow->Cases();
     ASSERT_EQ(1u, cases.Length());
@@ -1292,25 +1158,23 @@ TEST_F(IR_BuilderImplTest, Switch_MultiSelector) {
 
     EXPECT_EQ(1u, cases[0].Start()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    switch 1i [c: (0i 1i default, %fn2), m: %fn3]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    switch 1i [c: (0i 1i default, %b2), m: %b3]
       # Case block
-      %fn2 = block {
-        br %fn3
+      %b2 = block {
+        br %b3
       }
 
     # Merge block
-    %fn3 = block {
-      br %fn4  # return
+    %b3 = block {
+      ret
     }
 
   }
 
-  %fn4 = func_terminator
 }
 )");
 }
@@ -1326,7 +1190,6 @@ TEST_F(IR_BuilderImplTest, Switch_OnlyDefault) {
     auto* flow = FindSingleValue<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     auto cases = flow->Cases();
     ASSERT_EQ(1u, cases.Length());
@@ -1335,25 +1198,23 @@ TEST_F(IR_BuilderImplTest, Switch_OnlyDefault) {
 
     EXPECT_EQ(1u, cases[0].Start()->InboundBranches().Length());
     EXPECT_EQ(2u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    switch 1i [c: (default, %fn2), m: %fn3]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    switch 1i [c: (default, %b2), m: %b3]
       # Case block
-      %fn2 = block {
-        br %fn3
+      %b2 = block {
+        br %b3
       }
 
     # Merge block
-    %fn3 = block {
-      br %fn4  # return
+    %b3 = block {
+      ret
     }
 
   }
 
-  %fn4 = func_terminator
 }
 )");
 }
@@ -1371,7 +1232,6 @@ TEST_F(IR_BuilderImplTest, Switch_WithBreak) {
     auto* flow = FindSingleValue<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     auto cases = flow->Cases();
     ASSERT_EQ(2u, cases.Length());
@@ -1387,30 +1247,28 @@ TEST_F(IR_BuilderImplTest, Switch_WithBreak) {
     EXPECT_EQ(1u, cases[1].Start()->InboundBranches().Length());
     EXPECT_EQ(3u, flow->Merge()->InboundBranches().Length());
     // This is 1 because the if is dead-code eliminated and the return doesn't happen.
-    EXPECT_EQ(1u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    switch 1i [c: (0i, %fn2), c: (default, %fn3), m: %fn4]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    switch 1i [c: (0i, %b2), c: (default, %b3), m: %b4]
       # Case block
-      %fn2 = block {
-        br %fn4
+      %b2 = block {
+        br %b4
       }
 
       # Case block
-      %fn3 = block {
-        br %fn4
+      %b3 = block {
+        br %b4
       }
 
     # Merge block
-    %fn4 = block {
-      br %fn5  # return
+    %b4 = block {
+      ret
     }
 
   }
 
-  %fn5 = func_terminator
 }
 )");
 }
@@ -1431,7 +1289,6 @@ TEST_F(IR_BuilderImplTest, Switch_AllReturn) {
     auto* flow = FindSingleValue<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-    auto* func = m.functions[0];
 
     auto cases = flow->Cases();
     ASSERT_EQ(2u, cases.Length());
@@ -1446,24 +1303,22 @@ TEST_F(IR_BuilderImplTest, Switch_AllReturn) {
     EXPECT_EQ(1u, cases[0].Start()->InboundBranches().Length());
     EXPECT_EQ(1u, cases[1].Start()->InboundBranches().Length());
     EXPECT_EQ(1u, flow->Merge()->InboundBranches().Length());
-    EXPECT_EQ(2u, func->EndTarget()->InboundBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
-              R"(%1 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn1 {
-  %fn1 = block {
-    switch 1i [c: (0i, %fn2), c: (default, %fn3)]
+              R"(%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b1 {
+  %b1 = block {
+    switch 1i [c: (0i, %b2), c: (default, %b3)]
       # Case block
-      %fn2 = block {
-        br %fn4  # return
+      %b2 = block {
+        ret
       }
       # Case block
-      %fn3 = block {
-        br %fn4  # return
+      %b3 = block {
+        ret
       }
 
   }
 
-  %fn4 = func_terminator
 }
 )");
 }
@@ -1476,18 +1331,16 @@ TEST_F(IR_BuilderImplTest, Emit_Phony) {
     ASSERT_TRUE(m) << (!m ? m.Failure() : "");
 
     EXPECT_EQ(Disassemble(m.Get()),
-              R"(%1 = func b():i32 -> %fn1 {
-  %fn1 = block {
-    br %fn2 1i  # return
+              R"(%b = func():i32 -> %b1 {
+  %b1 = block {
+    ret 1i
   }
-  %fn2 = func_terminator
 }
-%2 = func test_function():void [@compute @workgroup_size(1, 1, 1)] -> %fn3 {
-  %fn3 = block {
-    %3:i32 = call b
-    br %fn4  # return
+%test_function = func():void [@compute @workgroup_size(1, 1, 1)] -> %b2 {
+  %b2 = block {
+    %3:i32 = call %b
+    ret
   }
-  %fn4 = func_terminator
 }
 )");
 }

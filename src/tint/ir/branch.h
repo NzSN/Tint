@@ -26,7 +26,7 @@ class Block;
 
 namespace tint::ir {
 
-/// A branch instruction. A branch is a walk terminating jump.
+/// A branch instruction.
 class Branch : public utils::Castable<Branch, Instruction> {
   public:
     /// Constructor
@@ -41,8 +41,13 @@ class Branch : public utils::Castable<Branch, Instruction> {
     /// @returns the branch arguments
     utils::VectorRef<Value*> Args() const { return args_; }
 
+  protected:
+    /// Constructor
+    /// @param args the branch arguments
+    explicit Branch(utils::VectorRef<Value*> args);
+
   private:
-    Block* to_;
+    Block* to_ = nullptr;
     utils::Vector<Value*, 2> args_;
 };
 

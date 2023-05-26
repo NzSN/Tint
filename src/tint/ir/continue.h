@@ -12,29 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef SRC_TINT_IR_CONTINUE_H_
+#define SRC_TINT_IR_CONTINUE_H_
+
 #include "src/tint/ir/branch.h"
+#include "src/tint/utils/castable.h"
 
-#include <utility>
-
-#include "src/tint/ir/block.h"
-
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Branch);
+// Forward declarations
+namespace tint::ir {
+class Loop;
+}  // namespace tint::ir
 
 namespace tint::ir {
 
-Branch::Branch(utils::VectorRef<Value*> args) : args_(std::move(args)) {
-    for (auto* arg : args) {
-        arg->AddUsage(this);
-    }
-}
+/// A continue instruction.
+class Continue : public utils::Castable<Continue, Branch> {
+  public:
+    /// Constructor
+    /// @param loop the loop owning the continue block
+    explicit Continue(ir::Loop* loop);
+    ~Continue() override;
 
-Branch::Branch(Block* to, utils::VectorRef<Value*> args) : Branch(args) {
-    to_ = to;
+    /// @returns the loop owning the continue block
+    const ir::Loop* Loop() const { return loop_; }
 
-    TINT_ASSERT(IR, to_);
-    to_->AddInboundBranch(this);
-}
-
-Branch::~Branch() = default;
+  private:
+    ir::Loop* loop_ = nullptr;
+};
 
 }  // namespace tint::ir
+
+#endif  // SRC_TINT_IR_CONTINUE_H_

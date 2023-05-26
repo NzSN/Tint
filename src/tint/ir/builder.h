@@ -24,15 +24,16 @@
 #include "src/tint/ir/builtin.h"
 #include "src/tint/ir/constant.h"
 #include "src/tint/ir/construct.h"
+#include "src/tint/ir/continue.h"
 #include "src/tint/ir/convert.h"
 #include "src/tint/ir/discard.h"
 #include "src/tint/ir/function.h"
 #include "src/tint/ir/function_param.h"
-#include "src/tint/ir/function_terminator.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
+#include "src/tint/ir/return.h"
 #include "src/tint/ir/root_terminator.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
@@ -65,9 +66,6 @@ class Builder {
     /// @returns a new root terminator flow node
     RootTerminator* CreateRootTerminator();
 
-    /// @returns a new function terminator flow node
-    FunctionTerminator* CreateFunctionTerminator();
-
     /// Creates a function flow node
     /// @param name the function name
     /// @param return_type the function return type
@@ -75,17 +73,6 @@ class Builder {
     /// @param wg_size the workgroup_size
     /// @returns the flow node
     Function* CreateFunction(std::string_view name,
-                             const type::Type* return_type,
-                             Function::PipelineStage stage = Function::PipelineStage::kUndefined,
-                             std::optional<std::array<uint32_t, 3>> wg_size = {});
-
-    /// Creates a function flow node
-    /// @param name the function name
-    /// @param return_type the function return type
-    /// @param stage the function stage
-    /// @param wg_size the workgroup_size
-    /// @returns the flow node
-    Function* CreateFunction(Symbol name,
                              const type::Type* return_type,
                              Function::PipelineStage stage = Function::PipelineStage::kUndefined,
                              std::optional<std::array<uint32_t, 3>> wg_size = {});
@@ -299,10 +286,10 @@ class Builder {
 
     /// Creates a user function call instruction
     /// @param type the return type of the call
-    /// @param name the name of the function being called
+    /// @param func the function being called
     /// @param args the call arguments
     /// @returns the instruction
-    ir::UserCall* UserCall(const type::Type* type, Symbol name, utils::VectorRef<Value*> args);
+    ir::UserCall* UserCall(const type::Type* type, Function* func, utils::VectorRef<Value*> args);
 
     /// Creates a value conversion instruction
     /// @param to the type converted to
@@ -343,6 +330,17 @@ class Builder {
     /// @param type the var type
     /// @returns the instruction
     ir::Var* Declare(const type::Type* type);
+
+    /// Creates a return instruction
+    /// @param func the function being returned
+    /// @param args the return arguments
+    /// @returns the instruction
+    ir::Return* Return(Function* func, utils::VectorRef<Value*> args = {});
+
+    /// Creates a continue instruction
+    /// @param loop the loop being continued
+    /// @returns the instruction
+    ir::Continue* Continue(Loop* loop);
 
     /// Creates a branch declaration
     /// @param to the node being branched too

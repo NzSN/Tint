@@ -1,4 +1,4 @@
-// Copyright 2022 The Tint Authors.
+// Copyright 2023 The Tint Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_FUNCTION_TERMINATOR_H_
-#define SRC_TINT_IR_FUNCTION_TERMINATOR_H_
+#include "src/tint/ir/continue.h"
 
-#include "src/tint/ir/block.h"
+#include "src/tint/ir/loop.h"
+
+TINT_INSTANTIATE_TYPEINFO(tint::ir::Continue);
 
 namespace tint::ir {
 
-/// Block used as the end of a function. Must only be used as the `end_target` in a function. There
-/// are no instructions in this block.
-class FunctionTerminator : public utils::Castable<FunctionTerminator, Block> {
-  public:
-    /// Constructor
-    FunctionTerminator();
-    ~FunctionTerminator() override;
-};
+Continue::Continue(ir::Loop* loop) : Base(utils::Empty), loop_(loop) {
+    TINT_ASSERT(IR, loop_);
+    loop_->AddUsage(this);
+    loop_->Continuing()->AddInboundBranch(this);
+}
+
+Continue::~Continue() = default;
 
 }  // namespace tint::ir
-
-#endif  // SRC_TINT_IR_FUNCTION_TERMINATOR_H_
