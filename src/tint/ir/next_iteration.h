@@ -12,37 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_BRANCH_H_
-#define SRC_TINT_IR_BRANCH_H_
+#ifndef SRC_TINT_IR_NEXT_ITERATION_H_
+#define SRC_TINT_IR_NEXT_ITERATION_H_
 
-#include "src/tint/ir/instruction.h"
-#include "src/tint/ir/value.h"
+#include "src/tint/ir/branch.h"
 #include "src/tint/utils/castable.h"
 
 // Forward declarations
 namespace tint::ir {
-class Block;
+class Loop;
 }  // namespace tint::ir
 
 namespace tint::ir {
 
-/// A branch instruction.
-class Branch : public utils::Castable<Branch, Instruction> {
+/// A next iteration instruction.
+class NextIteration : public utils::Castable<NextIteration, Branch> {
   public:
-    ~Branch() override;
-
-    /// @returns the branch arguments
-    utils::VectorRef<Value*> Args() const { return args_; }
-
-  protected:
     /// Constructor
-    /// @param args the branch arguments
-    explicit Branch(utils::VectorRef<Value*> args);
+    /// @param loop the loop being iterated
+    explicit NextIteration(ir::Loop* loop);
+    ~NextIteration() override;
+
+    /// @returns the loop being iterated
+    const ir::Loop* Loop() const { return loop_; }
 
   private:
-    utils::Vector<Value*, 2> args_;
+    ir::Loop* loop_ = nullptr;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_BRANCH_H_
+#endif  // SRC_TINT_IR_NEXT_ITERATION_H_

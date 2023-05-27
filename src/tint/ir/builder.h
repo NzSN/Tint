@@ -21,20 +21,24 @@
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/bitcast.h"
 #include "src/tint/ir/block_param.h"
+#include "src/tint/ir/break_if.h"
 #include "src/tint/ir/builtin.h"
 #include "src/tint/ir/constant.h"
 #include "src/tint/ir/construct.h"
 #include "src/tint/ir/continue.h"
 #include "src/tint/ir/convert.h"
 #include "src/tint/ir/discard.h"
+#include "src/tint/ir/exit_if.h"
+#include "src/tint/ir/exit_loop.h"
+#include "src/tint/ir/exit_switch.h"
 #include "src/tint/ir/function.h"
 #include "src/tint/ir/function_param.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
+#include "src/tint/ir/next_iteration.h"
 #include "src/tint/ir/return.h"
-#include "src/tint/ir/root_terminator.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
 #include "src/tint/ir/unary.h"
@@ -62,9 +66,6 @@ class Builder {
 
     /// @returns a new block flow node
     Block* CreateBlock();
-
-    /// @returns a new root terminator flow node
-    RootTerminator* CreateRootTerminator();
 
     /// Creates a function flow node
     /// @param name the function name
@@ -337,16 +338,37 @@ class Builder {
     /// @returns the instruction
     ir::Return* Return(Function* func, utils::VectorRef<Value*> args = {});
 
+    /// Creates a loop next iteration instruction
+    /// @param loop the loop being iterated
+    /// @returns the instruction
+    ir::NextIteration* NextIteration(Loop* loop);
+
+    /// Creates a loop break-if instruction
+    /// @param condition the break condition
+    /// @param loop the loop being iterated
+    /// @returns the instruction
+    ir::BreakIf* BreakIf(Value* condition, Loop* loop);
+
     /// Creates a continue instruction
     /// @param loop the loop being continued
     /// @returns the instruction
     ir::Continue* Continue(Loop* loop);
 
-    /// Creates a branch declaration
-    /// @param to the node being branched too
+    /// Creates an exit switch instruction
+    /// @param sw the switch being exited
+    /// @returns the instruction
+    ir::ExitSwitch* ExitSwitch(Switch* sw);
+
+    /// Creates an exit loop instruction
+    /// @param loop the loop being exited
+    /// @returns the instruction
+    ir::ExitLoop* ExitLoop(Loop* loop);
+
+    /// Creates an exit if instruction
+    /// @param i the if being exited
     /// @param args the branch arguments
     /// @returns the instruction
-    ir::Branch* Branch(Block* to, utils::VectorRef<Value*> args = {});
+    ir::ExitIf* ExitIf(If* i, utils::VectorRef<Value*> args = {});
 
     /// Creates a new `BlockParam`
     /// @param type the parameter type

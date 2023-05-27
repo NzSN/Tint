@@ -1,4 +1,4 @@
-// Copyright 2022 The Tint Authors.
+// Copyright 2023 The Tint Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/switch.h"
+#include "src/tint/ir/exit_if.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Switch);
+#include "src/tint/ir/if.h"
+
+TINT_INSTANTIATE_TYPEINFO(tint::ir::ExitIf);
 
 namespace tint::ir {
 
-Switch::Switch(Value* cond, Block* m) : Base(utils::Empty), condition_(cond), merge_(m) {
-    TINT_ASSERT(IR, condition_);
-    TINT_ASSERT(IR, merge_);
-    condition_->AddUsage(this);
+ExitIf::ExitIf(ir::If* i, utils::VectorRef<Value*> args) : Base(args), if_(i) {
+    TINT_ASSERT(IR, if_);
+    if_->AddUsage(this);
+    if_->Merge()->AddInboundBranch(this);
 }
 
-Switch::~Switch() = default;
+ExitIf::~ExitIf() = default;
 
 }  // namespace tint::ir

@@ -1,4 +1,4 @@
-// Copyright 2022 The Tint Authors.
+// Copyright 2023 The Tint Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/switch.h"
+#include "src/tint/ir/break_if.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Switch);
+#include "src/tint/ir/loop.h"
+
+TINT_INSTANTIATE_TYPEINFO(tint::ir::BreakIf);
 
 namespace tint::ir {
 
-Switch::Switch(Value* cond, Block* m) : Base(utils::Empty), condition_(cond), merge_(m) {
+BreakIf::BreakIf(Value* condition, ir::Loop* loop)
+    : Base(utils::Empty), condition_(condition), loop_(loop) {
     TINT_ASSERT(IR, condition_);
-    TINT_ASSERT(IR, merge_);
+    TINT_ASSERT(IR, loop_);
     condition_->AddUsage(this);
+    loop_->AddUsage(this);
+    loop_->Start()->AddInboundBranch(this);
+    loop_->Merge()->AddInboundBranch(this);
 }
 
-Switch::~Switch() = default;
+BreakIf::~BreakIf() = default;
 
 }  // namespace tint::ir

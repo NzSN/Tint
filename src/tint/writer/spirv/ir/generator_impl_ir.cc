@@ -16,12 +16,20 @@
 
 #include <utility>
 
+#include "spirv/unified1/GLSL.std.450.h"
 #include "spirv/unified1/spirv.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/block.h"
+#include "src/tint/ir/break_if.h"
+#include "src/tint/ir/builtin.h"
+#include "src/tint/ir/continue.h"
+#include "src/tint/ir/exit_if.h"
+#include "src/tint/ir/exit_loop.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/load.h"
+#include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
+#include "src/tint/ir/next_iteration.h"
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/transform/add_empty_entry_point.h"
@@ -329,7 +337,12 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
         auto result = Switch(
             inst,  //
             [&](const ir::Binary* b) { return EmitBinary(b); },
+            [&](const ir::Builtin* b) { return EmitBuiltin(b); },
             [&](const ir::Load* l) { return EmitLoad(l); },
+            [&](const ir::Loop* l) {
+                EmitLoop(l);
+                return 0u;
+            },
             [&](const ir::Store* s) {
                 EmitStore(s);
                 return 0u;
@@ -354,25 +367,41 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
 }
 
 void GeneratorImplIr::EmitBranch(const ir::Branch* b) {
-    if (b->Is<ir::Return>()) {
-        if (!b->Args().IsEmpty()) {
-            TINT_ASSERT(Writer, b->Args().Length() == 1u);
-            OperandList operands;
-            operands.push_back(Value(b->Args()[0]));
-            current_function_.push_inst(spv::Op::OpReturnValue, operands);
-        } else {
-            current_function_.push_inst(spv::Op::OpReturn, {});
-        }
-        return;
-    }
-
-    Switch(
-        b->To(),
-        [&](const ir::Block* blk) { current_function_.push_inst(spv::Op::OpBranch, {Label(blk)}); },
+    tint::Switch(  //
+        b,         //
+        [&](const ir::Return*) {
+            if (!b->Args().IsEmpty()) {
+                TINT_ASSERT(Writer, b->Args().Length() == 1u);
+                OperandList operands;
+                operands.push_back(Value(b->Args()[0]));
+                current_function_.push_inst(spv::Op::OpReturnValue, operands);
+            } else {
+                current_function_.push_inst(spv::Op::OpReturn, {});
+            }
+            return;
+        },
+        [&](const ir::BreakIf* breakif) {
+            current_function_.push_inst(spv::Op::OpBranchConditional,
+                                        {
+                                            Value(breakif->Condition()),
+                                            Label(breakif->Loop()->Merge()),
+                                            Label(breakif->Loop()->Start()),
+                                        });
+        },
+        [&](const ir::Continue* cont) {
+            current_function_.push_inst(spv::Op::OpBranch, {Label(cont->Loop()->Continuing())});
+        },
+        [&](const ir::ExitIf* if_) {
+            current_function_.push_inst(spv::Op::OpBranch, {Label(if_->If()->Merge())});
+        },
+        [&](const ir::ExitLoop* loop) {
+            current_function_.push_inst(spv::Op::OpBranch, {Label(loop->Loop()->Merge())});
+        },
+        [&](const ir::NextIteration* loop) {
+            current_function_.push_inst(spv::Op::OpBranch, {Label(loop->Loop()->Start())});
+        },
         [&](Default) {
-            // A block may not have an outward branch (e.g. an unreachable merge
-            // block).
-            current_function_.push_inst(spv::Op::OpUnreachable, {});
+            TINT_ICE(Writer, diagnostics_) << "unimplemented branch: " << b->TypeInfo().name;
         });
 }
 
@@ -388,10 +417,12 @@ void GeneratorImplIr::EmitIf(const ir::If* i) {
     uint32_t merge_label = Label(merge_block);
     uint32_t true_label = merge_label;
     uint32_t false_label = merge_label;
-    if (true_block->Instructions().Length() > 1 || true_block->Branch()->To() != merge_block) {
+    if (true_block->Instructions().Length() > 1 ||
+        (true_block->HasBranchTarget() && !true_block->Branch()->Is<ir::ExitIf>())) {
         true_label = Label(true_block);
     }
-    if (false_block->Instructions().Length() > 1 || false_block->Branch()->To() != merge_block) {
+    if (false_block->Instructions().Length() > 1 ||
+        (false_block->HasBranchTarget() && !false_block->Branch()->Is<ir::ExitIf>())) {
         false_label = Label(false_block);
     }
 
@@ -516,10 +547,108 @@ uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
     return id;
 }
 
+uint32_t GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
+    auto id = module_.NextId();
+    auto* result_ty = builtin->Type();
+
+    spv::Op op = spv::Op::Max;
+    OperandList operands = {Type(result_ty), id};
+
+    // Helper to set up the opcode and operand list for a GLSL extended instruction.
+    auto glsl_ext_inst = [&](enum GLSLstd450 inst) {
+        constexpr const char* kGLSLstd450 = "GLSL.std.450";
+        op = spv::Op::OpExtInst;
+        operands.push_back(imports_.GetOrCreate(kGLSLstd450, [&]() {
+            // Import the instruction set the first time it is requested.
+            auto import = module_.NextId();
+            module_.PushExtImport(spv::Op::OpExtInstImport, {import, Operand(kGLSLstd450)});
+            return import;
+        }));
+        operands.push_back(U32Operand(inst));
+    };
+
+    // Determine the opcode.
+    switch (builtin->Func()) {
+        case builtin::Function::kAbs:
+            if (result_ty->is_float_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450FAbs);
+            } else if (result_ty->is_signed_integer_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450SAbs);
+            } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
+                // abs() is a no-op for unsigned integers.
+                return Value(builtin->Args()[0]);
+            }
+            break;
+        case builtin::Function::kMax:
+            if (result_ty->is_float_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450FMax);
+            } else if (result_ty->is_signed_integer_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450SMax);
+            } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450UMax);
+            }
+            break;
+        case builtin::Function::kMin:
+            if (result_ty->is_float_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450FMin);
+            } else if (result_ty->is_signed_integer_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450SMin);
+            } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
+                glsl_ext_inst(GLSLstd450UMin);
+            }
+            break;
+        default:
+            TINT_ICE(Writer, diagnostics_) << "unimplemented builtin function: " << builtin->Func();
+            return 0u;
+    }
+    TINT_ASSERT(Writer, op != spv::Op::Max);
+
+    // Add the arguments to the builtin call.
+    for (auto* arg : builtin->Args()) {
+        operands.push_back(Value(arg));
+    }
+
+    // Emit the instruction.
+    current_function_.push_inst(op, operands);
+
+    return id;
+}
+
 uint32_t GeneratorImplIr::EmitLoad(const ir::Load* load) {
     auto id = module_.NextId();
     current_function_.push_inst(spv::Op::OpLoad, {Type(load->Type()), id, Value(load->From())});
     return id;
+}
+
+void GeneratorImplIr::EmitLoop(const ir::Loop* loop) {
+    auto header_label = module_.NextId();
+    auto body_label = Label(loop->Start());
+    auto continuing_label = Label(loop->Continuing());
+    auto merge_label = Label(loop->Merge());
+
+    // Branch to and emit the loop header, which contains OpLoopMerge and OpBranch instructions.
+    current_function_.push_inst(spv::Op::OpBranch, {header_label});
+    current_function_.push_inst(spv::Op::OpLabel, {header_label});
+    current_function_.push_inst(
+        spv::Op::OpLoopMerge, {merge_label, continuing_label, U32Operand(SpvLoopControlMaskNone)});
+    current_function_.push_inst(spv::Op::OpBranch, {body_label});
+
+    // Emit the loop body.
+    EmitBlock(loop->Start());
+
+    // Emit the loop continuing block.
+    // The back-edge needs to go to the loop header, so update the label for the start block.
+    block_labels_.Replace(loop->Start(), header_label);
+    if (loop->Continuing()->HasBranchTarget()) {
+        EmitBlock(loop->Continuing());
+    } else {
+        // We still need to emit a continuing block with a back-edge, even if it is unreachable.
+        current_function_.push_inst(spv::Op::OpLabel, {continuing_label});
+        current_function_.push_inst(spv::Op::OpBranch, {header_label});
+    }
+
+    // Emit the loop merge block.
+    EmitBlock(loop->Merge());
 }
 
 void GeneratorImplIr::EmitStore(const ir::Store* store) {

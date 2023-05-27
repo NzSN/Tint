@@ -12,37 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_BRANCH_H_
-#define SRC_TINT_IR_BRANCH_H_
+#ifndef SRC_TINT_IR_BREAK_IF_H_
+#define SRC_TINT_IR_BREAK_IF_H_
 
-#include "src/tint/ir/instruction.h"
+#include "src/tint/ir/branch.h"
 #include "src/tint/ir/value.h"
 #include "src/tint/utils/castable.h"
 
 // Forward declarations
 namespace tint::ir {
-class Block;
+class Loop;
 }  // namespace tint::ir
 
 namespace tint::ir {
 
-/// A branch instruction.
-class Branch : public utils::Castable<Branch, Instruction> {
+/// A break-if iteration instruction.
+class BreakIf : public utils::Castable<BreakIf, Branch> {
   public:
-    ~Branch() override;
-
-    /// @returns the branch arguments
-    utils::VectorRef<Value*> Args() const { return args_; }
-
-  protected:
     /// Constructor
-    /// @param args the branch arguments
-    explicit Branch(utils::VectorRef<Value*> args);
+    /// @param condition the break condition
+    /// @param loop the loop containing the break-if
+    BreakIf(Value* condition, ir::Loop* loop);
+    ~BreakIf() override;
+
+    /// @returns the break condition
+    const Value* Condition() const { return condition_; }
+
+    /// @returns the loop containing the break-if
+    const ir::Loop* Loop() const { return loop_; }
 
   private:
-    utils::Vector<Value*, 2> args_;
+    Value* condition_ = nullptr;
+    ir::Loop* loop_ = nullptr;
 };
 
 }  // namespace tint::ir
 
-#endif  // SRC_TINT_IR_BRANCH_H_
+#endif  // SRC_TINT_IR_BREAK_IF_H_
