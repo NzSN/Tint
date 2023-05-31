@@ -139,39 +139,119 @@ void Disassembler::WalkInternal(const Block* blk) {
     Indent() << "}" << std::endl;
 }
 
+void Disassembler::EmitBindingPoint(BindingPoint p) {
+    out_ << "@binding_point(" << p.group << ", " << p.binding << ")";
+}
+
+void Disassembler::EmitLocation(Location loc) {
+    out_ << "@location(" << loc.value << ")";
+    if (loc.interpolation.has_value()) {
+        out_ << ", @interpolate(";
+        out_ << loc.interpolation->type;
+        if (loc.interpolation->sampling != builtin::InterpolationSampling::kUndefined) {
+            out_ << ", ";
+            out_ << loc.interpolation->sampling;
+        }
+        out_ << ")";
+    }
+}
+
+void Disassembler::EmitParamAttributes(const FunctionParam* p) {
+    if (!p->Invariant() && !p->Location().has_value() && !p->BindingPoint().has_value() &&
+        !p->Builtin().has_value()) {
+        return;
+    }
+
+    out_ << " [";
+
+    bool need_comma = false;
+    auto comma = [&]() {
+        if (need_comma) {
+            out_ << ", ";
+        }
+    };
+
+    if (p->Invariant()) {
+        comma();
+        out_ << "@invariant";
+        need_comma = true;
+    }
+    if (p->Location().has_value()) {
+        EmitLocation(p->Location().value());
+        need_comma = true;
+    }
+    if (p->BindingPoint().has_value()) {
+        comma();
+        EmitBindingPoint(p->BindingPoint().value());
+        need_comma = true;
+    }
+    if (p->Builtin().has_value()) {
+        comma();
+        out_ << "@" << p->Builtin().value();
+        need_comma = true;
+    }
+    out_ << "]";
+}
+
+void Disassembler::EmitReturnAttributes(const Function* func) {
+    if (!func->ReturnInvariant() && !func->ReturnLocation().has_value() &&
+        !func->ReturnBuiltin().has_value()) {
+        return;
+    }
+
+    out_ << " [";
+
+    bool need_comma = false;
+    auto comma = [&]() {
+        if (need_comma) {
+            out_ << ", ";
+        }
+    };
+    if (func->ReturnInvariant()) {
+        comma();
+        out_ << "@invariant";
+        need_comma = true;
+    }
+    if (func->ReturnLocation().has_value()) {
+        comma();
+        EmitLocation(func->ReturnLocation().value());
+        need_comma = true;
+    }
+    if (func->ReturnBuiltin().has_value()) {
+        comma();
+        out_ << "@" << func->ReturnBuiltin().value();
+        need_comma = true;
+    }
+    out_ << "]";
+}
+
 void Disassembler::EmitFunction(const Function* func) {
     in_function_ = true;
 
-    Indent() << "%" << IdOf(func) << " = func(";
-    for (auto* p : func->Params()) {
+    Indent() << "%" << IdOf(func) << " =";
+
+    if (func->Stage() != Function::PipelineStage::kUndefined) {
+        out_ << " @" << func->Stage();
+    }
+    if (func->WorkgroupSize()) {
+        auto arr = func->WorkgroupSize().value();
+        out_ << " @workgroup_size(" << arr[0] << ", " << arr[1] << ", " << arr[2] << ")";
+    }
+
+    out_ << " func(";
+
+    for (const auto* p : func->Params()) {
         if (p != func->Params().Front()) {
             out_ << ", ";
         }
         out_ << "%" << IdOf(p) << ":" << p->Type()->FriendlyName();
+
+        EmitParamAttributes(p);
     }
     out_ << "):" << func->ReturnType()->FriendlyName();
 
-    if (func->Stage() != Function::PipelineStage::kUndefined) {
-        out_ << " [@" << func->Stage();
+    EmitReturnAttributes(func);
 
-        if (func->WorkgroupSize()) {
-            auto arr = func->WorkgroupSize().value();
-            out_ << " @workgroup_size(" << arr[0] << ", " << arr[1] << ", " << arr[2] << ")";
-        }
-
-        if (!func->ReturnAttributes().IsEmpty()) {
-            out_ << " ra:";
-
-            for (auto attr : func->ReturnAttributes()) {
-                out_ << " @" << attr;
-                if (attr == Function::ReturnAttribute::kLocation) {
-                    out_ << "(" << func->ReturnLocation().value() << ")";
-                }
-            }
-        }
-
-        out_ << "]";
-    }
     out_ << " -> %b" << IdOf(func->StartTarget()) << " {" << std::endl;
 
     {
@@ -302,6 +382,11 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
                 out_ << ", ";
                 EmitValue(v->Initializer());
             }
+            if (v->BindingPoint().has_value()) {
+                out_ << " ";
+                EmitBindingPoint(v->BindingPoint().value());
+            }
+
             out_ << std::endl;
         },
         [&](const ir::Branch* b) { EmitBranch(b); },
