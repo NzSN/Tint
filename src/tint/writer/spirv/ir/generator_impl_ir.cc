@@ -18,6 +18,7 @@
 
 #include "spirv/unified1/GLSL.std.450.h"
 #include "spirv/unified1/spirv.h"
+#include "src/tint/constant/scalar.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/block.h"
 #include "src/tint/ir/break_if.h"
@@ -39,6 +40,7 @@
 #include "src/tint/ir/var.h"
 #include "src/tint/switch.h"
 #include "src/tint/transform/manager.h"
+#include "src/tint/type/array.h"
 #include "src/tint/type/bool.h"
 #include "src/tint/type/f16.h"
 #include "src/tint/type/f32.h"
@@ -100,11 +102,9 @@ bool GeneratorImplIr::Generate() {
 
     // TODO(crbug.com/tint/1906): Emit extensions.
 
-    // TODO(crbug.com/tint/1906): Emit variables.
-    (void)zero_init_workgroup_memory_;
+    // Emit module-scope declarations.
     if (ir_->root_block) {
-        TINT_ICE(Writer, diagnostics_) << "root block is unimplemented";
-        return false;
+        EmitRootBlock(ir_->root_block);
     }
 
     // Emit functions.
@@ -174,6 +174,14 @@ uint32_t GeneratorImplIr::Constant(const constant::Value* constant) {
     });
 }
 
+uint32_t GeneratorImplIr::ConstantNull(const type::Type* type) {
+    return constant_nulls_.GetOrCreate(type, [&]() {
+        auto id = module_.NextId();
+        module_.PushType(spv::Op::OpConstantNull, {Type(type), id});
+        return id;
+    });
+}
+
 uint32_t GeneratorImplIr::Type(const type::Type* ty) {
     return types_.GetOrCreate(ty, [&]() {
         auto id = module_.NextId();
@@ -199,6 +207,18 @@ uint32_t GeneratorImplIr::Type(const type::Type* ty) {
             [&](const type::Matrix* mat) {
                 module_.PushType(spv::Op::OpTypeMatrix,
                                  {id, Type(mat->ColumnType()), mat->columns()});
+            },
+            [&](const type::Array* arr) {
+                if (arr->ConstantCount()) {
+                    auto* count = ir_->constant_values.Get(u32(arr->ConstantCount().value()));
+                    module_.PushType(spv::Op::OpTypeArray,
+                                     {id, Type(arr->ElemType()), Constant(count)});
+                } else {
+                    TINT_ASSERT(Writer, arr->Count()->Is<type::RuntimeArrayCount>());
+                    module_.PushType(spv::Op::OpTypeRuntimeArray, {id, Type(arr->ElemType())});
+                }
+                module_.PushAnnot(spv::Op::OpDecorate,
+                                  {id, U32Operand(SpvDecorationArrayStride), arr->Stride()});
             },
             [&](const type::Pointer* ptr) {
                 module_.PushType(
@@ -320,6 +340,20 @@ void GeneratorImplIr::EmitEntryPoint(const ir::Function* func, uint32_t id) {
                            {U32Operand(stage), id, ir_->NameOf(func).Name()});
 }
 
+void GeneratorImplIr::EmitRootBlock(const ir::Block* root_block) {
+    for (auto* inst : root_block->Instructions()) {
+        auto result = Switch(
+            inst,  //
+            [&](const ir::Var* v) { return EmitVar(v); },
+            [&](Default) {
+                TINT_ICE(Writer, diagnostics_)
+                    << "unimplemented root block instruction: " << inst->TypeInfo().name;
+                return 0u;
+            });
+        values_.Add(inst, result);
+    }
+}
+
 void GeneratorImplIr::EmitBlock(const ir::Block* block) {
     // Emit the label.
     // Skip if this is the function's entry block, as it will be emitted by the function object.
@@ -332,6 +366,22 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
     if (block->Instructions().IsEmpty()) {
         current_function_.push_inst(spv::Op::OpUnreachable, {});
         return;
+    }
+
+    // Emit Phi nodes for all the incoming block parameters
+    for (size_t param_idx = 0; param_idx < block->Params().Length(); param_idx++) {
+        auto* param = block->Params()[param_idx];
+        auto id = module_.NextId();
+        values_.Add(param, id);
+        OperandList ops{Type(param->Type()), id};
+
+        for (auto* incoming : block->InboundBranches()) {
+            auto* arg = incoming->Args()[param_idx];
+            ops.push_back(Value(arg));
+            ops.push_back(Label(incoming->Block()));
+        }
+
+        current_function_.push_inst(spv::Op::OpPhi, std::move(ops));
     }
 
     // Emit the instructions.
@@ -391,7 +441,7 @@ void GeneratorImplIr::EmitBranch(const ir::Branch* b) {
                                         {
                                             Value(breakif->Condition()),
                                             Label(breakif->Loop()->Merge()),
-                                            Label(breakif->Loop()->Start()),
+                                            Label(breakif->Loop()->Body()),
                                         });
         },
         [&](const ir::Continue* cont) {
@@ -407,7 +457,7 @@ void GeneratorImplIr::EmitBranch(const ir::Branch* b) {
             current_function_.push_inst(spv::Op::OpBranch, {Label(swtch->Switch()->Merge())});
         },
         [&](const ir::NextIteration* loop) {
-            current_function_.push_inst(spv::Op::OpBranch, {Label(loop->Loop()->Start())});
+            current_function_.push_inst(spv::Op::OpBranch, {Label(loop->Loop()->Body())});
         },
         [&](Default) {
             TINT_ICE(Writer, diagnostics_) << "unimplemented branch: " << b->TypeInfo().name;
@@ -421,16 +471,17 @@ void GeneratorImplIr::EmitIf(const ir::If* i) {
 
     // Generate labels for the blocks. We emit the true or false block if it:
     // 1. contains instructions other then the branch, or
-    // 2. branches somewhere other then the Merge().
+    // 2. branches somewhere other then the Merge(), or
+    // 3. the merge has input parameters
     // Otherwise we skip them and branch straight to the merge block.
     uint32_t merge_label = Label(merge_block);
     uint32_t true_label = merge_label;
     uint32_t false_label = merge_label;
-    if (true_block->Instructions().Length() > 1 ||
+    if (true_block->Instructions().Length() > 1 || !merge_block->Params().IsEmpty() ||
         (true_block->HasBranchTarget() && !true_block->Branch()->Is<ir::ExitIf>())) {
         true_label = Label(true_block);
     }
-    if (false_block->Instructions().Length() > 1 ||
+    if (false_block->Instructions().Length() > 1 || !merge_block->Params().IsEmpty() ||
         (false_block->HasBranchTarget() && !false_block->Branch()->Is<ir::ExitIf>())) {
         false_label = Label(false_block);
     }
@@ -631,7 +682,7 @@ uint32_t GeneratorImplIr::EmitLoad(const ir::Load* load) {
 
 void GeneratorImplIr::EmitLoop(const ir::Loop* loop) {
     auto header_label = module_.NextId();
-    auto body_label = Label(loop->Start());
+    auto body_label = Label(loop->Body());
     auto continuing_label = Label(loop->Continuing());
     auto merge_label = Label(loop->Merge());
 
@@ -643,11 +694,11 @@ void GeneratorImplIr::EmitLoop(const ir::Loop* loop) {
     current_function_.push_inst(spv::Op::OpBranch, {body_label});
 
     // Emit the loop body.
-    EmitBlock(loop->Start());
+    EmitBlock(loop->Body());
 
     // Emit the loop continuing block.
     // The back-edge needs to go to the loop header, so update the label for the start block.
-    block_labels_.Replace(loop->Start(), header_label);
+    block_labels_.Replace(loop->Body(), header_label);
     if (loop->Continuing()->HasBranchTarget()) {
         EmitBlock(loop->Continuing());
     } else {
@@ -719,16 +770,41 @@ uint32_t GeneratorImplIr::EmitVar(const ir::Var* var) {
     TINT_ASSERT(Writer, ptr);
     auto ty = Type(ptr);
 
-    if (ptr->AddressSpace() == builtin::AddressSpace::kFunction) {
-        TINT_ASSERT(Writer, current_function_);
-        current_function_.push_var({ty, id, U32Operand(SpvStorageClassFunction)});
-        if (var->Initializer()) {
-            current_function_.push_inst(spv::Op::OpStore, {id, Value(var->Initializer())});
+    switch (ptr->AddressSpace()) {
+        case builtin::AddressSpace::kFunction: {
+            TINT_ASSERT(Writer, current_function_);
+            current_function_.push_var({ty, id, U32Operand(SpvStorageClassFunction)});
+            if (var->Initializer()) {
+                current_function_.push_inst(spv::Op::OpStore, {id, Value(var->Initializer())});
+            }
+            break;
         }
-    } else {
-        TINT_ICE(Writer, diagnostics_)
-            << "unimplemented variable address space " << ptr->AddressSpace();
-        return 0u;
+        case builtin::AddressSpace::kPrivate: {
+            TINT_ASSERT(Writer, !current_function_);
+            OperandList operands = {ty, id, U32Operand(SpvStorageClassPrivate)};
+            if (var->Initializer()) {
+                TINT_ASSERT(Writer, var->Initializer()->Is<ir::Constant>());
+                operands.push_back(Value(var->Initializer()));
+            }
+            module_.PushType(spv::Op::OpVariable, operands);
+            break;
+        }
+        case builtin::AddressSpace::kWorkgroup: {
+            TINT_ASSERT(Writer, !current_function_);
+            OperandList operands = {ty, id, U32Operand(SpvStorageClassWorkgroup)};
+            if (zero_init_workgroup_memory_) {
+                // If requested, use the VK_KHR_zero_initialize_workgroup_memory to zero-initialize
+                // the workgroup variable using an null constant initializer.
+                operands.push_back(ConstantNull(ptr->StoreType()));
+            }
+            module_.PushType(spv::Op::OpVariable, operands);
+            break;
+        }
+        default: {
+            TINT_ICE(Writer, diagnostics_)
+                << "unimplemented variable address space " << ptr->AddressSpace();
+            return 0u;
+        }
     }
 
     // Set the name if present.

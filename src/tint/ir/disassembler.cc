@@ -122,12 +122,7 @@ void Disassembler::WalkInternal(const Block* blk) {
     Indent() << "%b" << IdOf(blk) << " = block";
     if (!blk->Params().IsEmpty()) {
         out_ << " (";
-        for (auto* p : blk->Params()) {
-            if (p != blk->Params().Front()) {
-                out_ << ", ";
-            }
-            EmitValue(p);
-        }
+        EmitValueList(blk->Params());
         out_ << ")";
     }
 
@@ -435,7 +430,7 @@ void Disassembler::EmitIf(const If* i) {
 }
 
 void Disassembler::EmitLoop(const Loop* l) {
-    out_ << "loop [s: %b" << IdOf(l->Start());
+    out_ << "loop [s: %b" << IdOf(l->Body());
 
     if (l->Continuing()->HasBranchTarget()) {
         out_ << ", c: %b" << IdOf(l->Continuing());
@@ -443,11 +438,18 @@ void Disassembler::EmitLoop(const Loop* l) {
     if (l->Merge()->HasBranchTarget()) {
         out_ << ", m: %b" << IdOf(l->Merge());
     }
-    out_ << "]" << std::endl;
+    out_ << "]";
+
+    if (!l->Args().IsEmpty()) {
+        out_ << " ";
+        EmitValueList(l->Args());
+    }
+
+    out_ << std::endl;
 
     {
         ScopedIndent si(indent_size_);
-        Walk(l->Start());
+        Walk(l->Body());
         out_ << std::endl;
     }
 
@@ -515,36 +517,33 @@ void Disassembler::EmitBranch(const Branch* b) {
         [&](const ir::ExitSwitch* es) { out_ << "exit_switch %b" << IdOf(es->Switch()->Merge()); },
         [&](const ir::ExitLoop* el) { out_ << "exit_loop %b" << IdOf(el->Loop()->Merge()); },
         [&](const ir::NextIteration* ni) {
-            out_ << "next_iteration %b" << IdOf(ni->Loop()->Start());
+            out_ << "next_iteration %b" << IdOf(ni->Loop()->Body());
         },
         [&](const ir::BreakIf* bi) {
             out_ << "break_if ";
             EmitValue(bi->Condition());
-            out_ << " %b" << IdOf(bi->Loop()->Start());
+            out_ << " %b" << IdOf(bi->Loop()->Body());
         },
         [&](Default) { out_ << "Unknown branch " << b->TypeInfo().name; });
 
     if (!b->Args().IsEmpty()) {
         out_ << " ";
-        for (auto* v : b->Args()) {
-            if (v != b->Args().Front()) {
-                out_ << ", ";
-            }
-            EmitValue(v);
-        }
+        EmitValueList(b->Args());
     }
     out_ << std::endl;
 }
 
-void Disassembler::EmitArgs(const Call* call) {
-    bool first = true;
-    for (const auto* arg : call->Args()) {
-        if (!first) {
+void Disassembler::EmitValueList(tint::utils::VectorRef<const tint::ir::Value*> values) {
+    for (auto* v : values) {
+        if (v != values.Front()) {
             out_ << ", ";
         }
-        first = false;
-        EmitValue(arg);
+        EmitValue(v);
     }
+}
+
+void Disassembler::EmitArgs(const Call* call) {
+    EmitValueList(call->Args());
 }
 
 void Disassembler::EmitBinary(const Binary* b) {
