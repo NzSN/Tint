@@ -47,6 +47,7 @@
 #include "src/tint/type/i32.h"
 #include "src/tint/type/matrix.h"
 #include "src/tint/type/pointer.h"
+#include "src/tint/type/struct.h"
 #include "src/tint/type/type.h"
 #include "src/tint/type/u32.h"
 #include "src/tint/type/vector.h"
@@ -225,6 +226,7 @@ uint32_t GeneratorImplIr::Type(const type::Type* ty) {
                     spv::Op::OpTypePointer,
                     {id, U32Operand(StorageClass(ptr->AddressSpace())), Type(ptr->StoreType())});
             },
+            [&](const type::Struct* str) { EmitStructType(id, str); },
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_) << "unhandled type: " << ty->FriendlyName();
             });
@@ -237,12 +239,7 @@ uint32_t GeneratorImplIr::Value(const ir::Value* value) {
         value,  //
         [&](const ir::Constant* constant) { return Constant(constant); },
         [&](const ir::Value*) {
-            auto id = values_.Find(value);
-            if (TINT_UNLIKELY(!id)) {
-                TINT_ICE(Writer, diagnostics_) << "missing result ID for value";
-                return 0u;
-            }
-            return *id;
+            return values_.GetOrCreate(value, [&] { return module_.NextId(); });
         });
 }
 
@@ -250,10 +247,49 @@ uint32_t GeneratorImplIr::Label(const ir::Block* block) {
     return block_labels_.GetOrCreate(block, [&]() { return module_.NextId(); });
 }
 
+void GeneratorImplIr::EmitStructType(uint32_t id, const type::Struct* str) {
+    // Helper to return `type` or a potentially nested array element type within `type` as a matrix
+    // type, or nullptr if no such matrix type is present.
+    auto get_nested_matrix_type = [&](const type::Type* type) {
+        while (auto* arr = type->As<type::Array>()) {
+            type = arr->ElemType();
+        }
+        return type->As<type::Matrix>();
+    };
+
+    OperandList operands = {id};
+    for (auto* member : str->Members()) {
+        operands.push_back(Type(member->Type()));
+
+        // Generate struct member offset decoration.
+        module_.PushAnnot(
+            spv::Op::OpMemberDecorate,
+            {operands[0], member->Index(), U32Operand(SpvDecorationOffset), member->Offset()});
+
+        // Emit matrix layout decorations if necessary.
+        if (auto* matrix_type = get_nested_matrix_type(member->Type())) {
+            const uint32_t effective_row_count = (matrix_type->rows() == 2) ? 2 : 4;
+            module_.PushAnnot(spv::Op::OpMemberDecorate,
+                              {id, member->Index(), U32Operand(SpvDecorationColMajor)});
+            module_.PushAnnot(spv::Op::OpMemberDecorate,
+                              {id, member->Index(), U32Operand(SpvDecorationMatrixStride),
+                               Operand(effective_row_count * matrix_type->type()->Size())});
+        }
+
+        if (member->Name().IsValid()) {
+            module_.PushDebug(spv::Op::OpMemberName,
+                              {operands[0], member->Index(), Operand(member->Name().Name())});
+        }
+    }
+    module_.PushType(spv::Op::OpTypeStruct, std::move(operands));
+
+    if (str->Name().IsValid()) {
+        module_.PushDebug(spv::Op::OpName, {operands[0], Operand(str->Name().Name())});
+    }
+}
+
 void GeneratorImplIr::EmitFunction(const ir::Function* func) {
-    // Make an ID for the function.
-    auto id = module_.NextId();
-    values_.Add(func, id);
+    auto id = Value(func);
 
     // Emit the function name.
     module_.PushDebug(spv::Op::OpName, {id, Operand(ir_->NameOf(func).Name())});
@@ -272,9 +308,8 @@ void GeneratorImplIr::EmitFunction(const ir::Function* func) {
     // Generate function parameter declarations and add their type IDs to the function signature.
     for (auto* param : func->Params()) {
         auto param_type_id = Type(param->Type());
-        auto param_id = module_.NextId();
+        auto param_id = Value(param);
         params.push_back(Instruction(spv::Op::OpFunctionParameter, {param_type_id, param_id}));
-        values_.Add(param, param_id);
         function_type.param_type_ids.Push(param_type_id);
         if (auto name = ir_->NameOf(param)) {
             module_.PushDebug(spv::Op::OpName, {param_id, Operand(name.Name())});
@@ -341,16 +376,14 @@ void GeneratorImplIr::EmitEntryPoint(const ir::Function* func, uint32_t id) {
 }
 
 void GeneratorImplIr::EmitRootBlock(const ir::Block* root_block) {
-    for (auto* inst : root_block->Instructions()) {
-        auto result = Switch(
+    for (auto* inst : *root_block) {
+        Switch(
             inst,  //
             [&](const ir::Var* v) { return EmitVar(v); },
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_)
                     << "unimplemented root block instruction: " << inst->TypeInfo().name;
-                return 0u;
             });
-        values_.Add(inst, result);
     }
 }
 
@@ -363,7 +396,7 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
 
     // If there are no instructions in the block, it's a dead end, so we shouldn't be able to get
     // here to begin with.
-    if (block->Instructions().IsEmpty()) {
+    if (block->IsEmpty()) {
         current_function_.push_inst(spv::Op::OpUnreachable, {});
         return;
     }
@@ -371,9 +404,7 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
     // Emit Phi nodes for all the incoming block parameters
     for (size_t param_idx = 0; param_idx < block->Params().Length(); param_idx++) {
         auto* param = block->Params()[param_idx];
-        auto id = module_.NextId();
-        values_.Add(param, id);
-        OperandList ops{Type(param->Type()), id};
+        OperandList ops{Type(param->Type()), Value(param)};
 
         for (auto* incoming : block->InboundBranches()) {
             auto* arg = incoming->Args()[param_idx];
@@ -385,40 +416,23 @@ void GeneratorImplIr::EmitBlock(const ir::Block* block) {
     }
 
     // Emit the instructions.
-    for (auto* inst : block->Instructions()) {
-        auto result = Switch(
-            inst,  //
-            [&](const ir::Binary* b) { return EmitBinary(b); },
-            [&](const ir::Builtin* b) { return EmitBuiltin(b); },
-            [&](const ir::Load* l) { return EmitLoad(l); },
-            [&](const ir::Loop* l) {
-                EmitLoop(l);
-                return 0u;
-            },
-            [&](const ir::Switch* sw) {
-                EmitSwitch(sw);
-                return 0u;
-            },
-            [&](const ir::Store* s) {
-                EmitStore(s);
-                return 0u;
-            },
-            [&](const ir::UserCall* c) { return EmitUserCall(c); },
-            [&](const ir::Var* v) { return EmitVar(v); },
-            [&](const ir::If* i) {
-                EmitIf(i);
-                return 0u;
-            },
-            [&](const ir::Branch* b) {
-                EmitBranch(b);
-                return 0u;
-            },
+    for (auto* inst : *block) {
+        Switch(
+            inst,                                             //
+            [&](const ir::Binary* b) { EmitBinary(b); },      //
+            [&](const ir::Builtin* b) { EmitBuiltin(b); },    //
+            [&](const ir::Load* l) { EmitLoad(l); },          //
+            [&](const ir::Loop* l) { EmitLoop(l); },          //
+            [&](const ir::Switch* sw) { EmitSwitch(sw); },    //
+            [&](const ir::Store* s) { EmitStore(s); },        //
+            [&](const ir::UserCall* c) { EmitUserCall(c); },  //
+            [&](const ir::Var* v) { EmitVar(v); },            //
+            [&](const ir::If* i) { EmitIf(i); },              //
+            [&](const ir::Branch* b) { EmitBranch(b); },      //
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_)
                     << "unimplemented instruction: " << inst->TypeInfo().name;
-                return 0u;
             });
-        values_.Add(inst, result);
     }
 }
 
@@ -477,11 +491,11 @@ void GeneratorImplIr::EmitIf(const ir::If* i) {
     uint32_t merge_label = Label(merge_block);
     uint32_t true_label = merge_label;
     uint32_t false_label = merge_label;
-    if (true_block->Instructions().Length() > 1 || !merge_block->Params().IsEmpty() ||
+    if (true_block->Length() > 1 || !merge_block->Params().IsEmpty() ||
         (true_block->HasBranchTarget() && !true_block->Branch()->Is<ir::ExitIf>())) {
         true_label = Label(true_block);
     }
-    if (false_block->Instructions().Length() > 1 || !merge_block->Params().IsEmpty() ||
+    if (false_block->Length() > 1 || !merge_block->Params().IsEmpty() ||
         (false_block->HasBranchTarget() && !false_block->Branch()->Is<ir::ExitIf>())) {
         false_label = Label(false_block);
     }
@@ -504,8 +518,8 @@ void GeneratorImplIr::EmitIf(const ir::If* i) {
     EmitBlock(merge_block);
 }
 
-uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
-    auto id = module_.NextId();
+void GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
+    auto id = Value(binary);
     auto* lhs_ty = binary->LHS()->Type();
 
     // Determine the opcode.
@@ -603,13 +617,19 @@ uint32_t GeneratorImplIr::EmitBinary(const ir::Binary* binary) {
     // Emit the instruction.
     current_function_.push_inst(
         op, {Type(binary->Type()), id, Value(binary->LHS()), Value(binary->RHS())});
-
-    return id;
 }
 
-uint32_t GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
-    auto id = module_.NextId();
+void GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
     auto* result_ty = builtin->Type();
+
+    if (builtin->Func() == builtin::Function::kAbs &&
+        result_ty->is_unsigned_integer_scalar_or_vector()) {
+        // abs() is a no-op for unsigned integers.
+        values_.Add(builtin, Value(builtin->Args()[0]));
+        return;
+    }
+
+    auto id = Value(builtin);
 
     spv::Op op = spv::Op::Max;
     OperandList operands = {Type(result_ty), id};
@@ -634,9 +654,6 @@ uint32_t GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
                 glsl_ext_inst(GLSLstd450FAbs);
             } else if (result_ty->is_signed_integer_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450SAbs);
-            } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
-                // abs() is a no-op for unsigned integers.
-                return Value(builtin->Args()[0]);
             }
             break;
         case builtin::Function::kMax:
@@ -659,7 +676,6 @@ uint32_t GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
             break;
         default:
             TINT_ICE(Writer, diagnostics_) << "unimplemented builtin function: " << builtin->Func();
-            return 0u;
     }
     TINT_ASSERT(Writer, op != spv::Op::Max);
 
@@ -670,14 +686,11 @@ uint32_t GeneratorImplIr::EmitBuiltin(const ir::Builtin* builtin) {
 
     // Emit the instruction.
     current_function_.push_inst(op, operands);
-
-    return id;
 }
 
-uint32_t GeneratorImplIr::EmitLoad(const ir::Load* load) {
-    auto id = module_.NextId();
-    current_function_.push_inst(spv::Op::OpLoad, {Type(load->Type()), id, Value(load->From())});
-    return id;
+void GeneratorImplIr::EmitLoad(const ir::Load* load) {
+    current_function_.push_inst(spv::Op::OpLoad,
+                                {Type(load->Type()), Value(load), Value(load->From())});
 }
 
 void GeneratorImplIr::EmitLoop(const ir::Loop* loop) {
@@ -754,18 +767,17 @@ void GeneratorImplIr::EmitStore(const ir::Store* store) {
     current_function_.push_inst(spv::Op::OpStore, {Value(store->To()), Value(store->From())});
 }
 
-uint32_t GeneratorImplIr::EmitUserCall(const ir::UserCall* call) {
-    auto id = module_.NextId();
-    OperandList operands = {Type(call->Type()), id, values_.Get(call->Func()).value()};
+void GeneratorImplIr::EmitUserCall(const ir::UserCall* call) {
+    auto id = Value(call);
+    OperandList operands = {Type(call->Type()), id, Value(call->Func())};
     for (auto* arg : call->Args()) {
         operands.push_back(Value(arg));
     }
     current_function_.push_inst(spv::Op::OpFunctionCall, operands);
-    return id;
 }
 
-uint32_t GeneratorImplIr::EmitVar(const ir::Var* var) {
-    auto id = module_.NextId();
+void GeneratorImplIr::EmitVar(const ir::Var* var) {
+    auto id = Value(var);
     auto* ptr = var->Type()->As<type::Pointer>();
     TINT_ASSERT(Writer, ptr);
     auto ty = Type(ptr);
@@ -803,7 +815,6 @@ uint32_t GeneratorImplIr::EmitVar(const ir::Var* var) {
         default: {
             TINT_ICE(Writer, diagnostics_)
                 << "unimplemented variable address space " << ptr->AddressSpace();
-            return 0u;
         }
     }
 
@@ -811,8 +822,6 @@ uint32_t GeneratorImplIr::EmitVar(const ir::Var* var) {
     if (auto name = ir_->NameOf(var)) {
         module_.PushDebug(spv::Op::OpName, {id, Operand(name.Name())});
     }
-
-    return id;
 }
 
 }  // namespace tint::writer::spirv

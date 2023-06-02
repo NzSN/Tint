@@ -940,6 +940,7 @@ if(TINT_BUILD_TESTS)
     constant/manager_test.cc
     constant/scalar_test.cc
     constant/splat_test.cc
+    constant/value_test.cc
     debug_test.cc
     diagnostic/diagnostic_test.cc
     diagnostic/formatter_test.cc
@@ -1483,6 +1484,7 @@ if(TINT_BUILD_TESTS)
     list(APPEND TINT_TEST_SRCS
       ir/binary_test.cc
       ir/bitcast_test.cc
+      ir/block_test.cc
       ir/constant_test.cc
       ir/discard_test.cc
       ir/from_program_binary_test.cc
@@ -1495,6 +1497,7 @@ if(TINT_BUILD_TESTS)
       ir/from_program_test.cc
       ir/from_program_unary_test.cc
       ir/from_program_var_test.cc
+      ir/instruction_test.cc
       ir/load_test.cc
       ir/module_test.cc
       ir/store_test.cc
