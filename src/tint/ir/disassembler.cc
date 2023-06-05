@@ -18,6 +18,7 @@
 #include "src/tint/constant/composite.h"
 #include "src/tint/constant/scalar.h"
 #include "src/tint/constant/splat.h"
+#include "src/tint/ir/access.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/bitcast.h"
 #include "src/tint/ir/block.h"
@@ -37,6 +38,7 @@
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
+#include "src/tint/ir/swizzle.h"
 #include "src/tint/ir/user_call.h"
 #include "src/tint/ir/var.h"
 #include "src/tint/switch.h"
@@ -292,17 +294,19 @@ void Disassembler::EmitValue(const Value* val) {
                         out_ << (scalar->ValueAs<bool>() ? "true" : "false");
                     },
                     [&](const constant::Splat* splat) {
-                        out_ << splat->Type()->FriendlyName() << " ";
+                        out_ << splat->Type()->FriendlyName() << "(";
                         emit(splat->Index(0));
+                        out_ << ")";
                     },
                     [&](const constant::Composite* composite) {
-                        out_ << composite->Type()->FriendlyName() << " ";
+                        out_ << composite->Type()->FriendlyName() << "(";
                         for (const auto* elem : composite->elements) {
                             if (elem != composite->elements[0]) {
                                 out_ << ", ";
                             }
                             emit(elem);
                         }
+                        out_ << ")";
                     });
             };
             emit(constant->Value());
@@ -382,6 +386,42 @@ void Disassembler::EmitInstruction(const Instruction* inst) {
                 EmitBindingPoint(v->BindingPoint().value());
             }
 
+            out_ << std::endl;
+        },
+        [&](const ir::Access* a) {
+            EmitValueWithType(a);
+            out_ << " = access ";
+            EmitValue(a->Object());
+            out_ << ", ";
+            for (size_t i = 0; i < a->Indices().Length(); ++i) {
+                if (i > 0) {
+                    out_ << ", ";
+                }
+                EmitValue(a->Indices()[i]);
+            }
+            out_ << std::endl;
+        },
+        [&](const ir::Swizzle* s) {
+            EmitValueWithType(s);
+            out_ << " = swizzle ";
+            EmitValue(s->Object());
+            out_ << ", ";
+            for (auto idx : s->Indices()) {
+                switch (idx) {
+                    case 0:
+                        out_ << "x";
+                        break;
+                    case 1:
+                        out_ << "y";
+                        break;
+                    case 2:
+                        out_ << "z";
+                        break;
+                    case 3:
+                        out_ << "w";
+                        break;
+                }
+            }
             out_ << std::endl;
         },
         [&](const ir::Branch* b) { EmitBranch(b); },

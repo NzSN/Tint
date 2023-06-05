@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/test_helper.h"
-
 #include "gmock/gmock.h"
 #include "src/tint/ast/case_selector.h"
 #include "src/tint/ast/int_literal_expression.h"
 #include "src/tint/constant/scalar.h"
+#include "src/tint/ir/program_test_helper.h"
 
 namespace tint::ir {
 namespace {
 
 using namespace tint::number_suffixes;  // NOLINT
 
-using IR_FromProgramCallTest = TestHelper;
+using IR_FromProgramCallTest = ProgramTestHelper;
 
 TEST_F(IR_FromProgramCallTest, EmitExpression_Bitcast) {
     Func("my_func", utils::Empty, ty.f32(), utils::Vector{Return(0_f)});
@@ -123,7 +122,7 @@ TEST_F(IR_FromProgramCallTest, EmitExpression_ConstructEmpty) {
 
     EXPECT_EQ(Disassemble(m.Get()), R"(# Root block
 %b1 = block {
-  %i:ptr<private, vec3<f32>, read_write> = var, vec3<f32> 0.0f
+  %i:ptr<private, vec3<f32>, read_write> = var, vec3<f32>(0.0f)
 }
 
 )");

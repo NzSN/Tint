@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/test_helper.h"
-
 #include "gmock/gmock.h"
 #include "src/tint/ast/case_selector.h"
 #include "src/tint/ast/int_literal_expression.h"
 #include "src/tint/constant/scalar.h"
+#include "src/tint/ir/program_test_helper.h"
 
 namespace tint::ir {
 namespace {
 
 using namespace tint::number_suffixes;  // NOLINT
 
-using IR_FromProgramFunctionTest = TestHelper;
+using IR_FromProgramFunctionTest = ProgramTestHelper;
 
 TEST_F(IR_FromProgramFunctionTest, EmitFunction_Vertex) {
     Func("test", utils::Empty, ty.vec4<f32>(), utils::Vector{Return(vec4<f32>(0_f, 0_f, 0_f, 0_f))},
@@ -36,7 +35,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_Vertex) {
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%test = @vertex func():vec4<f32> [@position] -> %b1 {
   %b1 = block {
-    ret vec4<f32> 0.0f
+    ret vec4<f32>(0.0f)
   }
 }
 )");
@@ -82,7 +81,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_Return) {
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%test = func():vec3<f32> -> %b1 {
   %b1 = block {
-    ret vec3<f32> 0.0f
+    ret vec3<f32>(0.0f)
   }
 }
 )");
@@ -98,7 +97,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_ReturnPosition) {
 
     EXPECT_EQ(Disassemble(m.Get()), R"(%test = @vertex func():vec4<f32> [@position] -> %b1 {
   %b1 = block {
-    ret vec4<f32> 1.0f, 2.0f, 3.0f, 4.0f
+    ret vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
   }
 }
 )");
@@ -115,7 +114,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_ReturnPositionInvariant) {
     EXPECT_EQ(Disassemble(m.Get()),
               R"(%test = @vertex func():vec4<f32> [@invariant, @position] -> %b1 {
   %b1 = block {
-    ret vec4<f32> 1.0f, 2.0f, 3.0f, 4.0f
+    ret vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
   }
 }
 )");
@@ -131,7 +130,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_ReturnLocation) {
     EXPECT_EQ(Disassemble(m.Get()),
               R"(%test = @fragment func():vec4<f32> [@location(1)] -> %b1 {
   %b1 = block {
-    ret vec4<f32> 1.0f, 2.0f, 3.0f, 4.0f
+    ret vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
   }
 }
 )");
@@ -150,7 +149,7 @@ TEST_F(IR_FromProgramFunctionTest, EmitFunction_ReturnLocation_Interpolate) {
         Disassemble(m.Get()),
         R"(%test = @fragment func():vec4<f32> [@location(1), @interpolate(linear, centroid)] -> %b1 {
   %b1 = block {
-    ret vec4<f32> 1.0f, 2.0f, 3.0f, 4.0f
+    ret vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
   }
 }
 )");

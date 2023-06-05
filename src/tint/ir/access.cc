@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/branch.h"
+#include "src/tint/ir/access.h"
 
 #include <utility>
 
-#include "src/tint/ir/block.h"
+#include "src/tint/debug.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Branch);
+TINT_INSTANTIATE_TYPEINFO(tint::ir::Access);
 
 namespace tint::ir {
 
-Branch::Branch(utils::VectorRef<Value*> args) : args_(std::move(args)) {
-    for (auto* arg : args) {
-        TINT_ASSERT(IR, arg);
-        arg->AddUsage(this);
-    }
+//! @cond Doxygen_Suppress
+Access::Access(const type::Type* ty, Value* object, utils::VectorRef<Value*> indices)
+    : result_type_(ty), object_(object), indices_(std::move(indices)) {
+    object_->AddUsage(this);
 }
 
-Branch::~Branch() = default;
+Access::~Access() = default;
+//! @endcond
 
 }  // namespace tint::ir

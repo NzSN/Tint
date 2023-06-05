@@ -716,6 +716,8 @@ endif()
 
 if(${TINT_BUILD_IR})
   list(APPEND TINT_LIB_SRCS
+    ir/access.cc
+    ir/access.h
     ir/binary.cc
     ir/binary.h
     ir/binding_point.h
@@ -778,12 +780,16 @@ if(${TINT_BUILD_IR})
     ir/store.h
     ir/switch.cc
     ir/switch.h
+    ir/swizzle.cc
+    ir/swizzle.h
     ir/to_program.cc
     ir/to_program.h
     ir/unary.cc
     ir/unary.h
     ir/user_call.cc
     ir/user_call.h
+    ir/validate.cc
+    ir/validate.h
     ir/value.cc
     ir/value.h
     ir/var.cc
@@ -1487,6 +1493,7 @@ if(TINT_BUILD_TESTS)
       ir/block_test.cc
       ir/constant_test.cc
       ir/discard_test.cc
+      ir/from_program_accessor_test.cc
       ir/from_program_binary_test.cc
       ir/from_program_builtin_test.cc
       ir/from_program_call_test.cc
@@ -1498,12 +1505,14 @@ if(TINT_BUILD_TESTS)
       ir/from_program_unary_test.cc
       ir/from_program_var_test.cc
       ir/instruction_test.cc
+      ir/ir_test_helper.h
       ir/load_test.cc
       ir/module_test.cc
+      ir/program_test_helper.h
       ir/store_test.cc
-      ir/test_helper.h
       ir/transform/add_empty_entry_point_test.cc
       ir/unary_test.cc
+      ir/validate_test.cc
     )
   endif()
 

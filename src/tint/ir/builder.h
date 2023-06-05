@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "src/tint/constant/scalar.h"
+#include "src/tint/ir/access.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/bitcast.h"
 #include "src/tint/ir/block_param.h"
@@ -41,6 +42,7 @@
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
+#include "src/tint/ir/swizzle.h"
 #include "src/tint/ir/unary.h"
 #include "src/tint/ir/user_call.h"
 #include "src/tint/ir/value.h"
@@ -49,6 +51,7 @@
 #include "src/tint/type/f16.h"
 #include "src/tint/type/f32.h"
 #include "src/tint/type/i32.h"
+#include "src/tint/type/pointer.h"
 #include "src/tint/type/u32.h"
 #include "src/tint/type/vector.h"
 #include "src/tint/type/void.h"
@@ -387,6 +390,20 @@ class Builder {
     /// @param type the parameter type
     /// @returns the value
     ir::FunctionParam* FunctionParam(const type::Type* type);
+
+    /// Creates a new `Access`
+    /// @param type the return type
+    /// @param source the source value
+    /// @param indices the access indices
+    /// @returns the instruction
+    ir::Access* Access(const type::Type* type, Value* source, utils::VectorRef<Value*> indices);
+
+    /// Creates a new `Swizzle`
+    /// @param type the return type
+    /// @param source the source value
+    /// @param indices the access indices
+    /// @returns the instruction
+    ir::Swizzle* Swizzle(const type::Type* type, Value* source, utils::VectorRef<uint32_t> indices);
 
     /// Retrieves the root block for the module, creating if necessary
     /// @returns the root block

@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/ir/branch.h"
+#include "src/tint/ir/swizzle.h"
 
 #include <utility>
 
-#include "src/tint/ir/block.h"
+#include "src/tint/debug.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::ir::Branch);
+TINT_INSTANTIATE_TYPEINFO(tint::ir::Swizzle);
 
 namespace tint::ir {
 
-Branch::Branch(utils::VectorRef<Value*> args) : args_(std::move(args)) {
-    for (auto* arg : args) {
-        TINT_ASSERT(IR, arg);
-        arg->AddUsage(this);
-    }
+Swizzle::Swizzle(const type::Type* ty, Value* object, utils::VectorRef<uint32_t> indices)
+    : result_type_(ty), object_(object), indices_(std::move(indices)) {
+    object_->AddUsage(this);
 }
 
-Branch::~Branch() = default;
+Swizzle::~Swizzle() = default;
 
 }  // namespace tint::ir
