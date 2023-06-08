@@ -145,8 +145,8 @@ class Impl {
         /* dst */ {builder_.ir.constant_values},
     };
 
-    /// The stack of control blocks.
-    utils::Vector<Branch*, 8> control_stack_;
+    /// The stack of flow control instructions.
+    utils::Vector<ControlInstruction*, 8> control_stack_;
 
     /// The current block for expressions.
     Block* current_block_ = nullptr;
@@ -162,7 +162,9 @@ class Impl {
 
     class ControlStackScope {
       public:
-        ControlStackScope(Impl* impl, Branch* b) : impl_(impl) { impl_->control_stack_.Push(b); }
+        ControlStackScope(Impl* impl, ControlInstruction* b) : impl_(impl) {
+            impl_->control_stack_.Push(b);
+        }
 
         ~ControlStackScope() { impl_->control_stack_.Pop(); }
 
@@ -646,6 +648,9 @@ class Impl {
         auto* loop_inst = builder_.CreateLoop();
         current_block_->Append(loop_inst);
 
+        // Loop branches directly to the body (no initializer)
+        loop_inst->Body()->AddInboundBranch(loop_inst);
+
         {
             ControlStackScope scope(this, loop_inst);
             current_block_ = loop_inst->Body();
@@ -689,6 +694,9 @@ class Impl {
     void EmitWhile(const ast::WhileStatement* stmt) {
         auto* loop_inst = builder_.CreateLoop();
         current_block_->Append(loop_inst);
+
+        // Loop branches directly to the body (no initializer)
+        loop_inst->Body()->AddInboundBranch(loop_inst);
 
         // Continue is always empty, just go back to the start
         current_block_ = loop_inst->Continuing();
@@ -735,16 +743,23 @@ class Impl {
         scopes_.Push();
         TINT_DEFER(scopes_.Pop());
 
-        if (stmt->initializer) {
-            // Emit the for initializer before branching to the loop
-            EmitStatement(stmt->initializer);
-        }
-
         {
             ControlStackScope scope(this, loop_inst);
 
-            current_block_ = loop_inst->Body();
+            if (stmt->initializer) {
+                // Loop branches to the initializer
+                loop_inst->Initializer()->AddInboundBranch(loop_inst);
 
+                // Emit the for initializer before branching to the body
+                current_block_ = loop_inst->Initializer();
+                EmitStatement(stmt->initializer);
+                SetBranch(builder_.NextIteration(loop_inst));
+            } else {
+                // If there's no initializer, then the loop branches directly to the body block
+                loop_inst->Body()->AddInboundBranch(loop_inst);
+            }
+
+            current_block_ = loop_inst->Body();
             if (stmt->condition) {
                 // Emit the condition into the target target of the loop
                 auto reg = EmitExpression(stmt->condition);

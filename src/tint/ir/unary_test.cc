@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "gmock/gmock.h"
+#include "gtest/gtest-spi.h"
 #include "src/tint/ir/builder.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/ir/ir_test_helper.h"
@@ -53,8 +55,27 @@ TEST_F(IR_UnaryTest, Unary_Usage) {
     EXPECT_EQ(inst->Kind(), Unary::Kind::kNegation);
 
     ASSERT_NE(inst->Val(), nullptr);
-    ASSERT_EQ(inst->Val()->Usage().Length(), 1u);
-    EXPECT_EQ(inst->Val()->Usage()[0], inst);
+    EXPECT_THAT(inst->Val()->Usages(), testing::UnorderedElementsAre(Usage{inst, 0u}));
+}
+
+TEST_F(IR_UnaryTest, Fail_NullType) {
+    EXPECT_FATAL_FAILURE(
+        {
+            Module mod;
+            Builder b{mod};
+            b.Negation(nullptr, b.Constant(1_i));
+        },
+        "");
+}
+
+TEST_F(IR_UnaryTest, Fail_NullValue) {
+    EXPECT_FATAL_FAILURE(
+        {
+            Module mod;
+            Builder b{mod};
+            b.Negation(mod.Types().i32(), nullptr);
+        },
+        "");
 }
 
 }  // namespace

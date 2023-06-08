@@ -16,18 +16,9 @@
 
 #include <utility>
 
-#include "src/tint/ir/block.h"
-
 TINT_INSTANTIATE_TYPEINFO(tint::ir::Branch);
 
 namespace tint::ir {
-
-Branch::Branch(utils::VectorRef<Value*> args) : args_(std::move(args)) {
-    for (auto* arg : args) {
-        TINT_ASSERT(IR, arg);
-        arg->AddUsage(this);
-    }
-}
 
 Branch::~Branch() = default;
 

@@ -15,20 +15,34 @@
 #ifndef SRC_TINT_IR_IF_H_
 #define SRC_TINT_IR_IF_H_
 
-#include "src/tint/ir/block.h"
-#include "src/tint/ir/branch.h"
-#include "src/tint/ir/value.h"
-
-// Forward declarations
-namespace tint::ir {
-class Block;
-}  // namespace tint::ir
+#include "src/tint/ir/control_instruction.h"
 
 namespace tint::ir {
 
-/// An if instruction
-class If : public utils::Castable<If, Branch> {
+/// If instruction.
+///
+/// ```
+///                   in
+///                    ┃
+///         ┏━━━━━━━━━━┻━━━━━━━━━━┓
+///         ▼                     ▼
+///    ┌────────────┐      ┌────────────┐
+///    │  True      │      │  False     │
+///    | (optional) |      | (optional) |
+///    └────────────┘      └────────────┘
+///  ExitIf ┃     ┌──────────┐     ┃ ExitIf
+///         ┗━━━━▶│  Merge   │◀━━━━┛
+///               │(optional)│
+///               └──────────┘
+///                    ┃
+///                    ▼
+///                   out
+/// ```
+class If : public utils::Castable<If, ControlInstruction> {
   public:
+    /// The index of the condition operand
+    static constexpr size_t kConditionOperandIndex = 0;
+
     /// Constructor
     /// @param cond the if condition
     /// @param t the true block
@@ -37,10 +51,13 @@ class If : public utils::Castable<If, Branch> {
     explicit If(Value* cond, ir::Block* t, ir::Block* f, ir::Block* m);
     ~If() override;
 
+    /// @returns the branch arguments
+    utils::Slice<Value const* const> Args() const override { return utils::Slice<Value*>{}; }
+
     /// @returns the if condition
-    const Value* Condition() const { return condition_; }
+    const Value* Condition() const { return operands_[kConditionOperandIndex]; }
     /// @returns the if condition
-    Value* Condition() { return condition_; }
+    Value* Condition() { return operands_[kConditionOperandIndex]; }
 
     /// @returns the true branch block
     const ir::Block* True() const { return true_; }
@@ -58,7 +75,6 @@ class If : public utils::Castable<If, Branch> {
     ir::Block* Merge() { return merge_; }
 
   private:
-    Value* condition_ = nullptr;
     ir::Block* true_ = nullptr;
     ir::Block* false_ = nullptr;
     ir::Block* merge_ = nullptr;

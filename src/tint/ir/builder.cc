@@ -41,8 +41,6 @@ Function* Builder::CreateFunction(std::string_view name,
                                   const type::Type* return_type,
                                   Function::PipelineStage stage,
                                   std::optional<std::array<uint32_t, 3>> wg_size) {
-    TINT_ASSERT(IR, return_type);
-
     auto* ir_func = ir.values.Create<Function>(return_type, stage, wg_size);
     ir_func->SetStartTarget(CreateBlock());
     ir.SetName(ir_func, name);
@@ -50,12 +48,11 @@ Function* Builder::CreateFunction(std::string_view name,
 }
 
 If* Builder::CreateIf(Value* condition) {
-    TINT_ASSERT(IR, condition);
     return ir.values.Create<If>(condition, CreateBlock(), CreateBlock(), CreateBlock());
 }
 
-Loop* Builder::CreateLoop(utils::VectorRef<Value*> args /* = utils::Empty */) {
-    return ir.values.Create<Loop>(CreateBlock(), CreateBlock(), CreateBlock(), std::move(args));
+Loop* Builder::CreateLoop() {
+    return ir.values.Create<Loop>(CreateBlock(), CreateBlock(), CreateBlock(), CreateBlock());
 }
 
 Switch* Builder::CreateSwitch(Value* condition) {
@@ -67,6 +64,7 @@ Block* Builder::CreateCase(Switch* s, utils::VectorRef<Switch::CaseSelector> sel
 
     Block* b = s->Cases().Back().Start();
     b->AddInboundBranch(s);
+    b->SetParent(s);
     return b;
 }
 
@@ -162,7 +160,7 @@ ir::Bitcast* Builder::Bitcast(const type::Type* type, Value* val) {
 }
 
 ir::Discard* Builder::Discard() {
-    return ir.values.Create<ir::Discard>();
+    return ir.values.Create<ir::Discard>(ir.Types().void_());
 }
 
 ir::UserCall* Builder::UserCall(const type::Type* type,
@@ -188,8 +186,17 @@ ir::Builtin* Builder::Builtin(const type::Type* type,
 }
 
 ir::Load* Builder::Load(Value* from) {
+    TINT_ASSERT(IR, from != nullptr);
+    if (from == nullptr) {
+        return nullptr;
+    }
+
     auto* ptr = from->Type()->As<type::Pointer>();
-    TINT_ASSERT(IR, ptr);
+    TINT_ASSERT(IR, ptr != nullptr);
+    if (ptr == nullptr) {
+        return nullptr;
+    }
+
     return ir.values.Create<ir::Load>(ptr->StoreType(), from);
 }
 

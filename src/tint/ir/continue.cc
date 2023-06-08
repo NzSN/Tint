@@ -16,6 +16,7 @@
 
 #include <utility>
 
+#include "src/tint/ir/block.h"
 #include "src/tint/ir/loop.h"
 
 TINT_INSTANTIATE_TYPEINFO(tint::ir::Continue);
@@ -23,10 +24,13 @@ TINT_INSTANTIATE_TYPEINFO(tint::ir::Continue);
 namespace tint::ir {
 
 Continue::Continue(ir::Loop* loop, utils::VectorRef<Value*> args /* = utils::Empty */)
-    : Base(std::move(args)), loop_(loop) {
+    : loop_(loop) {
     TINT_ASSERT(IR, loop_);
-    loop_->AddUsage(this);
-    loop_->Continuing()->AddInboundBranch(this);
+
+    if (loop_) {
+        loop_->Continuing()->AddInboundBranch(this);
+    }
+    AddOperands(std::move(args));
 }
 
 Continue::~Continue() = default;

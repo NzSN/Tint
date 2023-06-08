@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "gmock/gmock.h"
+#include "gtest/gtest-spi.h"
 #include "src/tint/ir/builder.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/ir/ir_test_helper.h"
@@ -22,6 +24,36 @@ namespace {
 using namespace tint::number_suffixes;  // NOLINT
 
 using IR_BinaryTest = IRTestHelper;
+
+TEST_F(IR_BinaryTest, Fail_NullType) {
+    EXPECT_FATAL_FAILURE(
+        {
+            Module mod;
+            Builder b{mod};
+            b.Add(nullptr, b.Constant(u32(1)), b.Constant(u32(2)));
+        },
+        "");
+}
+
+TEST_F(IR_BinaryTest, Fail_NullLHS) {
+    EXPECT_FATAL_FAILURE(
+        {
+            Module mod;
+            Builder b{mod};
+            b.Add(mod.Types().u32(), nullptr, b.Constant(u32(2)));
+        },
+        "");
+}
+
+TEST_F(IR_BinaryTest, Fail_NullRHS) {
+    EXPECT_FATAL_FAILURE(
+        {
+            Module mod;
+            Builder b{mod};
+            b.Add(mod.Types().u32(), b.Constant(u32(1)), nullptr);
+        },
+        "");
+}
 
 TEST_F(IR_BinaryTest, CreateAnd) {
     const auto* inst = b.And(mod.Types().i32(), b.Constant(4_i), b.Constant(2_i));
@@ -314,29 +346,41 @@ TEST_F(IR_BinaryTest, CreateModulo) {
 }
 
 TEST_F(IR_BinaryTest, Binary_Usage) {
-    const auto* inst = b.And(mod.Types().i32(), b.Constant(4_i), b.Constant(2_i));
+    auto* inst = b.And(mod.Types().i32(), b.Constant(4_i), b.Constant(2_i));
 
     EXPECT_EQ(inst->Kind(), Binary::Kind::kAnd);
 
     ASSERT_NE(inst->LHS(), nullptr);
-    ASSERT_EQ(inst->LHS()->Usage().Length(), 1u);
-    EXPECT_EQ(inst->LHS()->Usage()[0], inst);
+    EXPECT_THAT(inst->LHS()->Usages(), testing::UnorderedElementsAre(Usage{inst, 0u}));
 
     ASSERT_NE(inst->RHS(), nullptr);
-    ASSERT_EQ(inst->RHS()->Usage().Length(), 1u);
-    EXPECT_EQ(inst->RHS()->Usage()[0], inst);
+    EXPECT_THAT(inst->RHS()->Usages(), testing::UnorderedElementsAre(Usage{inst, 1u}));
 }
 
 TEST_F(IR_BinaryTest, Binary_Usage_DuplicateValue) {
     auto val = b.Constant(4_i);
-    const auto* inst = b.And(mod.Types().i32(), val, val);
+    auto* inst = b.And(mod.Types().i32(), val, val);
 
     EXPECT_EQ(inst->Kind(), Binary::Kind::kAnd);
     ASSERT_EQ(inst->LHS(), inst->RHS());
 
     ASSERT_NE(inst->LHS(), nullptr);
-    ASSERT_EQ(inst->LHS()->Usage().Length(), 1u);
-    EXPECT_EQ(inst->LHS()->Usage()[0], inst);
+    EXPECT_THAT(inst->LHS()->Usages(),
+                testing::UnorderedElementsAre(Usage{inst, 0u}, Usage{inst, 1u}));
+}
+
+TEST_F(IR_BinaryTest, Binary_Usage_SetOperand) {
+    auto* rhs_a = b.Constant(2_i);
+    auto* rhs_b = b.Constant(3_i);
+    auto* inst = b.And(mod.Types().i32(), b.Constant(4_i), rhs_a);
+
+    EXPECT_EQ(inst->Kind(), Binary::Kind::kAnd);
+
+    EXPECT_THAT(rhs_a->Usages(), testing::UnorderedElementsAre(Usage{inst, 1u}));
+    EXPECT_THAT(rhs_b->Usages(), testing::UnorderedElementsAre());
+    inst->SetOperand(1, rhs_b);
+    EXPECT_THAT(rhs_a->Usages(), testing::UnorderedElementsAre());
+    EXPECT_THAT(rhs_b->Usages(), testing::UnorderedElementsAre(Usage{inst, 1u}));
 }
 
 }  // namespace

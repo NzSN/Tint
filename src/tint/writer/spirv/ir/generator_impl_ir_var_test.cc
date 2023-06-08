@@ -28,6 +28,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_NoInit) {
                                            builtin::Access::kReadWrite)),
                       b.Return(func)});
 
+    ASSERT_TRUE(IRIsValid()) << Error();
+
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
 %2 = OpTypeVoid
@@ -50,6 +52,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_WithInit) {
     v->SetInitializer(b.Constant(42_i));
 
     func->StartTarget()->SetInstructions(utils::Vector{v, b.Return(func)});
+
+    ASSERT_TRUE(IRIsValid()) << Error();
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -74,6 +78,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_Name) {
         ty.pointer(ty.i32(), builtin::AddressSpace::kFunction, builtin::Access::kReadWrite));
     func->StartTarget()->SetInstructions(utils::Vector{v, b.Return(func)});
     mod.SetName(v, "myvar");
+
+    ASSERT_TRUE(IRIsValid()) << Error();
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -103,6 +109,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_DeclInsideBlock) {
     i->Merge()->SetInstructions(utils::Vector{b.Return(func)});
 
     func->StartTarget()->SetInstructions(utils::Vector{i});
+
+    ASSERT_TRUE(IRIsValid()) << Error();
 
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
@@ -137,6 +145,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_Load) {
         ty.pointer(store_ty, builtin::AddressSpace::kFunction, builtin::Access::kReadWrite));
     func->StartTarget()->SetInstructions(utils::Vector{v, b.Load(v), b.Return(func)});
 
+    ASSERT_TRUE(IRIsValid()) << Error();
+
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
 %2 = OpTypeVoid
@@ -160,6 +170,8 @@ TEST_F(SpvGeneratorImplTest, FunctionVar_Store) {
     func->StartTarget()->SetInstructions(
         utils::Vector{v, b.Store(v, b.Constant(42_i)), b.Return(func)});
 
+    ASSERT_TRUE(IRIsValid()) << Error();
+
     generator_.EmitFunction(func);
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpName %1 "foo"
 %2 = OpTypeVoid
@@ -180,7 +192,7 @@ TEST_F(SpvGeneratorImplTest, PrivateVar_NoInit) {
     b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{b.Declare(
         ty.pointer(ty.i32(), builtin::AddressSpace::kPrivate, builtin::Access::kReadWrite))});
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %4 "unused_entry_point"
@@ -204,7 +216,7 @@ TEST_F(SpvGeneratorImplTest, PrivateVar_WithInit) {
     b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
     v->SetInitializer(b.Constant(42_i));
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %5 "unused_entry_point"
@@ -230,7 +242,7 @@ TEST_F(SpvGeneratorImplTest, PrivateVar_Name) {
     v->SetInitializer(b.Constant(42_i));
     mod.SetName(v, "myvar");
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %5 "unused_entry_point"
@@ -265,7 +277,7 @@ TEST_F(SpvGeneratorImplTest, PrivateVar_LoadAndStore) {
     auto* store = b.Store(v, add);
     func->StartTarget()->SetInstructions(utils::Vector{load, add, store, b.Return(func)});
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %5 "foo"
@@ -292,7 +304,7 @@ TEST_F(SpvGeneratorImplTest, WorkgroupVar) {
     b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{b.Declare(
         ty.pointer(ty.i32(), builtin::AddressSpace::kWorkgroup, builtin::Access::kReadWrite))});
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %4 "unused_entry_point"
@@ -316,7 +328,7 @@ TEST_F(SpvGeneratorImplTest, WorkgroupVar_Name) {
     b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
     mod.SetName(v, "myvar");
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %4 "unused_entry_point"
@@ -350,7 +362,7 @@ TEST_F(SpvGeneratorImplTest, WorkgroupVar_LoadAndStore) {
     auto* store = b.Store(v, add);
     func->StartTarget()->SetInstructions(utils::Vector{load, add, store, b.Return(func)});
 
-    generator_.Generate();
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %4 "foo"
@@ -378,7 +390,7 @@ TEST_F(SpvGeneratorImplTest, WorkgroupVar_ZeroInitializeWithExtension) {
 
     // Create a generator with the zero_init_workgroup_memory flag set to `true`.
     spirv::GeneratorImplIr gen(&mod, true);
-    gen.Generate();
+    ASSERT_TRUE(gen.Generate()) << gen.Diagnostics().str();
     EXPECT_EQ(DumpModule(gen.Module()), R"(OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %5 "unused_entry_point"
@@ -392,6 +404,225 @@ OpName %5 "unused_entry_point"
 %7 = OpTypeFunction %6
 %5 = OpFunction %6 None %7
 %8 = OpLabel
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, StorageVar) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kStorage, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "unused_entry_point"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "unused_entry_point"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer StorageBuffer %3
+%1 = OpVariable %2 StorageBuffer
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, StorageVar_Name) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kStorage, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+    mod.SetName(v, "myvar");
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "unused_entry_point"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "unused_entry_point"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer StorageBuffer %3
+%1 = OpVariable %2 StorageBuffer
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, StorageVar_LoadAndStore) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kStorage, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+
+    auto* func = b.CreateFunction("foo", ty.void_(), ir::Function::PipelineStage::kCompute,
+                                  std::array{1u, 1u, 1u});
+    mod.functions.Push(func);
+
+    auto* load = b.Load(v);
+    auto* add = b.Add(ty.i32(), v, b.Constant(1_i));
+    auto* store = b.Store(v, add);
+    func->StartTarget()->SetInstructions(utils::Vector{load, add, store, b.Return(func)});
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "foo"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "foo"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer StorageBuffer %3
+%1 = OpVariable %2 StorageBuffer
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%10 = OpTypePointer StorageBuffer %4
+%12 = OpTypeInt 32 0
+%11 = OpConstant %12 0
+%16 = OpConstant %4 1
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+%9 = OpAccessChain %10 %1 %11
+%13 = OpLoad %4 %9
+%14 = OpAccessChain %10 %1 %11
+%15 = OpIAdd %4 %14 %16
+%17 = OpAccessChain %10 %1 %11
+OpStore %17 %15
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, UniformVar) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kUniform, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "unused_entry_point"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "unused_entry_point"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer Uniform %3
+%1 = OpVariable %2 Uniform
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, UniformVar_Name) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kUniform, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+    mod.SetName(v, "myvar");
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "unused_entry_point"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "unused_entry_point"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer Uniform %3
+%1 = OpVariable %2 Uniform
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+OpReturn
+OpFunctionEnd
+)");
+}
+
+TEST_F(SpvGeneratorImplTest, UniformVar_Load) {
+    auto* v = b.Declare(
+        ty.pointer(ty.i32(), builtin::AddressSpace::kUniform, builtin::Access::kReadWrite));
+    v->SetBindingPoint(0, 0);
+    b.CreateRootBlockIfNeeded()->SetInstructions(utils::Vector{v});
+
+    auto* func = b.CreateFunction("foo", ty.void_(), ir::Function::PipelineStage::kCompute,
+                                  std::array{1u, 1u, 1u});
+    mod.functions.Push(func);
+
+    auto* load = b.Load(v);
+    func->StartTarget()->SetInstructions(utils::Vector{load, b.Return(func)});
+
+    ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
+    EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %5 "foo"
+OpExecutionMode %5 LocalSize 1 1 1
+OpMemberName %3 0 "tint_symbol"
+OpName %3 "tint_symbol_1"
+OpName %5 "foo"
+OpMemberDecorate %3 0 Offset 0
+OpDecorate %3 Block
+OpDecorate %1 DescriptorSet 0
+OpDecorate %1 Binding 0
+%4 = OpTypeInt 32 1
+%3 = OpTypeStruct %4
+%2 = OpTypePointer Uniform %3
+%1 = OpVariable %2 Uniform
+%6 = OpTypeVoid
+%7 = OpTypeFunction %6
+%10 = OpTypePointer Uniform %4
+%12 = OpTypeInt 32 0
+%11 = OpConstant %12 0
+%5 = OpFunction %6 None %7
+%8 = OpLabel
+%9 = OpAccessChain %10 %1 %11
+%13 = OpLoad %4 %9
 OpReturn
 OpFunctionEnd
 )");

@@ -15,30 +15,73 @@
 #ifndef SRC_TINT_IR_LOOP_H_
 #define SRC_TINT_IR_LOOP_H_
 
-#include "src/tint/ir/block.h"
-#include "src/tint/ir/branch.h"
+#include "src/tint/ir/control_instruction.h"
 
 namespace tint::ir {
 
-/// Flow node describing a loop.
-class Loop : public utils::Castable<Loop, Branch> {
+/// Loop instruction.
+///
+/// ```
+///                     in
+///                      ┃
+///                      ┣━━━━━━━━━━━┓
+///                      ▼           ┃
+///             ┌─────────────────┐  ┃
+///             │   Initializer   │  ┃
+///             │    (optional)   │  ┃
+///             └─────────────────┘  ┃
+///        NextIteration ┃           ┃
+///                      ┃◀━━━━━━━━━━┫
+///                      ▼           ┃
+///             ┌─────────────────┐  ┃
+///          ┏━━│       Body      │  ┃
+///          ┃  └─────────────────┘  ┃
+///          ┃  Continue ┃           ┃ NextIteration
+///          ┃           ▼           ┃
+///          ┃  ┌─────────────────┐  ┃ BreakIf(false)
+/// ExitLoop ┃  │   Continuing    │━━┛
+///             │  (optional)     │
+///          ┃  └─────────────────┘
+///          ┃           ┃
+///          ┃           ┃ BreakIf(true)
+///          ┗━━━━━━━━━━▶┃
+///                      ▼
+///             ┌────────────────┐
+///             │     Merge      │
+///             │  (optional)    │
+///             └────────────────┘
+///                      ┃
+///                      ▼
+///                     out
+///
+/// ```
+class Loop : public utils::Castable<Loop, ControlInstruction> {
   public:
     /// Constructor
+    /// @param i the initializer block
     /// @param b the body block
     /// @param c the continuing block
     /// @param m the merge block
-    /// @param args the branch arguments
-    Loop(ir::Block* b, ir::Block* c, ir::Block* m, utils::VectorRef<Value*> args = utils::Empty);
+    Loop(ir::Block* i, ir::Block* b, ir::Block* c, ir::Block* m);
     ~Loop() override;
 
-    /// @returns the switch start branch
+    /// @returns the switch initializer block
+    const ir::Block* Initializer() const { return initializer_; }
+    /// @returns the switch initializer block
+    ir::Block* Initializer() { return initializer_; }
+
+    /// @returns true if the loop uses an initializer block. If true, then the Loop first branches
+    /// to the initializer block, otherwise it first branches to the body block.
+    bool HasInitializer() const;
+
+    /// @returns the switch start block
     const ir::Block* Body() const { return body_; }
-    /// @returns the switch start branch
+    /// @returns the switch start block
     ir::Block* Body() { return body_; }
 
-    /// @returns the switch continuing branch
+    /// @returns the switch continuing block
     const ir::Block* Continuing() const { return continuing_; }
-    /// @returns the switch continuing branch
+    /// @returns the switch continuing block
     ir::Block* Continuing() { return continuing_; }
 
     /// @returns the switch merge branch
@@ -47,6 +90,7 @@ class Loop : public utils::Castable<Loop, Branch> {
     ir::Block* Merge() { return merge_; }
 
   private:
+    ir::Block* initializer_ = nullptr;
     ir::Block* body_ = nullptr;
     ir::Block* continuing_ = nullptr;
     ir::Block* merge_ = nullptr;
