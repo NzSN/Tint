@@ -16,7 +16,7 @@
 
 #include <utility>
 
-#include "src/tint/ir/block.h"
+#include "src/tint/ir/multi_in_block.h"
 #include "src/tint/ir/switch.h"
 
 TINT_INSTANTIATE_TYPEINFO(tint::ir::ExitSwitch);
@@ -28,7 +28,7 @@ ExitSwitch::ExitSwitch(ir::Switch* sw, utils::VectorRef<Value*> args /* = utils:
     TINT_ASSERT(IR, switch_);
 
     if (switch_) {
-        switch_->Merge()->AddInboundBranch(this);
+        switch_->Merge()->AddInboundSiblingBranch(this);
     }
     AddOperands(std::move(args));
 }

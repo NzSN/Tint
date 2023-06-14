@@ -491,6 +491,8 @@ list(APPEND TINT_LIB_SRCS
   type/multisampled_texture.h
   type/node.cc
   type/node.h
+  type/numeric_scalar.cc
+  type/numeric_scalar.h
   type/pointer.cc
   type/pointer.h
   type/reference.cc
@@ -501,6 +503,8 @@ list(APPEND TINT_LIB_SRCS
   type/sampler.h
   type/sampler_kind.cc
   type/sampler_kind.h
+  type/scalar.cc
+  type/scalar.h
   type/storage_texture.cc
   type/storage_texture.h
   type/struct.cc
@@ -733,8 +737,8 @@ if(${TINT_BUILD_IR})
     ir/break_if.h
     ir/builder.cc
     ir/builder.h
-    ir/builtin.cc
-    ir/builtin.h
+    ir/builtin_call.cc
+    ir/builtin_call.h
     ir/call.cc
     ir/call.h
     ir/constant.cc
@@ -774,6 +778,8 @@ if(${TINT_BUILD_IR})
     ir/loop.h
     ir/module.cc
     ir/module.h
+    ir/multi_in_block.cc
+    ir/multi_in_block.h
     ir/next_iteration.cc
     ir/next_iteration.h
     ir/operand_instruction.cc
@@ -1503,7 +1509,7 @@ if(TINT_BUILD_TESTS)
       ir/block_param_test.cc
       ir/block_test.cc
       ir/break_if_test.cc
-      ir/builtin_test.cc
+      ir/builtin_call_test.cc
       ir/constant_test.cc
       ir/construct_test.cc
       ir/continue_test.cc
@@ -1531,6 +1537,7 @@ if(TINT_BUILD_TESTS)
       ir/load_test.cc
       ir/loop_test.cc
       ir/module_test.cc
+      ir/multi_in_block_test.cc
       ir/next_iteration_test.cc
       ir/program_test_helper.h
       ir/return_test.cc

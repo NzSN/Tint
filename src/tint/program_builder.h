@@ -117,30 +117,6 @@ class VariableDeclStatement;
 
 namespace tint {
 
-namespace detail {
-
-/// IsVectorLike<T>::value is true if T is a utils::Vector or utils::VectorRef.
-template <typename T>
-struct IsVectorLike {
-    /// Non-specialized form of IsVectorLike defaults to false
-    static constexpr bool value = false;
-};
-
-/// IsVectorLike specialization for utils::Vector
-template <typename T, size_t N>
-struct IsVectorLike<utils::Vector<T, N>> {
-    /// True for the IsVectorLike specialization of utils::Vector
-    static constexpr bool value = true;
-};
-
-/// IsVectorLike specialization for utils::VectorRef
-template <typename T>
-struct IsVectorLike<utils::VectorRef<T>> {
-    /// True for the IsVectorLike specialization of utils::VectorRef
-    static constexpr bool value = true;
-};
-}  // namespace detail
-
 // A sentinel type used by some template arguments to signal that the a type should be inferred.
 struct Infer {};
 
@@ -194,11 +170,11 @@ class ProgramBuilder {
     using EnableIfScalar = utils::traits::EnableIf<
         IsScalar<utils::traits::Decay<utils::traits::NthTypeOf<0, TYPES..., void>>>>;
 
-    /// A helper used to disable overloads if the first type in `TYPES` is a utils::Vector,
-    /// utils::VectorRef or utils::VectorRef.
+    /// A helper used to disable overloads if the first type in `TYPES` is a utils::Vector or
+    /// utils::VectorRef.
     template <typename... TYPES>
-    using DisableIfVectorLike = utils::traits::EnableIf<!detail::IsVectorLike<
-        utils::traits::Decay<utils::traits::NthTypeOf<0, TYPES..., void>>>::value>;
+    using DisableIfVectorLike = utils::traits::EnableIf<
+        !utils::IsVectorLike<utils::traits::Decay<utils::traits::NthTypeOf<0, TYPES..., void>>>>;
 
     /// A helper used to enable overloads if the first type in `TYPES` is identifier-like.
     template <typename... TYPES>
@@ -1148,25 +1124,25 @@ class ProgramBuilder {
                                                type);
         }
 
-        /// @param type the type of the pointer
         /// @param address_space the address space of the pointer
+        /// @param type the type of the pointer
         /// @param access the optional access control of the pointer
         /// @return the pointer to `type` with the given builtin::AddressSpace
-        ast::Type pointer(ast::Type type,
-                          builtin::AddressSpace address_space,
-                          builtin::Access access = builtin::Access::kUndefined) const {
-            return pointer(builder->source_, type, address_space, access);
+        ast::Type ptr(builtin::AddressSpace address_space,
+                      ast::Type type,
+                      builtin::Access access = builtin::Access::kUndefined) const {
+            return ptr(builder->source_, address_space, type, access);
         }
 
         /// @param source the Source of the node
-        /// @param type the type of the pointer
         /// @param address_space the address space of the pointer
+        /// @param type the type of the pointer
         /// @param access the optional access control of the pointer
         /// @return the pointer to `type` with the given builtin::AddressSpace
-        ast::Type pointer(const Source& source,
-                          ast::Type type,
-                          builtin::AddressSpace address_space,
-                          builtin::Access access = builtin::Access::kUndefined) const {
+        ast::Type ptr(const Source& source,
+                      builtin::AddressSpace address_space,
+                      ast::Type type,
+                      builtin::Access access = builtin::Access::kUndefined) const {
             if (access != builtin::Access::kUndefined) {
                 return (*this)(source, "ptr", address_space, type, access);
             } else {
@@ -1178,9 +1154,9 @@ class ProgramBuilder {
         /// @param access the optional access control of the pointer
         /// @return the pointer to type `T` with the given builtin::AddressSpace.
         template <typename T>
-        ast::Type pointer(builtin::AddressSpace address_space,
-                          builtin::Access access = builtin::Access::kUndefined) const {
-            return pointer<T>(builder->source_, address_space, access);
+        ast::Type ptr(builtin::AddressSpace address_space,
+                      builtin::Access access = builtin::Access::kUndefined) const {
+            return ptr<T>(builder->source_, address_space, access);
         }
 
         /// @param source the Source of the node
@@ -1188,9 +1164,9 @@ class ProgramBuilder {
         /// @param access the optional access control of the pointer
         /// @return the pointer to type `T` with the given builtin::AddressSpace.
         template <typename T>
-        ast::Type pointer(const Source& source,
-                          builtin::AddressSpace address_space,
-                          builtin::Access access = builtin::Access::kUndefined) const {
+        ast::Type ptr(const Source& source,
+                      builtin::AddressSpace address_space,
+                      builtin::Access access = builtin::Access::kUndefined) const {
             if (access != builtin::Access::kUndefined) {
                 return (*this)(source, "ptr", address_space, Of<T>(), access);
             } else {

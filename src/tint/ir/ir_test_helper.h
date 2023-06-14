@@ -32,6 +32,17 @@ class IRTestHelperBase : public BASE {
     Module mod;
     /// The IR builder
     Builder b{mod};
+    /// The type manager
+    type::Manager& ty{mod.Types()};
+
+    /// Alias to builtin::AddressSpace::kStorage
+    static constexpr auto storage = builtin::AddressSpace::kStorage;
+    /// Alias to builtin::AddressSpace::kUniform
+    static constexpr auto uniform = builtin::AddressSpace::kUniform;
+    /// Alias to builtin::AddressSpace::kPrivate
+    static constexpr auto private_ = builtin::AddressSpace::kPrivate;
+    /// Alias to builtin::AddressSpace::kFunction
+    static constexpr auto function = builtin::AddressSpace::kFunction;
 };
 
 using IRTestHelper = IRTestHelperBase<testing::Test>;
