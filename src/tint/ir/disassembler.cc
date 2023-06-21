@@ -33,6 +33,7 @@
 #include "src/tint/ir/exit_loop.h"
 #include "src/tint/ir/exit_switch.h"
 #include "src/tint/ir/if.h"
+#include "src/tint/ir/instruction_result.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/multi_in_block.h"
@@ -42,6 +43,7 @@
 #include "src/tint/ir/switch.h"
 #include "src/tint/ir/swizzle.h"
 #include "src/tint/ir/transform/block_decorated_structs.h"
+#include "src/tint/ir/unreachable.h"
 #include "src/tint/ir/user_call.h"
 #include "src/tint/ir/var.h"
 #include "src/tint/switch.h"
@@ -82,13 +84,6 @@ void Disassembler::EmitLine() {
     current_output_start_pos_ = out_.tellp();
 }
 
-void Disassembler::EmitBlockInstructions(Block* b) {
-    for (auto* inst : *b) {
-        Indent();
-        EmitInstruction(inst);
-    }
-}
-
 size_t Disassembler::IdOf(Block* node) {
     TINT_ASSERT(IR, node);
     return block_ids_.GetOrCreate(node, [&] { return block_ids_.Count(); });
@@ -118,7 +113,7 @@ std::string Disassembler::Disassemble() {
     if (mod_.root_block) {
         Indent() << "# Root block";
         EmitLine();
-        WalkInternal(mod_.root_block);
+        EmitBlock(mod_.root_block);
         EmitLine();
     }
 
@@ -128,15 +123,7 @@ std::string Disassembler::Disassemble() {
     return out_.str();
 }
 
-void Disassembler::Walk(Block* blk) {
-    if (visited_.Contains(blk)) {
-        return;
-    }
-    visited_.Add(blk);
-    WalkInternal(blk);
-}
-
-void Disassembler::WalkInternal(Block* blk) {
+void Disassembler::EmitBlock(Block* blk) {
     Indent();
 
     SourceMarker sm(this);
@@ -154,7 +141,10 @@ void Disassembler::WalkInternal(Block* blk) {
     EmitLine();
     {
         ScopedIndent si(indent_size_);
-        EmitBlockInstructions(blk);
+        for (auto* inst : *blk) {
+            Indent();
+            EmitInstruction(inst);
+        }
     }
     Indent() << "}";
 
@@ -279,17 +269,19 @@ void Disassembler::EmitFunction(Function* func) {
 
     {
         ScopedIndent si(indent_size_);
-        Walk(func->StartTarget());
+        EmitBlock(func->StartTarget());
     }
     Indent() << "}";
     EmitLine();
 }
 
+void Disassembler::EmitValueWithType(Instruction* val) {
+    EmitValueWithType(val->Result());
+}
+
 void Disassembler::EmitValueWithType(Value* val) {
     EmitValue(val);
-    if (auto* i = val->As<ir::Instruction>(); i->Type() != nullptr) {
-        out_ << ":" << i->Type()->FriendlyName();
-    }
+    out_ << ":" << val->Type()->FriendlyName();
 }
 
 void Disassembler::EmitValue(Value* val) {
@@ -338,10 +330,16 @@ void Disassembler::EmitValue(Value* val) {
             };
             emit(constant->Value());
         },
-        [&](ir::Instruction* i) { out_ << "%" << IdOf(i); },
+        [&](ir::InstructionResult* rv) { out_ << "%" << IdOf(rv); },
         [&](ir::BlockParam* p) { out_ << "%" << IdOf(p) << ":" << p->Type()->FriendlyName(); },
         [&](ir::FunctionParam* p) { out_ << "%" << IdOf(p); },
-        [&](Default) { out_ << "Unknown value: " << val->TypeInfo().name; });
+        [&](Default) {
+            if (val == nullptr) {
+                out_ << "undef";
+            } else {
+                out_ << "Unknown value: " << val->TypeInfo().name;
+            }
+        });
 }
 
 void Disassembler::EmitInstructionName(std::string_view name, Instruction* inst) {
@@ -494,11 +492,15 @@ void Disassembler::EmitOperandList(Instruction* inst,
 
 void Disassembler::EmitIf(If* i) {
     SourceMarker sm(this);
+    if (i->Result()) {
+        EmitValueWithType(i->Result());
+        out_ << " = ";
+    }
     out_ << "if ";
     EmitOperand(i, i->Condition(), If::kConditionOperandOffset);
 
-    bool has_true = i->True()->HasBranchTarget();
-    bool has_false = i->False()->HasBranchTarget();
+    bool has_true = !i->True()->IsEmpty();
+    bool has_false = !i->False()->IsEmpty();
 
     out_ << " [";
     if (has_true) {
@@ -510,9 +512,6 @@ void Disassembler::EmitIf(If* i) {
         }
         out_ << "f: %b" << IdOf(i->False());
     }
-    if (i->Merge()->HasBranchTarget()) {
-        out_ << ", m: %b" << IdOf(i->Merge());
-    }
     out_ << "]";
     sm.Store(i);
 
@@ -523,7 +522,7 @@ void Disassembler::EmitIf(If* i) {
         Indent() << "# True block";
         EmitLine();
 
-        Walk(i->True());
+        EmitBlock(i->True());
         EmitLine();
     }
     if (has_false) {
@@ -531,65 +530,50 @@ void Disassembler::EmitIf(If* i) {
         Indent() << "# False block";
         EmitLine();
 
-        Walk(i->False());
-        EmitLine();
-    }
-    if (i->Merge()->HasBranchTarget()) {
-        Indent() << "# Merge block";
-        EmitLine();
-        Walk(i->Merge());
+        EmitBlock(i->False());
         EmitLine();
     }
 }
 
 void Disassembler::EmitLoop(Loop* l) {
-    utils::Vector<std::string, 4> parts;
-    if (l->Initializer()->HasBranchTarget()) {
+    utils::Vector<std::string, 3> parts;
+    if (!l->Initializer()->IsEmpty()) {
         parts.Push("i: %b" + std::to_string(IdOf(l->Initializer())));
     }
-    if (l->Body()->HasBranchTarget()) {
+    if (!l->Body()->IsEmpty()) {
         parts.Push("b: %b" + std::to_string(IdOf(l->Body())));
     }
 
-    if (l->Continuing()->HasBranchTarget()) {
+    if (!l->Continuing()->IsEmpty()) {
         parts.Push("c: %b" + std::to_string(IdOf(l->Continuing())));
-    }
-    if (l->Merge()->HasBranchTarget()) {
-        parts.Push("m: %b" + std::to_string(IdOf(l->Merge())));
     }
     SourceMarker sm(this);
     out_ << "loop [" << utils::Join(parts, ", ") << "]";
     sm.Store(l);
+
     EmitLine();
 
-    if (l->Initializer()->HasBranchTarget()) {
+    if (!l->Initializer()->IsEmpty()) {
         ScopedIndent si(indent_size_);
         Indent() << "# Initializer block";
         EmitLine();
-        Walk(l->Initializer());
+        EmitBlock(l->Initializer());
         EmitLine();
     }
 
-    if (l->Body()->HasBranchTarget()) {
+    if (!l->Body()->IsEmpty()) {
         ScopedIndent si(indent_size_);
         Indent() << "# Body block";
         EmitLine();
-        Walk(l->Body());
+        EmitBlock(l->Body());
         EmitLine();
     }
 
-    if (l->Continuing()->HasBranchTarget()) {
+    if (!l->Continuing()->IsEmpty()) {
         ScopedIndent si(indent_size_);
         Indent() << "# Continuing block";
         EmitLine();
-        Walk(l->Continuing());
-        EmitLine();
-    }
-    if (l->Merge()->HasBranchTarget()) {
-        Indent() << "# Merge block";
-        EmitLine();
-
-        Walk(l->Merge());
+        EmitBlock(l->Continuing());
         EmitLine();
     }
 }
@@ -614,10 +598,7 @@ void Disassembler::EmitSwitch(Switch* s) {
                 EmitValue(selector.val);
             }
         }
-        out_ << ", %b" << IdOf(c.Start()) << ")";
-    }
-    if (s->Merge()->HasBranchTarget()) {
-        out_ << ", m: %b" << IdOf(s->Merge());
+        out_ << ", %b" << IdOf(c.Block()) << ")";
     }
     out_ << "]";
     EmitLine();
@@ -627,14 +608,7 @@ void Disassembler::EmitSwitch(Switch* s) {
         Indent() << "# Case block";
         EmitLine();
 
-        Walk(c.Start());
-        EmitLine();
-    }
-    if (s->Merge()->HasBranchTarget()) {
-        Indent() << "# Merge block";
-        EmitLine();
-
-        Walk(s->Merge());
+        EmitBlock(c.Block());
         EmitLine();
     }
 }
@@ -642,18 +616,20 @@ void Disassembler::EmitSwitch(Switch* s) {
 void Disassembler::EmitBranch(Branch* b) {
     SourceMarker sm(this);
     tint::Switch(
-        b,  //
-        [&](Return*) { out_ << "ret"; },
-        [&](Continue* cont) { out_ << "continue %b" << IdOf(cont->Loop()->Continuing()); },
-        [&](ExitIf* ei) { out_ << "exit_if %b" << IdOf(ei->If()->Merge()); },
-        [&](ExitSwitch* es) { out_ << "exit_switch %b" << IdOf(es->Switch()->Merge()); },
-        [&](ExitLoop* el) { out_ << "exit_loop %b" << IdOf(el->Loop()->Merge()); },
-        [&](NextIteration* ni) { out_ << "next_iteration %b" << IdOf(ni->Loop()->Body()); },
-        [&](BreakIf* bi) {
+        b,                                                                                        //
+        [&](ir::Return*) { out_ << "ret"; },                                                      //
+        [&](ir::Continue* cont) { out_ << "continue %b" << IdOf(cont->Loop()->Continuing()); },   //
+        [&](ir::ExitIf*) { out_ << "exit_if"; },                                                  //
+        [&](ir::ExitSwitch*) { out_ << "exit_switch"; },                                          //
+        [&](ir::ExitLoop*) { out_ << "exit_loop"; },                                              //
+        [&](ir::NextIteration* ni) { out_ << "next_iteration %b" << IdOf(ni->Loop()->Body()); },  //
+        [&](ir::Unreachable*) { out_ << "unreachable"; },                                         //
+        [&](ir::BreakIf* bi) {
             out_ << "break_if ";
             EmitValue(bi->Condition());
             out_ << " %b" << IdOf(bi->Loop()->Body());
         },
+        [&](Unreachable*) { out_ << "unreachable"; },
         [&](Default) { out_ << "Unknown branch " << b->TypeInfo().name; });
 
     if (!b->Args().IsEmpty()) {

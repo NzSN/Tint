@@ -31,10 +31,10 @@ namespace {
 /// If multiple flow nodes are found with the type T, then an error is raised and the first is
 /// returned.
 template <typename T>
-T* FindSingleValue(Module& mod) {
+T* FindSingleInstruction(Module& mod) {
     T* found = nullptr;
     size_t count = 0;
-    for (auto* node : mod.values.Objects()) {
+    for (auto* node : mod.instructions.Objects()) {
         if (auto* as = node->As<T>()) {
             count++;
             if (!found) {
@@ -43,7 +43,7 @@ T* FindSingleValue(Module& mod) {
         }
     }
     if (count > 1) {
-        ADD_FAILURE() << "FindSingleValue() found " << count << " nodes of type "
+        ADD_FAILURE() << "FindSingleInstruction() found " << count << " nodes of type "
                       << utils::TypeInfo::Of<T>().name;
     }
     return found;
@@ -135,31 +135,24 @@ TEST_F(IR_FromProgramTest, IfStatement) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* if_ = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-
-    EXPECT_EQ(2u, if_->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3, m: %b4]
+    if true [t: %b2, f: %b3]
       # True block
       %b2 = block {
-        exit_if %b4
+        exit_if
       }
 
       # False block
       %b3 = block {
-        exit_if %b4
+        exit_if
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -173,31 +166,19 @@ TEST_F(IR_FromProgramTest, IfStatement_TrueReturns) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* if_ = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-
-    EXPECT_EQ(1u, if_->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3, m: %b4]
+    if true [t: %b2]
       # True block
       %b2 = block {
         ret
       }
 
-      # False block
-      %b3 = block {
-        exit_if %b4
-      }
-
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -211,19 +192,16 @@ TEST_F(IR_FromProgramTest, IfStatement_FalseReturns) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* if_ = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-
-    EXPECT_EQ(1u, if_->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3, m: %b4]
+    if true [t: %b2, f: %b3]
       # True block
       %b2 = block {
-        exit_if %b4
+        exit_if
       }
 
       # False block
@@ -231,11 +209,7 @@ TEST_F(IR_FromProgramTest, IfStatement_FalseReturns) {
         ret
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -249,11 +223,8 @@ TEST_F(IR_FromProgramTest, IfStatement_BothReturn) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* if_ = FindSingleValue<ir::If>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
-
-    EXPECT_EQ(0u, if_->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
@@ -269,6 +240,7 @@ TEST_F(IR_FromProgramTest, IfStatement_BothReturn) {
         ret
       }
 
+    ret
   }
 }
 )");
@@ -287,32 +259,24 @@ TEST_F(IR_FromProgramTest, IfStatement_JumpChainToMerge) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3, m: %b4]
+    if true [t: %b2]
       # True block
       %b2 = block {
-        loop [b: %b5, m: %b6]
+        loop [b: %b3, c: %b4]
           # Body block
-          %b5 = block {
-            exit_loop %b6
+          %b3 = block {
+            exit_loop
           }
 
-        # Merge block
-        %b6 = block {
-          exit_if %b4
-        }
+          # Continuing block
+          %b4 = block {
+            next_iteration %b3
+          }
 
+        exit_if
       }
 
-      # False block
-      %b3 = block {
-        exit_if %b4
-      }
-
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -326,28 +290,28 @@ TEST_F(IR_FromProgramTest, Loop_WithBreak) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    EXPECT_EQ(0u, loop->Body()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, m: %b3]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        exit_loop %b3
+        exit_loop
       }
 
-    # Merge block
-    %b3 = block {
-      ret
-    }
+      # Continuing block
+      %b3 = block {
+        next_iteration %b2
+      }
 
+    ret
   }
 }
 )");
@@ -362,36 +326,26 @@ TEST_F(IR_FromProgramTest, Loop_WithContinue) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        if true [t: %b5, f: %b6, m: %b7]
+        if true [t: %b4]
           # True block
-          %b5 = block {
-            exit_loop %b4
+          %b4 = block {
+            exit_loop
           }
 
-          # False block
-          %b6 = block {
-            exit_if %b7
-          }
-
-        # Merge block
-        %b7 = block {
-          continue %b3
-        }
-
+        continue %b3
       }
 
       # Continuing block
@@ -399,11 +353,7 @@ TEST_F(IR_FromProgramTest, Loop_WithContinue) {
         next_iteration %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -418,18 +368,17 @@ TEST_F(IR_FromProgramTest, Loop_WithContinuing_BreakIf) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
         continue %b3
@@ -440,11 +389,7 @@ TEST_F(IR_FromProgramTest, Loop_WithContinuing_BreakIf) {
         break_if true %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -463,7 +408,7 @@ TEST_F(IR_FromProgramTest, Loop_Continuing_Body_Scope) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
         continue %b3
@@ -474,11 +419,7 @@ TEST_F(IR_FromProgramTest, Loop_Continuing_Body_Scope) {
         break_if true %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -493,13 +434,12 @@ TEST_F(IR_FromProgramTest, Loop_WithReturn) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(0u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
@@ -507,22 +447,13 @@ TEST_F(IR_FromProgramTest, Loop_WithReturn) {
     loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        if true [t: %b4, f: %b5, m: %b6]
+        if true [t: %b4]
           # True block
           %b4 = block {
             ret
           }
 
-          # False block
-          %b5 = block {
-            exit_if %b6
-          }
-
-        # Merge block
-        %b6 = block {
-          continue %b3
-        }
-
+        continue %b3
       }
 
       # Continuing block
@@ -530,6 +461,7 @@ TEST_F(IR_FromProgramTest, Loop_WithReturn) {
         next_iteration %b2
       }
 
+    ret
   }
 }
 )");
@@ -543,23 +475,28 @@ TEST_F(IR_FromProgramTest, Loop_WithOnlyReturn) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    EXPECT_EQ(0u, loop->Body()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(0u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
         ret
       }
 
+      # Continuing block
+      %b3 = block {
+        next_iteration %b2
+      }
+
+    ret
   }
 }
 )");
@@ -582,23 +519,34 @@ TEST_F(IR_FromProgramTest, Loop_WithOnlyReturn_ContinuingBreakIf) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    EXPECT_EQ(0u, loop->Body()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(0u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
         ret
       }
 
+      # Continuing block
+      %b3 = block {
+        break_if true %b2
+      }
+
+    if true [t: %b4]
+      # True block
+      %b4 = block {
+        ret
+      }
+
+    ret
   }
 }
 )");
@@ -613,38 +561,39 @@ TEST_F(IR_FromProgramTest, Loop_WithIf_BothBranchesBreak) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    EXPECT_EQ(0u, loop->Body()->InboundSiblingBranches().Length());
-    EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(2u, loop->Merge()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, m: %b3]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
         if true [t: %b4, f: %b5]
           # True block
           %b4 = block {
-            exit_loop %b3
+            exit_loop
           }
 
           # False block
           %b5 = block {
-            exit_loop %b3
+            exit_loop
           }
 
+        continue %b3
       }
 
-    # Merge block
-    %b3 = block {
-      ret
-    }
+      # Continuing block
+      %b3 = block {
+        next_iteration %b2
+      }
 
+    ret
   }
 }
 )");
@@ -670,95 +619,61 @@ TEST_F(IR_FromProgramTest, Loop_Nested) {
     EXPECT_EQ(Disassemble(m.Get()),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        loop [b: %b5, c: %b6, m: %b7]
+        loop [b: %b4, c: %b5]
           # Body block
-          %b5 = block {
-            if true [t: %b8, f: %b9, m: %b10]
+          %b4 = block {
+            if true [t: %b6]
               # True block
-              %b8 = block {
-                exit_loop %b7
+              %b6 = block {
+                exit_loop
               }
 
-              # False block
-              %b9 = block {
-                exit_if %b10
+            if true [t: %b7]
+              # True block
+              %b7 = block {
+                continue %b5
               }
 
-            # Merge block
-            %b10 = block {
-              if true [t: %b11, f: %b12, m: %b13]
-                # True block
-                %b11 = block {
-                  continue %b6
-                }
-
-                # False block
-                %b12 = block {
-                  exit_if %b13
-                }
-
-              # Merge block
-              %b13 = block {
-                continue %b6
-              }
-
-            }
-
+            continue %b5
           }
 
           # Continuing block
-          %b6 = block {
-            loop [b: %b14, m: %b15]
+          %b5 = block {
+            loop [b: %b8, c: %b9]
               # Body block
-              %b14 = block {
-                exit_loop %b15
+              %b8 = block {
+                exit_loop
               }
 
-            # Merge block
-            %b15 = block {
-              loop [b: %b16, c: %b17, m: %b18]
-                # Body block
-                %b16 = block {
-                  continue %b17
-                }
-
-                # Continuing block
-                %b17 = block {
-                  break_if true %b16
-                }
-
-              # Merge block
-              %b18 = block {
-                next_iteration %b5
+              # Continuing block
+              %b9 = block {
+                next_iteration %b8
               }
 
-            }
+            loop [b: %b10, c: %b11]
+              # Body block
+              %b10 = block {
+                continue %b11
+              }
 
+              # Continuing block
+              %b11 = block {
+                break_if true %b10
+              }
+
+            next_iteration %b4
           }
 
-        # Merge block
-        %b7 = block {
-          if true [t: %b19, f: %b20, m: %b21]
-            # True block
-            %b19 = block {
-              exit_loop %b4
-            }
-
-            # False block
-            %b20 = block {
-              exit_if %b21
-            }
-
-          # Merge block
-          %b21 = block {
-            continue %b3
+        if true [t: %b12]
+          # True block
+          %b12 = block {
+            exit_loop
           }
 
-        }
-
+        continue %b3
       }
 
       # Continuing block
@@ -766,11 +681,7 @@ TEST_F(IR_FromProgramTest, Loop_Nested) {
         next_iteration %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -784,36 +695,31 @@ TEST_F(IR_FromProgramTest, While) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        if false [t: %b5, f: %b6, m: %b7]
+        if false [t: %b4, f: %b5]
           # True block
-          %b5 = block {
-            exit_if %b7
+          %b4 = block {
+            exit_if
           }
 
           # False block
-          %b6 = block {
-            exit_loop %b4
+          %b5 = block {
+            exit_loop
           }
 
-        # Merge block
-        %b7 = block {
-          continue %b3
-        }
-
+        continue %b3
       }
 
       # Continuing block
@@ -821,11 +727,7 @@ TEST_F(IR_FromProgramTest, While) {
         next_iteration %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -839,36 +741,31 @@ TEST_F(IR_FromProgramTest, While_Return) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
-    EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
+    EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3, m: %b4]
+    loop [b: %b2, c: %b3]
       # Body block
       %b2 = block {
-        if true [t: %b5, f: %b6, m: %b7]
+        if true [t: %b4, f: %b5]
           # True block
-          %b5 = block {
-            exit_if %b7
+          %b4 = block {
+            exit_if
           }
 
           # False block
-          %b6 = block {
-            exit_loop %b4
+          %b5 = block {
+            exit_loop
           }
 
-        # Merge block
-        %b7 = block {
-          ret
-        }
-
+        continue %b3
       }
 
       # Continuing block
@@ -876,11 +773,7 @@ TEST_F(IR_FromProgramTest, While_Return) {
         next_iteration %b2
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -907,13 +800,12 @@ TEST_F(IR_FromProgramTest, DISABLED_For) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(2u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(1u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(2u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m), R"()");
 }
@@ -926,18 +818,17 @@ TEST_F(IR_FromProgramTest, For_Init_NoCondOrContinuing) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(1u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [i: %b2, b: %b3, m: %b4]
+    loop [i: %b2, b: %b3]
       # Initializer block
       %b2 = block {
         %i:ptr<function, i32, read_write> = var
@@ -946,14 +837,10 @@ TEST_F(IR_FromProgramTest, For_Init_NoCondOrContinuing) {
 
       # Body block
       %b3 = block {
-        exit_loop %b4
+        exit_loop
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -967,28 +854,23 @@ TEST_F(IR_FromProgramTest, For_NoInitCondOrContinuing) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* loop = FindSingleValue<ir::Loop>(m);
+    auto* loop = FindSingleInstruction<ir::Loop>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
     EXPECT_EQ(0u, loop->Body()->InboundSiblingBranches().Length());
     EXPECT_EQ(0u, loop->Continuing()->InboundSiblingBranches().Length());
-    EXPECT_EQ(1u, loop->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, m: %b3]
+    loop [b: %b2]
       # Body block
       %b2 = block {
-        exit_loop %b3
+        exit_loop
       }
 
-    # Merge block
-    %b3 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -1005,7 +887,7 @@ TEST_F(IR_FromProgramTest, Switch) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleValue<ir::Switch>(m);
+    auto* flow = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
@@ -1025,32 +907,26 @@ TEST_F(IR_FromProgramTest, Switch) {
     ASSERT_EQ(1u, cases[2].selectors.Length());
     EXPECT_TRUE(cases[2].selectors[0].IsDefault());
 
-    EXPECT_EQ(3u, flow->Merge()->InboundSiblingBranches().Length());
-
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i, %b2), c: (1i, %b3), c: (default, %b4), m: %b5]
+    switch 1i [c: (0i, %b2), c: (1i, %b3), c: (default, %b4)]
       # Case block
       %b2 = block {
-        exit_switch %b5
+        exit_switch
       }
 
       # Case block
       %b3 = block {
-        exit_switch %b5
+        exit_switch
       }
 
       # Case block
       %b4 = block {
-        exit_switch %b5
+        exit_switch
       }
 
-    # Merge block
-    %b5 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -1068,7 +944,7 @@ TEST_F(IR_FromProgramTest, Switch_MultiSelector) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleValue<ir::Switch>(m);
+    auto* flow = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
@@ -1085,22 +961,16 @@ TEST_F(IR_FromProgramTest, Switch_MultiSelector) {
 
     EXPECT_TRUE(cases[0].selectors[2].IsDefault());
 
-    EXPECT_EQ(1u, flow->Merge()->InboundSiblingBranches().Length());
-
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i 1i default, %b2), m: %b3]
+    switch 1i [c: (0i 1i default, %b2)]
       # Case block
       %b2 = block {
-        exit_switch %b3
+        exit_switch
       }
 
-    # Merge block
-    %b3 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -1114,7 +984,7 @@ TEST_F(IR_FromProgramTest, Switch_OnlyDefault) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleValue<ir::Switch>(m);
+    auto* flow = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
@@ -1123,22 +993,16 @@ TEST_F(IR_FromProgramTest, Switch_OnlyDefault) {
     ASSERT_EQ(1u, cases[0].selectors.Length());
     EXPECT_TRUE(cases[0].selectors[0].IsDefault());
 
-    EXPECT_EQ(1u, flow->Merge()->InboundSiblingBranches().Length());
-
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (default, %b2), m: %b3]
+    switch 1i [c: (default, %b2)]
       # Case block
       %b2 = block {
-        exit_switch %b3
+        exit_switch
       }
 
-    # Merge block
-    %b3 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -1154,7 +1018,7 @@ TEST_F(IR_FromProgramTest, Switch_WithBreak) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleValue<ir::Switch>(m);
+    auto* flow = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
@@ -1168,28 +1032,23 @@ TEST_F(IR_FromProgramTest, Switch_WithBreak) {
     ASSERT_EQ(1u, cases[1].selectors.Length());
     EXPECT_TRUE(cases[1].selectors[0].IsDefault());
 
-    EXPECT_EQ(2u, flow->Merge()->InboundSiblingBranches().Length());
     // This is 1 because the if is dead-code eliminated and the return doesn't happen.
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i, %b2), c: (default, %b3), m: %b4]
+    switch 1i [c: (0i, %b2), c: (default, %b3)]
       # Case block
       %b2 = block {
-        exit_switch %b4
+        exit_switch
       }
 
       # Case block
       %b3 = block {
-        exit_switch %b4
+        exit_switch
       }
 
-    # Merge block
-    %b4 = block {
-      ret
-    }
-
+    ret
   }
 }
 )");
@@ -1207,7 +1066,7 @@ TEST_F(IR_FromProgramTest, Switch_AllReturn) {
 
     auto m = res.Move();
 
-    auto* flow = FindSingleValue<ir::Switch>(m);
+    auto* flow = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
@@ -1220,8 +1079,6 @@ TEST_F(IR_FromProgramTest, Switch_AllReturn) {
 
     ASSERT_EQ(1u, cases[1].selectors.Length());
     EXPECT_TRUE(cases[1].selectors[0].IsDefault());
-
-    EXPECT_EQ(0u, flow->Merge()->InboundSiblingBranches().Length());
 
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
@@ -1237,6 +1094,7 @@ TEST_F(IR_FromProgramTest, Switch_AllReturn) {
         ret
       }
 
+    ret
   }
 }
 )");

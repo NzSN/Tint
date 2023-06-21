@@ -22,6 +22,7 @@
 #include "src/tint/ir/call.h"
 #include "src/tint/ir/constant.h"
 #include "src/tint/ir/exit_if.h"
+#include "src/tint/ir/exit_switch.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/instruction.h"
 #include "src/tint/ir/load.h"
@@ -45,6 +46,7 @@
 #include "src/tint/type/texture.h"
 #include "src/tint/utils/hashmap.h"
 #include "src/tint/utils/predicates.h"
+#include "src/tint/utils/scoped_assignment.h"
 #include "src/tint/utils/transform.h"
 #include "src/tint/utils/vector.h"
 
@@ -86,13 +88,16 @@ class State {
     /// A hashmap of value to symbol used in the emitted AST
     utils::Hashmap<Value*, Symbol, 32> value_names_;
 
-    // The nesting depth of the currently generated AST
-    // 0 is module scope
-    // 1 is root-level function scope
-    // 2+ is within control flow
+    /// The nesting depth of the currently generated AST
+    /// 0 is module scope
+    /// 1 is root-level function scope
+    /// 2+ is within control flow
     uint32_t nesting_depth_ = 0;
 
-    const ast::Function* Fn(Function* fn) {
+    /// The current switch case block
+    ir::Block* current_switch_case_ = nullptr;
+
+    const ast::Function* Fn(ir::Function* fn) {
         SCOPED_NESTING();
 
         // TODO(crbug.com/tint/1915): Properly implement this when we've fleshed out Function
@@ -105,43 +110,23 @@ class State {
 
         auto name = AssignNameTo(fn);
         auto ret_ty = Type(fn->ReturnType());
-        auto* body = BlockGraph(fn->StartTarget());
+        auto* body = Block(fn->StartTarget());
         utils::Vector<const ast::Attribute*, 1> attrs{};
         utils::Vector<const ast::Attribute*, 1> ret_attrs{};
         return b.Func(name, std::move(params), ret_ty, body, std::move(attrs),
                       std::move(ret_attrs));
     }
 
-    const ast::BlockStatement* BlockGraph(ir::Block* start_node) {
-        // TODO(crbug.com/tint/1902): Check if the block is dead
-        utils::Vector<const ast::Statement*,
-                      decltype(ast::BlockStatement::statements)::static_length>
-            stmts;
-
-        ir::Block* block = start_node;
+    const ast::BlockStatement* Block(ir::Block* block) {
+        static constexpr size_t N = decltype(ast::BlockStatement::statements)::static_length;
+        utils::Vector<const ast::Statement*, N> stmts;
 
         // TODO(crbug.com/tint/1902): Handle block arguments.
 
-        while (block) {
-            TINT_ASSERT(IR, block->HasBranchTarget());
-
-            for (auto* inst : *block) {
-                if (auto* stmt = Stmt(inst)) {
-                    stmts.Push(stmt);
-                }
+        for (auto* inst : *block) {
+            if (auto stmt = Stmt(inst)) {
+                stmts.Push(stmt);
             }
-            if (auto* if_ = block->Branch()->As<ir::If>()) {
-                if (if_->Merge()->HasBranchTarget()) {
-                    block = if_->Merge();
-                    continue;
-                }
-            } else if (auto* switch_ = block->Branch()->As<ir::Switch>()) {
-                if (switch_->Merge()->HasBranchTarget()) {
-                    block = switch_->Merge();
-                    continue;
-                }
-            }
-            break;
         }
 
         return b.Block(std::move(stmts));
@@ -158,16 +143,17 @@ class State {
     /// @return an ast::Statement from @p inst, or nullptr if there was an error
     const ast::Statement* Stmt(ir::Instruction* inst) {
         return tint::Switch(
-            inst,                                                  //
-            [&](ir::Store* i) { return Store(i); },                //
-            [&](ir::Call* i) { return CallStmt(i); },              //
-            [&](ir::Var* i) { return Var(i); },                    //
-            [&](ir::If* if_) { return If(if_); },                  //
-            [&](ir::Switch* switch_) { return Switch(switch_); },  //
-            [&](ir::Return* ret) { return Return(ret); },          //
-            [&](ir::Value*) { return ValueStmt(inst); },
-            // TODO(dsinclair): Remove when branch is only a parent ...
-            [&](ir::Branch*) { return nullptr; },
+            inst,                                                        //
+            [&](ir::Call* i) { return CallStmt(i); },                    //
+            [&](ir::Var* i) { return Var(i); },                          //
+            [&](ir::Load*) { return nullptr; },                          //
+            [&](ir::Store* i) { return Store(i); },                      //
+            [&](ir::If* if_) { return If(if_); },                        //
+            [&](ir::Switch* switch_) { return Switch(switch_); },        //
+            [&](ir::Return* ret) { return Return(ret); },                //
+            [&](ir::ExitSwitch* e) { return ExitSwitch(e); },            //
+            [&](ir::ExitIf*) { return nullptr; },                        //
+            [&](ir::Instruction* i) { return ValueStmt(i->Result()); },  //
             [&](Default) {
                 UNHANDLED_CASE(inst);
                 return nullptr;
@@ -179,33 +165,31 @@ class State {
     const ast::IfStatement* If(ir::If* i) {
         SCOPED_NESTING();
         auto* cond = Expr(i->Condition());
-        auto* t = BlockGraph(i->True());
+        auto* t = Block(i->True());
         if (TINT_UNLIKELY(!t)) {
             return nullptr;
         }
 
-        auto* false_blk = i->False();
-        if (false_blk->Length() > 1 || (false_blk->Length() == 1 && false_blk->HasBranchTarget() &&
-                                        !false_blk->Branch()->Is<ir::ExitIf>())) {
-            // If the else target is an `if` which has a merge target that just bounces to the outer
-            // if merge target then emit an 'else if' instead of a block statement for the else.
-            if (auto* inst = i->False()->Instructions(); inst && inst->As<ir::If>()) {
-                auto* if_ = inst->As<ir::If>();
-                if (auto* br = if_->Merge()->Branch()->As<ir::ExitIf>(); br && br->If() == i) {
-                    auto* f = If(if_);
+        if (auto* false_blk = i->False(); false_blk && !false_blk->IsEmpty()) {
+            bool maybe_elseif = (false_blk->Length() == 1) ||
+                                (false_blk->Length() == 2 && false_blk->Back()->Is<ir::Branch>());
+            if (maybe_elseif) {
+                if (auto* else_if = false_blk->Front()->As<ir::If>()) {
+                    auto* f = If(else_if);
                     if (!f) {
                         return nullptr;
                     }
                     return b.If(cond, t, b.Else(f));
                 }
-            } else {
-                auto* f = BlockGraph(i->False());
-                if (!f) {
-                    return nullptr;
-                }
-                return b.If(cond, t, b.Else(f));
             }
+
+            auto* f = Block(i->False());
+            if (!f) {
+                return nullptr;
+            }
+            return b.If(cond, t, b.Else(f));
         }
+
         return b.If(cond, t);
     }
 
@@ -223,7 +207,12 @@ class State {
             utils::Transform(s->Cases(),  //
                              [&](ir::Switch::Case c) -> const tint::ast::CaseStatement* {
                                  SCOPED_NESTING();
-                                 auto* body = BlockGraph(c.start);
+
+                                 const ast::BlockStatement* body = nullptr;
+                                 {
+                                     TINT_SCOPED_ASSIGNMENT(current_switch_case_, c.Block());
+                                     body = Block(c.Block());
+                                 }
                                  if (!body) {
                                      return nullptr;
                                  }
@@ -251,6 +240,13 @@ class State {
         }
 
         return b.Switch(cond, std::move(cases));
+    }
+
+    const ast::BreakStatement* ExitSwitch(const ir::ExitSwitch* e) {
+        if (current_switch_case_ && current_switch_case_->Branch() == e) {
+            return nullptr;  // No need to emit
+        }
+        return b.Break();
     }
 
     /// @param ret the ir::Return
@@ -290,7 +286,7 @@ class State {
     /// @return an ast::VariableDeclStatement from @p var
     const ast::VariableDeclStatement* Var(ir::Var* var) {
         Symbol name = AssignNameTo(var);
-        auto* ptr = var->Type();
+        auto* ptr = var->Result()->Type()->As<type::Pointer>();
         auto ty = Type(ptr->StoreType());
         const ast::Expression* init = nullptr;
         if (var->Initializer()) {
@@ -321,8 +317,8 @@ class State {
 
         // Determine whether the value should be placed into a let, or inlined in its single place
         // of usage. Currently a value is inlined if it has a single usage and is unnamed.
-        // TODO(crbug.com/tint/1902): This logic needs to check that the sequence of side-effecting
-        // expressions is not changed by inlining the expression. This needs fixing.
+        // TODO(crbug.com/tint/1902): This logic needs to check that the sequence of side -
+        // effecting expressions is not changed by inlining the expression. This needs fixing.
         bool create_let = val->Usages().Count() > 1 || mod.NameOf(val).IsValid();
         if (create_let) {
             auto* init = Expr(val);  // Must come before giving the value a name
@@ -342,20 +338,36 @@ class State {
     // This prevents littering the ToProgram logic with expensive error checking code.
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// @param val the ir::Expression
-    /// @return an ast::Expression from @p val.
-    /// @note May be a semantically-invalid placeholder expression on error.
+    /// @param val the value
+    /// @returns the ast::Expression from the values source instruction
     const ast::Expression* Expr(ir::Value* val) {
         if (auto name = value_names_.Get(val)) {
             return b.Expr(name.value());
         }
 
         return tint::Switch(
-            val,                                            //
-            [&](ir::Constant* c) { return ConstExpr(c); },  //
-            [&](ir::Load* l) { return LoadExpr(l); },       //
-            [&](ir::Unary* u) { return UnaryExpr(u); },     //
-            [&](ir::Binary* u) { return BinaryExpr(u); },   //
+            val,                                                          //
+            [&](ir::Constant* c) { return ConstExpr(c); },                //
+            [&](ir::InstructionResult* r) { return Expr(r->Source()); },  //
+            [&](Default) -> const ast::Expression* {
+                UNHANDLED_CASE(val);
+                return b.Expr("<error>");
+            });
+    }
+
+    /// @param val the ir::Expression
+    /// @return an ast::Expression from @p val.
+    /// @note May be a semantically-invalid placeholder expression on error.
+    const ast::Expression* Expr(ir::Instruction* val) {
+        if (auto name = value_names_.Get(val->Result())) {
+            return b.Expr(name.value());
+        }
+
+        return tint::Switch(
+            val,                                           //
+            [&](ir::Load* l) { return LoadExpr(l); },      //
+            [&](ir::Unary* u) { return UnaryExpr(u); },    //
+            [&](ir::Binary* u) { return BinaryExpr(u); },  //
             [&](Default) {
                 UNHANDLED_CASE(val);
                 return b.Expr("<error>");
@@ -553,6 +565,11 @@ class State {
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Helpers
     ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// Creates and returns a new, unique name for the instructions result value, or returns the
+    /// previously created name. Must not be called with a multi-result instruction.
+    /// @return the instruction values name
+    Symbol AssignNameTo(Instruction* inst) { return AssignNameTo(inst->Result()); }
 
     /// Creates and returns a new, unique name for the given value, or returns the previously
     /// created name.

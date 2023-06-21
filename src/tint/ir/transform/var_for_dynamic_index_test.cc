@@ -24,14 +24,10 @@
 namespace tint::ir::transform {
 namespace {
 
-using namespace tint::number_suffixes;  // NOLINT
+using namespace tint::builtin::fluent_types;  // NOLINT
+using namespace tint::number_suffixes;        // NOLINT
 
-class IR_VarForDynamicIndexTest : public TransformTest {
-  protected:
-    const type::Type* ptr(const type::Type* elem) {
-        return ty.ptr(builtin::AddressSpace::kFunction, elem, builtin::Access::kReadWrite);
-    }
-};
+using IR_VarForDynamicIndexTest = TransformTest;
 
 TEST_F(IR_VarForDynamicIndexTest, NoModify_ConstantIndex_ArrayValue) {
     auto* arr = b.FunctionParam(ty.array<i32, 4u>());
@@ -82,13 +78,13 @@ TEST_F(IR_VarForDynamicIndexTest, NoModify_ConstantIndex_MatrixValue) {
 }
 
 TEST_F(IR_VarForDynamicIndexTest, NoModify_DynamicIndex_ArrayPointer) {
-    auto* arr = b.FunctionParam(ptr(ty.array<i32, 4u>()));
+    auto* arr = b.FunctionParam(ty.ptr<function, array<i32, 4u>>());
     auto* idx = b.FunctionParam(ty.i32());
     auto* func = b.Function("foo", ty.i32());
     func->SetParams({arr, idx});
 
     auto* block = func->StartTarget();
-    auto* access = block->Append(b.Access(ptr(ty.i32()), arr, idx));
+    auto* access = block->Append(b.Access(ty.ptr<function, i32>(), arr, idx));
     auto* load = block->Append(b.Load(access));
     block->Append(b.Return(func, load));
     mod.functions.Push(func);
@@ -109,13 +105,13 @@ TEST_F(IR_VarForDynamicIndexTest, NoModify_DynamicIndex_ArrayPointer) {
 }
 
 TEST_F(IR_VarForDynamicIndexTest, NoModify_DynamicIndex_MatrixPointer) {
-    auto* mat = b.FunctionParam(ptr(ty.mat2x2<f32>()));
+    auto* mat = b.FunctionParam(ty.ptr<function, mat2x2<f32>>());
     auto* idx = b.FunctionParam(ty.i32());
     auto* func = b.Function("foo", ty.f32());
     func->SetParams({mat, idx});
 
     auto* block = func->StartTarget();
-    auto* access = block->Append(b.Access(ptr(ty.f32()), mat, idx, idx));
+    auto* access = block->Append(b.Access(ty.ptr<function, f32>(), mat, idx, idx));
     auto* load = block->Append(b.Load(access));
     block->Append(b.Return(func, load));
     mod.functions.Push(func);
@@ -188,22 +184,22 @@ TEST_F(IR_VarForDynamicIndexTest, DynamicIndex_ArrayValue) {
 }
 
 TEST_F(IR_VarForDynamicIndexTest, DynamicIndex_MatrixValue) {
-    auto* arr = b.FunctionParam(ty.mat2x2<f32>());
+    auto* mat = b.FunctionParam(ty.mat2x2<f32>());
     auto* idx = b.FunctionParam(ty.i32());
-    auto* func = b.Function("foo", ty.f32());
-    func->SetParams({arr, idx});
+    auto* func = b.Function("foo", ty.vec2<f32>());
+    func->SetParams({mat, idx});
 
     auto* block = func->StartTarget();
-    auto* access = block->Append(b.Access(ty.f32(), arr, idx));
+    auto* access = block->Append(b.Access(ty.vec2<f32>(), mat, idx));
     block->Append(b.Return(func, access));
     mod.functions.Push(func);
 
     auto* expect = R"(
-%foo = func(%2:mat2x2<f32>, %3:i32):f32 -> %b1 {
+%foo = func(%2:mat2x2<f32>, %3:i32):vec2<f32> -> %b1 {
   %b1 = block {
     %4:ptr<function, mat2x2<f32>, read_write> = var, %2
-    %5:ptr<function, f32, read_write> = access %4, %3
-    %6:f32 = load %5
+    %5:ptr<function, vec2<f32>, read_write> = access %4, %3
+    %6:vec2<f32> = load %5
     ret %6
   }
 }
@@ -298,17 +294,12 @@ TEST_F(IR_VarForDynamicIndexTest, AccessChain_SkipConstantIndices_Interleaved) {
 }
 
 TEST_F(IR_VarForDynamicIndexTest, AccessChain_SkipConstantIndices_Struct) {
-    auto* str_ty = ty.Get<type::Struct>(
-        mod.symbols.Register("MyStruct"),
-        utils::Vector{
-            ty.Get<type::StructMember>(mod.symbols.Register("arr1"), ty.array<f32, 1024>(), 0u, 0u,
-                                       4u, 4096u, type::StructMemberAttributes{}),
-            ty.Get<type::StructMember>(mod.symbols.Register("mat"), ty.mat4x4<f32>(), 1u, 4096u,
-                                       16u, 64u, type::StructMemberAttributes{}),
-            ty.Get<type::StructMember>(mod.symbols.Register("arr2"), ty.array<f32, 1024>(), 2u,
-                                       4160u, 4u, 4096u, type::StructMemberAttributes{}),
-        },
-        16u, 32u, 32u);
+    auto* str_ty = ty.Struct(mod.symbols.Register("MyStruct"),
+                             {
+                                 {mod.symbols.Register("arr1"), ty.array<f32, 1024>()},
+                                 {mod.symbols.Register("mat"), ty.mat4x4<f32>()},
+                                 {mod.symbols.Register("arr2"), ty.array<f32, 1024>()},
+                             });
     auto* str_val = b.FunctionParam(str_ty);
     auto* idx = b.FunctionParam(ty.i32());
     auto* func = b.Function("foo", ty.f32());

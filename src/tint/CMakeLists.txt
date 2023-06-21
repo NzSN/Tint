@@ -58,14 +58,14 @@ endfunction()
 add_library(tint_diagnostic_utils
   debug.cc
   debug.h
-  source.h
-  source.cc
   diagnostic/diagnostic.cc
   diagnostic/diagnostic.h
   diagnostic/formatter.cc
   diagnostic/formatter.h
   diagnostic/printer.cc
   diagnostic/printer.h
+  source.cc
+  source.h
   utils/debugger.cc
   utils/debugger.h
   utils/unicode.cc
@@ -158,6 +158,8 @@ list(APPEND TINT_LIB_SRCS
   ast/increment_decrement_statement.h
   ast/index_accessor_expression.cc
   ast/index_accessor_expression.h
+  ast/index_attribute.cc
+  ast/index_attribute.h
   ast/int_literal_expression.cc
   ast/int_literal_expression.h
   ast/internal_attribute.cc
@@ -232,6 +234,9 @@ list(APPEND TINT_LIB_SRCS
   ast/while_statement.h
   ast/workgroup_attribute.cc
   ast/workgroup_attribute.h
+  builtin/fluent_types.h
+  builtin/number.cc
+  builtin/number.h
   clone_context.cc
   clone_context.h
   constant/clone_context.h
@@ -255,8 +260,6 @@ list(APPEND TINT_LIB_SRCS
   inspector/resource_binding.h
   inspector/scalar.cc
   inspector/scalar.h
-  number.cc
-  number.h
   program_builder.cc
   program_builder.h
   program_id.cc
@@ -761,6 +764,8 @@ if(${TINT_BUILD_IR})
     ir/exit_loop.h
     ir/exit_switch.cc
     ir/exit_switch.h
+    ir/exit.cc
+    ir/exit.h
     ir/from_program.cc
     ir/from_program.h
     ir/function.cc
@@ -771,6 +776,8 @@ if(${TINT_BUILD_IR})
     ir/if.h
     ir/instruction.cc
     ir/instruction.h
+    ir/instruction_result.cc
+    ir/instruction_result.h
     ir/load.cc
     ir/load.h
     ir/location.h
@@ -796,6 +803,8 @@ if(${TINT_BUILD_IR})
     ir/to_program.h
     ir/unary.cc
     ir/unary.h
+    ir/unreachable.cc
+    ir/unreachable.h
     ir/user_call.cc
     ir/user_call.h
     ir/validate.cc
@@ -808,6 +817,8 @@ if(${TINT_BUILD_IR})
     ir/transform/add_empty_entry_point.h
     ir/transform/block_decorated_structs.cc
     ir/transform/block_decorated_structs.h
+    ir/transform/merge_return.cc
+    ir/transform/merge_return.h
     ir/transform/transform.cc
     ir/transform/transform.h
     ir/transform/var_for_dynamic_index.cc
@@ -930,6 +941,7 @@ if(TINT_BUILD_TESTS)
     ast/if_statement_test.cc
     ast/increment_decrement_statement_test.cc
     ast/index_accessor_expression_test.cc
+    ast/index_attribute_test.cc
     ast/int_literal_expression_test.cc
     ast/interpolate_attribute_test.cc
     ast/location_attribute_test.cc
@@ -955,6 +967,7 @@ if(TINT_BUILD_TESTS)
     ast/variable_test.cc
     ast/while_statement_test.cc
     ast/workgroup_attribute_test.cc
+    builtin/number_test.cc
     clone_context_test.cc
     constant/composite_test.cc
     constant/manager_test.cc
@@ -965,7 +978,6 @@ if(TINT_BUILD_TESTS)
     diagnostic/diagnostic_test.cc
     diagnostic/formatter_test.cc
     diagnostic/printer_test.cc
-    number_test.cc
     program_builder_test.cc
     program_test.cc
     reflection_test.cc
@@ -999,6 +1011,7 @@ if(TINT_BUILD_TESTS)
     resolver/control_block_validation_test.cc
     resolver/dependency_graph_test.cc
     resolver/diagnostic_control_test.cc
+    resolver/dual_source_blending_extension_test.cc
     resolver/entry_point_validation_test.cc
     resolver/evaluation_stage_test.cc
     resolver/expression_kind_test.cc
@@ -1285,6 +1298,7 @@ if(TINT_BUILD_TESTS)
         writer/spirv/ir/generator_impl_ir_binary_test.cc
         writer/spirv/ir/generator_impl_ir_builtin_test.cc
         writer/spirv/ir/generator_impl_ir_constant_test.cc
+        writer/spirv/ir/generator_impl_ir_construct_test.cc
         writer/spirv/ir/generator_impl_ir_function_test.cc
         writer/spirv/ir/generator_impl_ir_if_test.cc
         writer/spirv/ir/generator_impl_ir_loop_test.cc
@@ -1532,6 +1546,7 @@ if(TINT_BUILD_TESTS)
       ir/function_param_test.cc
       ir/function_test.cc
       ir/if_test.cc
+      ir/instruction_result_test.cc
       ir/instruction_test.cc
       ir/ir_test_helper.h
       ir/load_test.cc
@@ -1539,6 +1554,7 @@ if(TINT_BUILD_TESTS)
       ir/module_test.cc
       ir/multi_in_block_test.cc
       ir/next_iteration_test.cc
+      ir/operand_instruction_test.cc
       ir/program_test_helper.h
       ir/return_test.cc
       ir/store_test.cc
@@ -1546,10 +1562,12 @@ if(TINT_BUILD_TESTS)
       ir/swizzle_test.cc
       ir/transform/add_empty_entry_point_test.cc
       ir/transform/block_decorated_structs_test.cc
+      ir/transform/merge_return_test.cc
       ir/transform/var_for_dynamic_index_test.cc
       ir/unary_test.cc
       ir/user_call_test.cc
       ir/validate_test.cc
+      ir/value_test.cc
       ir/var_test.cc
     )
   endif()

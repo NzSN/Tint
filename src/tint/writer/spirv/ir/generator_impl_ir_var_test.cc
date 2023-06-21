@@ -15,17 +15,18 @@
 #include "src/tint/type/pointer.h"
 #include "src/tint/writer/spirv/ir/test_helper_ir.h"
 
-using namespace tint::number_suffixes;  // NOLINT
-
 namespace tint::writer::spirv {
 namespace {
+
+using namespace tint::builtin::fluent_types;  // NOLINT
+using namespace tint::number_suffixes;        // NOLINT
 
 TEST_F(SpvGeneratorImplTest, FunctionVar_NoInit) {
     auto* func = b.Function("foo", ty.void_());
 
-    func->StartTarget()->SetInstructions(
-        {b.Var(ty.ptr(builtin::AddressSpace::kFunction, ty.i32(), builtin::Access::kReadWrite)),
-         b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    sb.Var(ty.ptr<function, i32>());
+    sb.Return(func);
 
     ASSERT_TRUE(IRIsValid()) << Error();
 
@@ -46,11 +47,11 @@ OpFunctionEnd
 TEST_F(SpvGeneratorImplTest, FunctionVar_WithInit) {
     auto* func = b.Function("foo", ty.void_());
 
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kFunction, ty.i32(), builtin::Access::kReadWrite));
+    auto sb = b.With(func->StartTarget());
+    auto* v = sb.Var(ty.ptr<function, i32>());
     v->SetInitializer(b.Constant(42_i));
 
-    func->StartTarget()->SetInstructions({v, b.Return(func)});
+    sb.Return(func);
 
     ASSERT_TRUE(IRIsValid()) << Error();
 
@@ -73,9 +74,10 @@ OpFunctionEnd
 TEST_F(SpvGeneratorImplTest, FunctionVar_Name) {
     auto* func = b.Function("foo", ty.void_());
 
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kFunction, ty.i32(), builtin::Access::kReadWrite));
-    func->StartTarget()->SetInstructions({v, b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    auto* v = sb.Var(ty.ptr<function, i32>());
+    sb.Return(func);
+
     mod.SetName(v, "myvar");
 
     ASSERT_TRUE(IRIsValid()) << Error();
@@ -98,16 +100,17 @@ OpFunctionEnd
 TEST_F(SpvGeneratorImplTest, FunctionVar_DeclInsideBlock) {
     auto* func = b.Function("foo", ty.void_());
 
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kFunction, ty.i32(), builtin::Access::kReadWrite));
-    v->SetInitializer(b.Constant(42_i));
-
     auto* i = b.If(true);
-    i->True()->SetInstructions({v, b.ExitIf(i)});
-    i->False()->SetInstructions({b.Return(func)});
-    i->Merge()->SetInstructions({b.Return(func)});
 
-    func->StartTarget()->SetInstructions({i});
+    auto tb = b.With(i->True());
+    auto* v = tb.Var(ty.ptr<function, i32>());
+    v->SetInitializer(b.Constant(42_i));
+    tb.ExitIf(i);
+
+    i->False()->Append(b.Return(func));
+
+    func->StartTarget()->Append(i);
+    func->StartTarget()->Append(b.Return(func));
 
     ASSERT_TRUE(IRIsValid()) << Error();
 
@@ -139,10 +142,12 @@ OpFunctionEnd
 TEST_F(SpvGeneratorImplTest, FunctionVar_Load) {
     auto* func = b.Function("foo", ty.void_());
 
+    auto sb = b.With(func->StartTarget());
+
     auto* store_ty = ty.i32();
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kFunction, store_ty, builtin::Access::kReadWrite));
-    func->StartTarget()->SetInstructions({v, b.Load(v), b.Return(func)});
+    auto* v = sb.Var(ty.ptr(function, store_ty));
+    sb.Load(v);
+    sb.Return(func);
 
     ASSERT_TRUE(IRIsValid()) << Error();
 
@@ -164,9 +169,10 @@ OpFunctionEnd
 TEST_F(SpvGeneratorImplTest, FunctionVar_Store) {
     auto* func = b.Function("foo", ty.void_());
 
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kFunction, ty.i32(), builtin::Access::kReadWrite));
-    func->StartTarget()->SetInstructions({v, b.Store(v, 42_i), b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    auto* v = sb.Var(ty.ptr<function, i32>());
+    sb.Store(v, 42_i);
+    sb.Return(func);
 
     ASSERT_TRUE(IRIsValid()) << Error();
 
@@ -187,8 +193,7 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, PrivateVar_NoInit) {
-    b.RootBlock()->SetInstructions(
-        {b.Var(ty.ptr(builtin::AddressSpace::kPrivate, ty.i32(), builtin::Access::kReadWrite))});
+    b.RootBlock()->Append(b.Var(ty.ptr<private_, i32>()));
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -209,9 +214,9 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, PrivateVar_WithInit) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kPrivate, ty.i32(), builtin::Access::kReadWrite));
-    b.RootBlock()->SetInstructions({v});
+    auto* v = b.Var(ty.ptr<private_, i32>());
     v->SetInitializer(b.Constant(42_i));
+    b.RootBlock()->Append(v);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -233,9 +238,10 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, PrivateVar_Name) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kPrivate, ty.i32(), builtin::Access::kReadWrite));
-    b.RootBlock()->SetInstructions({v});
+    auto* v = b.Var(ty.ptr<private_, i32>());
     v->SetInitializer(b.Constant(42_i));
+    b.RootBlock()->Append(v);
+
     mod.SetName(v, "myvar");
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
@@ -263,14 +269,15 @@ TEST_F(SpvGeneratorImplTest, PrivateVar_LoadAndStore) {
     mod.functions.Push(func);
 
     auto* store_ty = ty.i32();
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kPrivate, store_ty, builtin::Access::kReadWrite));
-    b.RootBlock()->SetInstructions({v});
+    auto* v = b.Var(ty.ptr(private_, store_ty));
     v->SetInitializer(b.Constant(42_i));
+    b.RootBlock()->Append(v);
 
-    auto* load = b.Load(v);
-    auto* add = b.Add(store_ty, v, 1_i);
-    auto* store = b.Store(v, add);
-    func->StartTarget()->SetInstructions({load, add, store, b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    sb.Load(v);
+    auto* add = sb.Add(store_ty, v, 1_i);
+    sb.Store(v, add);
+    sb.Return(func);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -296,8 +303,7 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, WorkgroupVar) {
-    b.RootBlock()->SetInstructions(
-        {b.Var(ty.ptr(builtin::AddressSpace::kWorkgroup, ty.i32(), builtin::Access::kReadWrite))});
+    b.RootBlock()->Append(b.Var(ty.ptr<workgroup, i32>()));
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -318,9 +324,7 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, WorkgroupVar_Name) {
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kWorkgroup, ty.i32(), builtin::Access::kReadWrite));
-    b.RootBlock()->SetInstructions({v});
+    auto* v = b.RootBlock()->Append(b.Var(ty.ptr<workgroup, i32>()));
     mod.SetName(v, "myvar");
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
@@ -348,14 +352,13 @@ TEST_F(SpvGeneratorImplTest, WorkgroupVar_LoadAndStore) {
     mod.functions.Push(func);
 
     auto* store_ty = ty.i32();
-    auto* v =
-        b.Var(ty.ptr(builtin::AddressSpace::kWorkgroup, store_ty, builtin::Access::kReadWrite));
-    b.RootBlock()->SetInstructions({v});
+    auto* v = b.RootBlock()->Append(b.Var(ty.ptr(workgroup, store_ty)));
 
-    auto* load = b.Load(v);
-    auto* add = b.Add(store_ty, v, 1_i);
-    auto* store = b.Store(v, add);
-    func->StartTarget()->SetInstructions({load, add, store, b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    sb.Load(v);
+    auto* add = sb.Add(store_ty, v, 1_i);
+    sb.Store(v, add);
+    sb.Return(func);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -380,8 +383,7 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, WorkgroupVar_ZeroInitializeWithExtension) {
-    b.RootBlock()->SetInstructions(
-        {b.Var(ty.ptr(builtin::AddressSpace::kWorkgroup, ty.i32(), builtin::Access::kReadWrite))});
+    b.RootBlock()->Append(b.Var(ty.ptr<workgroup, i32>()));
 
     // Create a generator with the zero_init_workgroup_memory flag set to `true`.
     spirv::GeneratorImplIr gen(&mod, true);
@@ -405,9 +407,9 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, StorageVar) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kStorage, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<storage, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -435,9 +437,9 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, StorageVar_Name) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kStorage, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<storage, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
     mod.SetName(v, "myvar");
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
@@ -466,18 +468,19 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, StorageVar_LoadAndStore) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kStorage, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<storage, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
 
     auto* func = b.Function("foo", ty.void_(), ir::Function::PipelineStage::kCompute,
                             std::array{1u, 1u, 1u});
     mod.functions.Push(func);
 
-    auto* load = b.Load(v);
-    auto* add = b.Add(ty.i32(), v, 1_i);
-    auto* store = b.Store(v, add);
-    func->StartTarget()->SetInstructions({load, add, store, b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    sb.Load(v);
+    auto* add = sb.Add(ty.i32(), v, 1_i);
+    sb.Store(v, add);
+    sb.Return(func);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -515,9 +518,9 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, UniformVar) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kUniform, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<uniform, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
@@ -545,9 +548,9 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, UniformVar_Name) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kUniform, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<uniform, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
     mod.SetName(v, "myvar");
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
@@ -576,16 +579,17 @@ OpFunctionEnd
 }
 
 TEST_F(SpvGeneratorImplTest, UniformVar_Load) {
-    auto* v = b.Var(ty.ptr(builtin::AddressSpace::kUniform, ty.i32(), builtin::Access::kReadWrite));
+    auto* v = b.Var(ty.ptr<uniform, i32>());
     v->SetBindingPoint(0, 0);
-    b.RootBlock()->SetInstructions({v});
+    b.RootBlock()->Append(v);
 
     auto* func = b.Function("foo", ty.void_(), ir::Function::PipelineStage::kCompute,
                             std::array{1u, 1u, 1u});
     mod.functions.Push(func);
 
-    auto* load = b.Load(v);
-    func->StartTarget()->SetInstructions({load, b.Return(func)});
+    auto sb = b.With(func->StartTarget());
+    sb.Load(v);
+    sb.Return(func);
 
     ASSERT_TRUE(generator_.Generate()) << generator_.Diagnostics().str();
     EXPECT_EQ(DumpModule(generator_.Module()), R"(OpCapability Shader
