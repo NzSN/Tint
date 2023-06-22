@@ -26,9 +26,9 @@
 namespace tint::ir {
 namespace {
 
-/// Looks for the flow node with the given type T.
-/// If no flow node is found, then nullptr is returned.
-/// If multiple flow nodes are found with the type T, then an error is raised and the first is
+/// Looks for the instruction with the given type T.
+/// If no instruction is found, then nullptr is returned.
+/// If multiple instructions are found with the type T, then an error is raised and the first is
 /// returned.
 template <typename T>
 T* FindSingleInstruction(Module& mod) {
@@ -141,17 +141,14 @@ TEST_F(IR_FromProgramTest, IfStatement) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3]
-      # True block
-      %b2 = block {
-        exit_if
+    if true [t: %b2, f: %b3] {  # if_1
+      %b2 = block {  # true
+        exit_if  # if_1
       }
-
-      # False block
-      %b3 = block {
-        exit_if
+      %b3 = block {  # false
+        exit_if  # if_1
       }
-
+    }
     ret
   }
 }
@@ -172,12 +169,11 @@ TEST_F(IR_FromProgramTest, IfStatement_TrueReturns) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2]
-      # True block
-      %b2 = block {
+    if true [t: %b2] {  # if_1
+      %b2 = block {  # true
         ret
       }
-
+    }
     ret
   }
 }
@@ -198,17 +194,14 @@ TEST_F(IR_FromProgramTest, IfStatement_FalseReturns) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3]
-      # True block
-      %b2 = block {
-        exit_if
+    if true [t: %b2, f: %b3] {  # if_1
+      %b2 = block {  # true
+        exit_if  # if_1
       }
-
-      # False block
-      %b3 = block {
+      %b3 = block {  # false
         ret
       }
-
+    }
     ret
   }
 }
@@ -229,17 +222,14 @@ TEST_F(IR_FromProgramTest, IfStatement_BothReturn) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2, f: %b3]
-      # True block
-      %b2 = block {
+    if true [t: %b2, f: %b3] {  # if_1
+      %b2 = block {  # true
         ret
       }
-
-      # False block
-      %b3 = block {
+      %b3 = block {  # false
         ret
       }
-
+    }
     ret
   }
 }
@@ -259,23 +249,19 @@ TEST_F(IR_FromProgramTest, IfStatement_JumpChainToMerge) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    if true [t: %b2]
-      # True block
-      %b2 = block {
-        loop [b: %b3, c: %b4]
-          # Body block
-          %b3 = block {
-            exit_loop
+    if true [t: %b2] {  # if_1
+      %b2 = block {  # true
+        loop [b: %b3, c: %b4] {  # loop_1
+          %b3 = block {  # body
+            exit_loop  # loop_1
           }
-
-          # Continuing block
-          %b4 = block {
+          %b4 = block {  # continuing
             next_iteration %b3
           }
-
-        exit_if
+        }
+        exit_if  # if_1
       }
-
+    }
     ret
   }
 }
@@ -300,17 +286,14 @@ TEST_F(IR_FromProgramTest, Loop_WithBreak) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        exit_loop
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        exit_loop  # loop_1
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -336,23 +319,19 @@ TEST_F(IR_FromProgramTest, Loop_WithContinue) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        if true [t: %b4]
-          # True block
-          %b4 = block {
-            exit_loop
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        if true [t: %b4] {  # if_1
+          %b4 = block {  # true
+            exit_loop  # loop_1
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -378,17 +357,14 @@ TEST_F(IR_FromProgramTest, Loop_WithContinuing_BreakIf) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         break_if true %b2
       }
-
+    }
     ret
   }
 }
@@ -408,17 +384,14 @@ TEST_F(IR_FromProgramTest, Loop_Continuing_Body_Scope) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         break_if true %b2
       }
-
+    }
     ret
   }
 }
@@ -444,23 +417,19 @@ TEST_F(IR_FromProgramTest, Loop_WithReturn) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        if true [t: %b4]
-          # True block
-          %b4 = block {
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        if true [t: %b4] {  # if_1
+          %b4 = block {  # true
             ret
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -485,17 +454,14 @@ TEST_F(IR_FromProgramTest, Loop_WithOnlyReturn) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
         ret
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -529,23 +495,19 @@ TEST_F(IR_FromProgramTest, Loop_WithOnlyReturn_ContinuingBreakIf) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
         ret
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         break_if true %b2
       }
-
-    if true [t: %b4]
-      # True block
-      %b4 = block {
+    }
+    if true [t: %b4] {  # if_1
+      %b4 = block {  # true
         ret
       }
-
+    }
     ret
   }
 }
@@ -571,28 +533,22 @@ TEST_F(IR_FromProgramTest, Loop_WithIf_BothBranchesBreak) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        if true [t: %b4, f: %b5]
-          # True block
-          %b4 = block {
-            exit_loop
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        if true [t: %b4, f: %b5] {  # if_1
+          %b4 = block {  # true
+            exit_loop  # loop_1
           }
-
-          # False block
-          %b5 = block {
-            exit_loop
+          %b5 = block {  # false
+            exit_loop  # loop_1
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -619,68 +575,53 @@ TEST_F(IR_FromProgramTest, Loop_Nested) {
     EXPECT_EQ(Disassemble(m.Get()),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        loop [b: %b4, c: %b5]
-          # Body block
-          %b4 = block {
-            if true [t: %b6]
-              # True block
-              %b6 = block {
-                exit_loop
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        loop [b: %b4, c: %b5] {  # loop_2
+          %b4 = block {  # body
+            if true [t: %b6] {  # if_1
+              %b6 = block {  # true
+                exit_loop  # loop_2
               }
-
-            if true [t: %b7]
-              # True block
-              %b7 = block {
+            }
+            if true [t: %b7] {  # if_2
+              %b7 = block {  # true
                 continue %b5
               }
-
+            }
             continue %b5
           }
-
-          # Continuing block
-          %b5 = block {
-            loop [b: %b8, c: %b9]
-              # Body block
-              %b8 = block {
-                exit_loop
+          %b5 = block {  # continuing
+            loop [b: %b8, c: %b9] {  # loop_3
+              %b8 = block {  # body
+                exit_loop  # loop_3
               }
-
-              # Continuing block
-              %b9 = block {
+              %b9 = block {  # continuing
                 next_iteration %b8
               }
-
-            loop [b: %b10, c: %b11]
-              # Body block
-              %b10 = block {
+            }
+            loop [b: %b10, c: %b11] {  # loop_4
+              %b10 = block {  # body
                 continue %b11
               }
-
-              # Continuing block
-              %b11 = block {
+              %b11 = block {  # continuing
                 break_if true %b10
               }
-
+            }
             next_iteration %b4
           }
-
-        if true [t: %b12]
-          # True block
-          %b12 = block {
-            exit_loop
+        }
+        if true [t: %b12] {  # if_3
+          %b12 = block {  # true
+            exit_loop  # loop_1
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -705,28 +646,22 @@ TEST_F(IR_FromProgramTest, While) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        if false [t: %b4, f: %b5]
-          # True block
-          %b4 = block {
-            exit_if
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        if false [t: %b4, f: %b5] {  # if_1
+          %b4 = block {  # true
+            exit_if  # if_1
           }
-
-          # False block
-          %b5 = block {
-            exit_loop
+          %b5 = block {  # false
+            exit_loop  # loop_1
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -751,28 +686,22 @@ TEST_F(IR_FromProgramTest, While_Return) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2, c: %b3]
-      # Body block
-      %b2 = block {
-        if true [t: %b4, f: %b5]
-          # True block
-          %b4 = block {
-            exit_if
+    loop [b: %b2, c: %b3] {  # loop_1
+      %b2 = block {  # body
+        if true [t: %b4, f: %b5] {  # if_1
+          %b4 = block {  # true
+            exit_if  # if_1
           }
-
-          # False block
-          %b5 = block {
-            exit_loop
+          %b5 = block {  # false
+            exit_loop  # loop_1
           }
-
+        }
         continue %b3
       }
-
-      # Continuing block
-      %b3 = block {
+      %b3 = block {  # continuing
         next_iteration %b2
       }
-
+    }
     ret
   }
 }
@@ -828,18 +757,15 @@ TEST_F(IR_FromProgramTest, For_Init_NoCondOrContinuing) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [i: %b2, b: %b3]
-      # Initializer block
-      %b2 = block {
+    loop [i: %b2, b: %b3] {  # loop_1
+      %b2 = block {  # initializer
         %i:ptr<function, i32, read_write> = var
         next_iteration %b3
       }
-
-      # Body block
-      %b3 = block {
-        exit_loop
+      %b3 = block {  # body
+        exit_loop  # loop_1
       }
-
+    }
     ret
   }
 }
@@ -864,12 +790,11 @@ TEST_F(IR_FromProgramTest, For_NoInitCondOrContinuing) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    loop [b: %b2]
-      # Body block
-      %b2 = block {
-        exit_loop
+    loop [b: %b2] {  # loop_1
+      %b2 = block {  # body
+        exit_loop  # loop_1
       }
-
+    }
     ret
   }
 }
@@ -887,11 +812,11 @@ TEST_F(IR_FromProgramTest, Switch) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleInstruction<ir::Switch>(m);
+    auto* swtch = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    auto cases = flow->Cases();
+    auto cases = swtch->Cases();
     ASSERT_EQ(3u, cases.Length());
 
     ASSERT_EQ(1u, cases[0].selectors.Length());
@@ -910,22 +835,17 @@ TEST_F(IR_FromProgramTest, Switch) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i, %b2), c: (1i, %b3), c: (default, %b4)]
-      # Case block
-      %b2 = block {
-        exit_switch
+    switch 1i [c: (0i, %b2), c: (1i, %b3), c: (default, %b4)] {  # switch_1
+      %b2 = block {  # case
+        exit_switch  # switch_1
       }
-
-      # Case block
-      %b3 = block {
-        exit_switch
+      %b3 = block {  # case
+        exit_switch  # switch_1
       }
-
-      # Case block
-      %b4 = block {
-        exit_switch
+      %b4 = block {  # case
+        exit_switch  # switch_1
       }
-
+    }
     ret
   }
 }
@@ -944,11 +864,11 @@ TEST_F(IR_FromProgramTest, Switch_MultiSelector) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleInstruction<ir::Switch>(m);
+    auto* swtch = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    auto cases = flow->Cases();
+    auto cases = swtch->Cases();
     ASSERT_EQ(1u, cases.Length());
     ASSERT_EQ(3u, cases[0].selectors.Length());
     ASSERT_TRUE(cases[0].selectors[0].val->Value()->Is<constant::Scalar<tint::i32>>());
@@ -964,12 +884,11 @@ TEST_F(IR_FromProgramTest, Switch_MultiSelector) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i 1i default, %b2)]
-      # Case block
-      %b2 = block {
-        exit_switch
+    switch 1i [c: (0i 1i default, %b2)] {  # switch_1
+      %b2 = block {  # case
+        exit_switch  # switch_1
       }
-
+    }
     ret
   }
 }
@@ -984,11 +903,11 @@ TEST_F(IR_FromProgramTest, Switch_OnlyDefault) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleInstruction<ir::Switch>(m);
+    auto* swtch = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    auto cases = flow->Cases();
+    auto cases = swtch->Cases();
     ASSERT_EQ(1u, cases.Length());
     ASSERT_EQ(1u, cases[0].selectors.Length());
     EXPECT_TRUE(cases[0].selectors[0].IsDefault());
@@ -996,12 +915,11 @@ TEST_F(IR_FromProgramTest, Switch_OnlyDefault) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (default, %b2)]
-      # Case block
-      %b2 = block {
-        exit_switch
+    switch 1i [c: (default, %b2)] {  # switch_1
+      %b2 = block {  # case
+        exit_switch  # switch_1
       }
-
+    }
     ret
   }
 }
@@ -1018,11 +936,11 @@ TEST_F(IR_FromProgramTest, Switch_WithBreak) {
     ASSERT_TRUE(res) << (!res ? res.Failure() : "");
 
     auto m = res.Move();
-    auto* flow = FindSingleInstruction<ir::Switch>(m);
+    auto* swtch = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    auto cases = flow->Cases();
+    auto cases = swtch->Cases();
     ASSERT_EQ(2u, cases.Length());
     ASSERT_EQ(1u, cases[0].selectors.Length());
     ASSERT_TRUE(cases[0].selectors[0].val->Value()->Is<constant::Scalar<tint::i32>>());
@@ -1037,17 +955,14 @@ TEST_F(IR_FromProgramTest, Switch_WithBreak) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i, %b2), c: (default, %b3)]
-      # Case block
-      %b2 = block {
-        exit_switch
+    switch 1i [c: (0i, %b2), c: (default, %b3)] {  # switch_1
+      %b2 = block {  # case
+        exit_switch  # switch_1
       }
-
-      # Case block
-      %b3 = block {
-        exit_switch
+      %b3 = block {  # case
+        exit_switch  # switch_1
       }
-
+    }
     ret
   }
 }
@@ -1066,11 +981,11 @@ TEST_F(IR_FromProgramTest, Switch_AllReturn) {
 
     auto m = res.Move();
 
-    auto* flow = FindSingleInstruction<ir::Switch>(m);
+    auto* swtch = FindSingleInstruction<ir::Switch>(m);
 
     ASSERT_EQ(1u, m.functions.Length());
 
-    auto cases = flow->Cases();
+    auto cases = swtch->Cases();
     ASSERT_EQ(2u, cases.Length());
     ASSERT_EQ(1u, cases[0].selectors.Length());
     ASSERT_TRUE(cases[0].selectors[0].val->Value()->Is<constant::Scalar<tint::i32>>());
@@ -1083,17 +998,14 @@ TEST_F(IR_FromProgramTest, Switch_AllReturn) {
     EXPECT_EQ(Disassemble(m),
               R"(%test_function = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
   %b1 = block {
-    switch 1i [c: (0i, %b2), c: (default, %b3)]
-      # Case block
-      %b2 = block {
+    switch 1i [c: (0i, %b2), c: (default, %b3)] {  # switch_1
+      %b2 = block {  # case
         ret
       }
-
-      # Case block
-      %b3 = block {
+      %b3 = block {  # case
         ret
       }
-
+    }
     ret
   }
 }

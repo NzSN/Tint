@@ -99,6 +99,23 @@ std::string_view Disassembler::IdOf(Value* value) {
     });
 }
 
+std::string_view Disassembler::NameOf(If* inst) {
+    TINT_ASSERT(IR, inst);
+    return if_names_.GetOrCreate(inst, [&] { return "if_" + std::to_string(if_names_.Count()); });
+}
+
+std::string_view Disassembler::NameOf(Loop* inst) {
+    TINT_ASSERT(IR, inst);
+    return loop_names_.GetOrCreate(inst,
+                                   [&] { return "loop_" + std::to_string(loop_names_.Count()); });
+}
+
+std::string_view Disassembler::NameOf(Switch* inst) {
+    TINT_ASSERT(IR, inst);
+    return switch_names_.GetOrCreate(
+        inst, [&] { return "switch_" + std::to_string(switch_names_.Count()); });
+}
+
 Source::Location Disassembler::MakeCurrentLocation() {
     return Source::Location{current_output_line_, out_.tellp() - current_output_start_pos_ + 1};
 }
@@ -111,9 +128,7 @@ std::string Disassembler::Disassemble() {
     }
 
     if (mod_.root_block) {
-        Indent() << "# Root block";
-        EmitLine();
-        EmitBlock(mod_.root_block);
+        EmitBlock(mod_.root_block, "root");
         EmitLine();
     }
 
@@ -123,7 +138,7 @@ std::string Disassembler::Disassemble() {
     return out_.str();
 }
 
-void Disassembler::EmitBlock(Block* blk) {
+void Disassembler::EmitBlock(Block* blk, std::string_view comment /* = "" */) {
     Indent();
 
     SourceMarker sm(this);
@@ -138,6 +153,10 @@ void Disassembler::EmitBlock(Block* blk) {
     sm.Store(blk);
 
     out_ << " {";
+    if (!comment.empty()) {
+        out_ << "  # " << comment;
+    }
+
     EmitLine();
     {
         ScopedIndent si(indent_size_);
@@ -468,7 +487,7 @@ void Disassembler::EmitInstruction(Instruction* inst) {
             }
             EmitLine();
         },
-        [&](Branch* b) { EmitBranch(b); },
+        [&](Terminator* b) { EmitTerminator(b); },
         [&](Default) { out_ << "Unknown instruction: " << inst->TypeInfo().name; });
 }
 
@@ -515,24 +534,29 @@ void Disassembler::EmitIf(If* i) {
     out_ << "]";
     sm.Store(i);
 
+    out_ << " {  # " << NameOf(i);
     EmitLine();
 
     if (has_true) {
         ScopedIndent si(indent_size_);
-        Indent() << "# True block";
-        EmitLine();
-
-        EmitBlock(i->True());
-        EmitLine();
+        EmitBlock(i->True(), "true");
     }
     if (has_false) {
         ScopedIndent si(indent_size_);
-        Indent() << "# False block";
-        EmitLine();
-
-        EmitBlock(i->False());
+        EmitBlock(i->False(), "false");
+    } else if (i->HasResults()) {
+        ScopedIndent si(indent_size_);
+        Indent();
+        out_ << "# implicit false block: exit_if undef";
+        for (size_t v = 1; v < i->Results().Length(); v++) {
+            out_ << ", undef";
+        }
         EmitLine();
     }
+
+    Indent();
+    out_ << "}";
+    EmitLine();
 }
 
 void Disassembler::EmitLoop(Loop* l) {
@@ -551,31 +575,27 @@ void Disassembler::EmitLoop(Loop* l) {
     out_ << "loop [" << utils::Join(parts, ", ") << "]";
     sm.Store(l);
 
+    out_ << " {  # " << NameOf(l);
     EmitLine();
 
     if (!l->Initializer()->IsEmpty()) {
         ScopedIndent si(indent_size_);
-        Indent() << "# Initializer block";
-        EmitLine();
-        EmitBlock(l->Initializer());
-        EmitLine();
+        EmitBlock(l->Initializer(), "initializer");
     }
 
     if (!l->Body()->IsEmpty()) {
         ScopedIndent si(indent_size_);
-        Indent() << "# Body block";
-        EmitLine();
-        EmitBlock(l->Body());
-        EmitLine();
+        EmitBlock(l->Body(), "body");
     }
 
     if (!l->Continuing()->IsEmpty()) {
         ScopedIndent si(indent_size_);
-        Indent() << "# Continuing block";
-        EmitLine();
-        EmitBlock(l->Continuing());
-        EmitLine();
+        EmitBlock(l->Continuing(), "continuing");
     }
+
+    Indent();
+    out_ << "}";
+    EmitLine();
 }
 
 void Disassembler::EmitSwitch(Switch* s) {
@@ -600,20 +620,20 @@ void Disassembler::EmitSwitch(Switch* s) {
         }
         out_ << ", %b" << IdOf(c.Block()) << ")";
     }
-    out_ << "]";
+    out_ << "] {  # " << NameOf(s);
     EmitLine();
 
     for (auto& c : s->Cases()) {
         ScopedIndent si(indent_size_);
-        Indent() << "# Case block";
-        EmitLine();
-
-        EmitBlock(c.Block());
-        EmitLine();
+        EmitBlock(c.Block(), "case");
     }
+
+    Indent();
+    out_ << "}";
+    EmitLine();
 }
 
-void Disassembler::EmitBranch(Branch* b) {
+void Disassembler::EmitTerminator(Terminator* b) {
     SourceMarker sm(this);
     tint::Switch(
         b,                                                                                        //
@@ -630,7 +650,7 @@ void Disassembler::EmitBranch(Branch* b) {
             out_ << " %b" << IdOf(bi->Loop()->Body());
         },
         [&](Unreachable*) { out_ << "unreachable"; },
-        [&](Default) { out_ << "Unknown branch " << b->TypeInfo().name; });
+        [&](Default) { out_ << "unknown terminator " << b->TypeInfo().name; });
 
     if (!b->Args().IsEmpty()) {
         out_ << " ";
@@ -638,6 +658,12 @@ void Disassembler::EmitBranch(Branch* b) {
     }
     sm.Store(b);
 
+    tint::Switch(
+        b,                                                                  //
+        [&](ir::ExitIf* e) { out_ << "  # " << NameOf(e->If()); },          //
+        [&](ir::ExitSwitch* e) { out_ << "  # " << NameOf(e->Switch()); },  //
+        [&](ir::ExitLoop* e) { out_ << "  # " << NameOf(e->Loop()); }       //
+    );
     EmitLine();
 }
 
