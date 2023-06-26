@@ -59,6 +59,7 @@
 #include "src/tint/type/u32.h"
 #include "src/tint/type/vector.h"
 #include "src/tint/type/void.h"
+#include "src/tint/utils/scoped_assignment.h"
 
 namespace tint::ir {
 
@@ -75,14 +76,6 @@ class Builder {
     template <typename... TYPES>
     using DisableIfVectorLike = utils::traits::EnableIf<
         !utils::IsVectorLike<utils::traits::Decay<utils::traits::NthTypeOf<0, TYPES..., void>>>>;
-
-    template <typename T>
-    T* Append(T* val) {
-        if (current_block_) {
-            current_block_->Append(val);
-        }
-        return val;
-    }
 
     /// If set, any created instruction will be auto-appended to the block.
     ir::Block* current_block_ = nullptr;
@@ -101,7 +94,28 @@ class Builder {
     /// Creates a new builder wrapping the given block
     /// @param b the block to set as the current block
     /// @returns the builder
-    Builder With(Block* b) { return Builder(ir, b); }
+    Builder With(ir::Block* b) { return Builder(ir, b); }
+
+    /// Calls @p cb with the builder appending to block @p b
+    /// @param b the block to set as the block to append to
+    /// @param cb the function to call with the builder appending to block @p b
+    template <typename FUNCTION>
+    void With(ir::Block* b, FUNCTION&& cb) {
+        TINT_SCOPED_ASSIGNMENT(current_block_, b);
+        cb();
+    }
+
+    /// Appends and returns the instruction @p val to the current block. If there is no current
+    /// block bound, then @p val is just returned.
+    /// @param val the instruction to append
+    /// @returns the instruction
+    template <typename T>
+    T* Append(T* val) {
+        if (current_block_) {
+            current_block_->Append(val);
+        }
+        return val;
+    }
 
     /// @returns a new block
     ir::Block* Block();
@@ -157,7 +171,7 @@ class Builder {
     /// @param val the constant value
     /// @returns the new constant
     ir::Constant* Constant(const constant::Value* val) {
-        return ir.constants.GetOrCreate(val, [&]() { return ir.values.Create<ir::Constant>(val); });
+        return ir.constants.GetOrCreate(val, [&] { return ir.values.Create<ir::Constant>(val); });
     }
 
     /// Creates a ir::Constant for an i32 Scalar

@@ -417,7 +417,7 @@ class Impl {
         }
         ir_func->SetParams(params);
 
-        TINT_SCOPED_ASSIGNMENT(current_block_, ir_func->StartTarget());
+        TINT_SCOPED_ASSIGNMENT(current_block_, ir_func->Block());
         EmitBlock(ast_func->body);
 
         // Add a terminator if one was not already created.
@@ -701,6 +701,9 @@ class Impl {
                 SetTerminator(builder_.ExitLoop(loop_inst));
             }
 
+            EmitStatements(stmt->body->statements);
+
+            // The current block didn't `break`, `return` or `continue`, go to the continuing block.
             if (NeedTerminator()) {
                 SetTerminator(builder_.Continue(loop_inst));
             }

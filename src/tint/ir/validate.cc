@@ -158,10 +158,11 @@ class Validator {
                          std::string("root block: invalid instruction: ") + inst->TypeInfo().name);
                 continue;
             }
+            CheckVar(var);
         }
     }
 
-    void CheckFunction(Function* func) { CheckBlock(func->StartTarget()); }
+    void CheckFunction(Function* func) { CheckBlock(func->Block()); }
 
     void CheckBlock(Block* blk) {
         TINT_SCOPED_ASSIGNMENT(current_block_, blk);
@@ -181,10 +182,39 @@ class Validator {
     }
 
     void CheckInstruction(Instruction* inst) {
+        if (!inst->Alive()) {
+            AddError(inst, "destroyed instruction found in instruction list");
+        }
+        if (inst->Result()) {
+            if (inst->Result()->Source() == nullptr) {
+                AddError(inst, "instruction result source is undefined");
+            } else if (inst->Result()->Source() != inst) {
+                AddError(inst, "instruction result source has wrong instruction");
+            }
+        }
+
+        auto ops = inst->Operands();
+        for (size_t i = 0; i < ops.Length(); ++i) {
+            auto* op = ops[i];
+            if (!op) {
+                continue;
+            }
+
+            // Note, a `nullptr` is a valid operand in some cases, like `var` so we can't just check
+            // for `nullptr` here.
+            if (!op->Alive()) {
+                AddError(inst, "instruction has undefined operand");
+            }
+
+            if (!op->Usages().Contains({inst, i})) {
+                AddError(inst, i, "instruction operand missing usage");
+            }
+        }
+
         tint::Switch(
             inst,                                        //
             [&](Access* a) { CheckAccess(a); },          //
-            [&](Binary*) {},                             //
+            [&](Binary* b) { CheckBinary(b); },          //
             [&](Call* c) { CheckCall(c); },              //
             [&](If* if_) { CheckIf(if_); },              //
             [&](Load*) {},                               //
@@ -194,7 +224,7 @@ class Validator {
             [&](Swizzle*) {},                            //
             [&](Terminator* b) { CheckTerminator(b); },  //
             [&](Unary*) {},                              //
-            [&](Var*) {},                                //
+            [&](Var* var) { CheckVar(var); },            //
             [&](Default) {
                 AddError(std::string("missing validation of: ") + inst->TypeInfo().name);
             });
@@ -282,6 +312,18 @@ class Validator {
         }
     }
 
+    void CheckBinary(ir::Binary* b) {
+        if (b->LHS() == nullptr) {
+            AddError(b, "binary: left operand is undefined");
+        }
+        if (b->RHS() == nullptr) {
+            AddError(b, "binary: right operand is undefined");
+        }
+        if (b->Result() == nullptr) {
+            AddError(b, "binary: result is undefined");
+        }
+    }
+
     void CheckTerminator(ir::Terminator* b) {
         tint::Switch(
             b,                           //
@@ -304,10 +346,22 @@ class Validator {
 
     void CheckIf(If* if_) {
         if (!if_->Condition()) {
-            AddError(if_, "if: condition is nullptr");
+            AddError(if_, "if: condition is undefined");
         }
         if (if_->Condition() && !if_->Condition()->Type()->Is<type::Bool>()) {
             AddError(if_, If::kConditionOperandOffset, "if: condition must be a `bool` type");
+        }
+    }
+
+    void CheckVar(Var* var) {
+        if (var->Result() == nullptr) {
+            AddError(var, "var: result is undefined");
+        }
+
+        if (var->Result() && var->Initializer()) {
+            if (var->Initializer()->Type() != var->Result()->Type()->UnwrapPtr()) {
+                AddError(var, "var initializer has incorrect type");
+            }
         }
     }
 };  // namespace

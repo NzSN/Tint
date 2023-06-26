@@ -71,7 +71,7 @@ TEST_F(IR_ValidateTest, Function) {
     mod.functions.Push(f);
 
     f->SetParams({b.FunctionParam(ty.i32()), b.FunctionParam(ty.f32())});
-    f->StartTarget()->Append(b.Return(f));
+    f->Block()->Append(b.Return(f));
 
     auto res = ir::Validate(mod);
     EXPECT_TRUE(res) << res.Failure().str();
@@ -101,9 +101,10 @@ TEST_F(IR_ValidateTest, Valid_Access_Value) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.f32(), obj, 1_u, 0_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.f32(), obj, 1_u, 0_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     EXPECT_TRUE(res) << res.Failure().str();
@@ -115,9 +116,10 @@ TEST_F(IR_ValidateTest, Valid_Access_Ptr) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.ptr<private_, f32>(), obj, 1_u, 0_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.ptr<private_, f32>(), obj, 1_u, 0_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     EXPECT_TRUE(res) << res.Failure().str();
@@ -129,9 +131,10 @@ TEST_F(IR_ValidateTest, Access_NegativeIndex) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.f32(), obj, -1_i);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.f32(), obj, -1_i);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -159,9 +162,10 @@ TEST_F(IR_ValidateTest, Access_OOB_Index_Value) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.f32(), obj, 1_u, 3_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.f32(), obj, 1_u, 3_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -193,9 +197,10 @@ TEST_F(IR_ValidateTest, Access_OOB_Index_Ptr) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.ptr<private_, f32>(), obj, 1_u, 3_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.ptr<private_, f32>(), obj, 1_u, 3_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -228,9 +233,10 @@ TEST_F(IR_ValidateTest, Access_StaticallyUnindexableType_Value) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.f32(), obj, 1_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.f32(), obj, 1_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -258,9 +264,10 @@ TEST_F(IR_ValidateTest, Access_StaticallyUnindexableType_Ptr) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.ptr<private_, f32>(), obj, 1_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.ptr<private_, f32>(), obj, 1_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -294,9 +301,10 @@ TEST_F(IR_ValidateTest, Access_DynamicallyUnindexableType_Value) {
     f->SetParams({obj, idx});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.i32(), obj, idx);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.i32(), obj, idx);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -336,9 +344,10 @@ TEST_F(IR_ValidateTest, Access_DynamicallyUnindexableType_Ptr) {
     f->SetParams({obj, idx});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.i32(), obj, idx);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.i32(), obj, idx);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -372,9 +381,10 @@ TEST_F(IR_ValidateTest, Access_Incorrect_Type_Value_Value) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.i32(), obj, 1_u, 1_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.i32(), obj, 1_u, 1_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -403,9 +413,10 @@ TEST_F(IR_ValidateTest, Access_Incorrect_Type_Ptr_Ptr) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.ptr<private_, i32>(), obj, 1_u, 1_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.ptr<private_, i32>(), obj, 1_u, 1_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -435,9 +446,10 @@ TEST_F(IR_ValidateTest, Access_Incorrect_Type_Ptr_Value) {
     f->SetParams({obj});
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Access(ty.f32(), obj, 1_u, 1_u);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Access(ty.f32(), obj, 1_u, 1_u);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -465,9 +477,10 @@ TEST_F(IR_ValidateTest, Block_TerminatorInMiddle) {
     auto* f = b.Function("my_func", ty.void_());
     mod.functions.Push(f);
 
-    auto sb = b.With(f->StartTarget());
-    sb.Return(f);
-    sb.Return(f);
+    b.With(f->Block(), [&] {
+        b.Return(f);
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -498,8 +511,8 @@ TEST_F(IR_ValidateTest, If_ConditionIsBool) {
     if_->True()->Append(b.Return(f));
     if_->False()->Append(b.Return(f));
 
-    f->StartTarget()->Append(if_);
-    f->StartTarget()->Append(b.Return(f));
+    f->Block()->Append(if_);
+    f->Block()->Append(b.Return(f));
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
@@ -522,6 +535,309 @@ note: # Disassembly
         ret
       }
     }
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Var_RootBlock_NullResult) {
+    auto* v = mod.instructions.Create<ir::Var>(nullptr);
+    b.RootBlock()->Append(v);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:2:11 error: var: result is undefined
+  undef = var
+          ^^^
+
+:1:1 note: In block
+%b1 = block {  # root
+^^^^^^^^^^^
+
+note: # Disassembly
+%b1 = block {  # root
+  undef = var
+}
+
+)");
+}
+
+TEST_F(IR_ValidateTest, Var_Function_NullResult) {
+    auto* v = mod.instructions.Create<ir::Var>(nullptr);
+
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    sb.Append(v);
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:13 error: var: result is undefined
+    undef = var
+            ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    undef = var
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Var_Init_WrongType) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    auto* v = sb.Var(ty.ptr<function, f32>());
+    sb.Return(f);
+
+    auto* result = sb.InstructionResult(ty.i32());
+    v->SetInitializer(result);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: var initializer has incorrect type
+    %2:ptr<function, f32, read_write> = var, %3
+                                        ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:ptr<function, f32, read_write> = var, %3
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Instruction_AppendedDead) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    auto* v = sb.Var(ty.ptr<function, f32>());
+    auto* ret = sb.Return(f);
+
+    v->Destroy();
+    v->InsertBefore(ret);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: destroyed instruction found in instruction list
+    %2:ptr<function, f32, read_write> = var
+                                        ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+:3:41 error: instruction result source is undefined
+    %2:ptr<function, f32, read_write> = var
+                                        ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:ptr<function, f32, read_write> = var
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Instruction_NullSource) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    auto* v = sb.Var(ty.ptr<function, f32>());
+    sb.Return(f);
+
+    v->Result()->SetSource(nullptr);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: instruction result source is undefined
+    %2:ptr<function, f32, read_write> = var
+                                        ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:ptr<function, f32, read_write> = var
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Instruction_DeadOperand) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    auto* v = sb.Var(ty.ptr<function, f32>());
+    sb.Return(f);
+
+    auto* result = sb.InstructionResult(ty.f32());
+    result->Destroy();
+    v->SetInitializer(result);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: instruction has undefined operand
+    %2:ptr<function, f32, read_write> = var, %3
+                                        ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:ptr<function, f32, read_write> = var, %3
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Instruction_OperandUsageRemoved) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    auto* v = sb.Var(ty.ptr<function, f32>());
+    sb.Return(f);
+
+    auto* result = sb.InstructionResult(ty.f32());
+    v->SetInitializer(result);
+    result->RemoveUsage({v, 0u});
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:46 error: instruction operand missing usage
+    %2:ptr<function, f32, read_write> = var, %3
+                                             ^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:ptr<function, f32, read_write> = var, %3
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Binary_LHS_Nullptr) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    sb.Add(ty.i32(), nullptr, sb.Constant(2_i));
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: binary: left operand is undefined
+    %2:i32 = add undef, 2i
+    ^^^^^^^^^^^^^^^^^^^^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:i32 = add undef, 2i
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Binary_RHS_Nullptr) {
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    sb.Add(ty.i32(), sb.Constant(2_i), nullptr);
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: binary: right operand is undefined
+    %2:i32 = add 2i, undef
+    ^^^^^^^^^^^^^^^^^^^^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %2:i32 = add 2i, undef
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidateTest, Binary_Result_Nullptr) {
+    auto* bin = mod.instructions.Create<ir::Binary>(nullptr, ir::Binary::Kind::kAdd,
+                                                    b.Constant(3_i), b.Constant(2_i));
+
+    auto* f = b.Function("my_func", ty.void_());
+    mod.functions.Push(f);
+
+    auto sb = b.With(f->Block());
+    sb.Append(bin);
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_FALSE(res);
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: binary: result is undefined
+    undef = add 3i, 2i
+    ^^^^^^^^^^^^^^^^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    undef = add 3i, 2i
     ret
   }
 }
