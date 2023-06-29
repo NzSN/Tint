@@ -17,7 +17,9 @@
 
 #include <utility>
 
+#include "src/tint/constant/composite.h"
 #include "src/tint/constant/scalar.h"
+#include "src/tint/constant/splat.h"
 #include "src/tint/ir/access.h"
 #include "src/tint/ir/binary.h"
 #include "src/tint/ir/bitcast.h"
@@ -559,6 +561,12 @@ class Builder {
     /// @returns the instruction
     ir::Var* Var(const type::Pointer* type);
 
+    /// Creates a new `var` declaration with a name
+    /// @param name the var name
+    /// @param type the var type
+    /// @returns the instruction
+    ir::Var* Var(std::string_view name, const type::Pointer* type);
+
     /// Creates a return instruction
     /// @param func the function being returned
     /// @returns the instruction
@@ -572,6 +580,11 @@ class Builder {
     /// @returns the instruction
     template <typename ARG>
     ir::Return* Return(ir::Function* func, ARG&& value) {
+        if constexpr (std::is_same_v<std::decay_t<ARG>, ir::Value*>) {
+            if (value == nullptr) {
+                return Append(ir.instructions.Create<ir::Return>(func));
+            }
+        }
         return Append(ir.instructions.Create<ir::Return>(func, Value(std::forward<ARG>(value))));
     }
 
@@ -591,7 +604,7 @@ class Builder {
     /// @param args the arguments for the target MultiInBlock
     /// @returns the instruction
     template <typename CONDITION, typename... ARGS>
-    ir::BreakIf* BreakIf(CONDITION&& condition, ir::Loop* loop, ARGS&&... args) {
+    ir::BreakIf* BreakIf(ir::Loop* loop, CONDITION&& condition, ARGS&&... args) {
         return Append(ir.instructions.Create<ir::BreakIf>(
             Value(std::forward<CONDITION>(condition)), loop, Values(std::forward<ARGS>(args)...)));
     }
@@ -657,6 +670,12 @@ class Builder {
     /// @param type the parameter type
     /// @returns the value
     ir::FunctionParam* FunctionParam(const type::Type* type);
+
+    /// Creates a new `FunctionParam` with a name.
+    /// @param name the parameter name
+    /// @param type the parameter type
+    /// @returns the value
+    ir::FunctionParam* FunctionParam(std::string_view name, const type::Type* type);
 
     /// Creates a new `Access`
     /// @param type the return type

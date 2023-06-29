@@ -66,12 +66,9 @@ class Validator {
         }
 
         if (diagnostics_.contains_errors()) {
-            // If a diassembly file was generated then one of the diagnostics referenced the
-            // disasembly. Emit the entire disassembly file at the end of the messages.
-            if (mod_.disassembly_file) {
-                diagnostics_.add_note(tint::diag::System::IR,
-                                      "# Disassembly\n" + mod_.disassembly_file->content.data, {});
-            }
+            DisassembleIfNeeded();
+            diagnostics_.add_note(tint::diag::System::IR,
+                                  "# Disassembly\n" + mod_.disassembly_file->content.data, {});
             return std::move(diagnostics_);
         }
         return Success{};
@@ -83,6 +80,7 @@ class Validator {
     Disassembler dis_{mod_};
 
     Block* current_block_ = nullptr;
+    utils::Hashset<Function*, 4> seen_functions_;
 
     void DisassembleIfNeeded() {
         if (mod_.disassembly_file) {
@@ -105,6 +103,17 @@ class Validator {
     void AddError(Instruction* inst, size_t idx, std::string err) {
         DisassembleIfNeeded();
         auto src = dis_.OperandSource(Usage{inst, static_cast<uint32_t>(idx)});
+        src.file = mod_.disassembly_file.get();
+        AddError(std::move(err), src);
+
+        if (current_block_) {
+            AddNote(current_block_, "In block");
+        }
+    }
+
+    void AddResultError(Instruction* inst, size_t idx, std::string err) {
+        DisassembleIfNeeded();
+        auto src = dis_.ResultSource(Usage{inst, static_cast<uint32_t>(idx)});
         src.file = mod_.disassembly_file.get();
         AddError(std::move(err), src);
 
@@ -142,7 +151,30 @@ class Validator {
         diagnostics_.add_note(tint::diag::System::IR, std::move(note), src);
     }
 
-    // std::string Name(Value* v) { return mod_.NameOf(v).Name(); }
+    std::string Name(Value* v) { return mod_.NameOf(v).Name(); }
+
+    template <typename FUNC>
+    void CheckOperandNotNull(ir::Instruction* inst,
+                             ir::Value* operand,
+                             size_t idx,
+                             std::string_view name,
+                             FUNC&& cb) {
+        if (operand == nullptr) {
+            AddError(inst, idx, std::string(name) + ": " + cb(idx) + " operand is undefined");
+        }
+    }
+
+    template <typename FUNC>
+    void CheckOperandsNotNull(ir::Instruction* inst,
+                              size_t start_operand,
+                              size_t end_operand,
+                              std::string_view name,
+                              FUNC&& cb) {
+        auto operands = inst->Operands();
+        for (size_t i = start_operand; i <= end_operand; i++) {
+            CheckOperandNotNull(inst, operands[i], i, name, cb);
+        }
+    }
 
     void CheckRootBlock(Block* blk) {
         if (!blk) {
@@ -158,11 +190,17 @@ class Validator {
                          std::string("root block: invalid instruction: ") + inst->TypeInfo().name);
                 continue;
             }
-            CheckVar(var);
+            CheckInstruction(var);
         }
     }
 
-    void CheckFunction(Function* func) { CheckBlock(func->Block()); }
+    void CheckFunction(Function* func) {
+        if (!seen_functions_.Add(func)) {
+            AddError("function '" + Name(func) + "' added to module multiple times");
+        }
+
+        CheckBlock(func->Block());
+    }
 
     void CheckBlock(Block* blk) {
         TINT_SCOPED_ASSIGNMENT(current_block_, blk);
@@ -184,12 +222,22 @@ class Validator {
     void CheckInstruction(Instruction* inst) {
         if (!inst->Alive()) {
             AddError(inst, "destroyed instruction found in instruction list");
+            return;
         }
-        if (inst->Result()) {
-            if (inst->Result()->Source() == nullptr) {
-                AddError(inst, "instruction result source is undefined");
-            } else if (inst->Result()->Source() != inst) {
-                AddError(inst, "instruction result source has wrong instruction");
+        if (inst->HasResults()) {
+            auto results = inst->Results();
+            for (size_t i = 0; i < results.Length(); ++i) {
+                auto* res = results[i];
+                if (!res) {
+                    AddResultError(inst, i, "instruction result is undefined");
+                    continue;
+                }
+
+                if (res->Source() == nullptr) {
+                    AddResultError(inst, i, "instruction result source is undefined");
+                } else if (res->Source() != inst) {
+                    AddResultError(inst, i, "instruction result source has wrong instruction");
+                }
             }
         }
 
@@ -203,7 +251,7 @@ class Validator {
             // Note, a `nullptr` is a valid operand in some cases, like `var` so we can't just check
             // for `nullptr` here.
             if (!op->Alive()) {
-                AddError(inst, "instruction has undefined operand");
+                AddError(inst, i, "instruction has operand which is not alive");
             }
 
             if (!op->Usages().Contains({inst, i})) {
@@ -223,7 +271,7 @@ class Validator {
             [&](Switch*) {},                             //
             [&](Swizzle*) {},                            //
             [&](Terminator* b) { CheckTerminator(b); },  //
-            [&](Unary*) {},                              //
+            [&](Unary* u) { CheckUnary(u); },            //
             [&](Var* var) { CheckVar(var); },            //
             [&](Default) {
                 AddError(std::string("missing validation of: ") + inst->TypeInfo().name);
@@ -313,14 +361,20 @@ class Validator {
     }
 
     void CheckBinary(ir::Binary* b) {
-        if (b->LHS() == nullptr) {
-            AddError(b, "binary: left operand is undefined");
-        }
-        if (b->RHS() == nullptr) {
-            AddError(b, "binary: right operand is undefined");
-        }
-        if (b->Result() == nullptr) {
-            AddError(b, "binary: result is undefined");
+        CheckOperandsNotNull(b, Binary::kLhsOperandOffset, Binary::kRhsOperandOffset, "binary",
+                             [](size_t err_idx) {
+                                 return (err_idx == Binary::kLhsOperandOffset) ? "left" : "right";
+                             });
+    }
+
+    void CheckUnary(ir::Unary* u) {
+        CheckOperandNotNull(u, u->Val(), Unary::kValueOperandOffset, "unary",
+                            [](size_t) { return "value"; });
+
+        if (u->Result() && u->Val()) {
+            if (u->Result()->Type() != u->Val()->Type()) {
+                AddError(u, "unary: result type must match value type");
+            }
         }
     }
 
@@ -345,19 +399,15 @@ class Validator {
     }
 
     void CheckIf(If* if_) {
-        if (!if_->Condition()) {
-            AddError(if_, "if: condition is undefined");
-        }
+        CheckOperandNotNull(if_, if_->Condition(), If::kConditionOperandOffset, "if",
+                            [](size_t) { return "condition"; });
+
         if (if_->Condition() && !if_->Condition()->Type()->Is<type::Bool>()) {
             AddError(if_, If::kConditionOperandOffset, "if: condition must be a `bool` type");
         }
     }
 
     void CheckVar(Var* var) {
-        if (var->Result() == nullptr) {
-            AddError(var, "var: result is undefined");
-        }
-
         if (var->Result() && var->Initializer()) {
             if (var->Initializer()->Type() != var->Result()->Type()->UnwrapPtr()) {
                 AddError(var, "var initializer has incorrect type");
