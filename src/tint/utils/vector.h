@@ -63,7 +63,11 @@ namespace tint::utils {
 template <typename T, size_t N>
 class Vector {
   public:
-    /// Type of `T`.
+    /// Alias to `T*`.
+    using iterator = T*;
+    /// Alias to `const T*`.
+    using const_iterator = const T*;
+    /// Alias to `T`.
     using value_type = T;
     /// Value of `N`
     static constexpr size_t static_length = N;
@@ -328,6 +332,24 @@ class Vector {
         return val;
     }
 
+    /// Inserts the element @p element before the element at @p before
+    /// @param before the index of the element to insert before
+    /// @param element the element to insert
+    template <typename EL>
+    void Insert(size_t before, EL&& element) {
+        TINT_ASSERT(Utils, before <= Length());
+        size_t n = Length();
+        Resize(Length() + 1);
+        // Shuffle
+        for (size_t i = n; i > before; i--) {
+            auto& src = impl_.slice.data[i - 1];
+            auto& dst = impl_.slice.data[i];
+            dst = std::move(src);
+        }
+        // Insert
+        impl_.slice.data[before] = std::forward<EL>(element);
+    }
+
     /// Removes @p count elements from the vector
     /// @param start the index of the first element to remove
     /// @param count the number of elements to remove
@@ -358,6 +380,16 @@ class Vector {
     /// Sort sorts the vector in-place using `T::operator<()`
     void Sort() {
         Sort([](auto& a, auto& b) { return a < b; });
+    }
+
+    /// Reverse reversed the vector in-place
+    void Reverse() {
+        size_t n = Length();
+        size_t mid = n / 2;
+        auto& self = *this;
+        for (size_t i = 0; i < mid; i++) {
+            std::swap(self[i], self[n - i - 1]);
+        }
     }
 
     /// @returns true if the predicate function returns true for any of the elements of the vector

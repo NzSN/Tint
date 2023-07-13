@@ -43,11 +43,15 @@ class ExitLoop;
 class ExitSwitch;
 class Function;
 class If;
+class IntrinsicCall;
+class Let;
 class Load;
+class LoadVectorElement;
 class Loop;
 class Module;
 class MultiInBlock;
 class Store;
+class StoreVectorElement;
 class Switch;
 class Swizzle;
 class Terminator;
@@ -206,9 +210,17 @@ class GeneratorImplIr {
     /// @param convert the convert instruction to emit
     void EmitConvert(ir::Convert* convert);
 
+    /// Emit an intrinsic call instruction.
+    /// @param call the intrinsic call instruction to emit
+    void EmitIntrinsicCall(ir::IntrinsicCall* call);
+
     /// Emit a load instruction.
     /// @param load the load instruction to emit
     void EmitLoad(ir::Load* load);
+
+    /// Emit a load vector element instruction.
+    /// @param load the load vector element instruction to emit
+    void EmitLoadVectorElement(ir::LoadVectorElement* load);
 
     /// Emit a loop instruction.
     /// @param loop the loop instruction to emit
@@ -217,6 +229,10 @@ class GeneratorImplIr {
     /// Emit a store instruction.
     /// @param store the store instruction to emit
     void EmitStore(ir::Store* store);
+
+    /// Emit a store vector element instruction.
+    /// @param store the store vector element instruction to emit
+    void EmitStoreVectorElement(ir::StoreVectorElement* store);
 
     /// Emit a switch instruction.
     /// @param swtch the switch instruction to emit
@@ -237,6 +253,10 @@ class GeneratorImplIr {
     /// Emit a var instruction.
     /// @param var the var instruction to emit
     void EmitVar(ir::Var* var);
+
+    /// Emit a let instruction.
+    /// @param let the let instruction to emit
+    void EmitLet(ir::Let* let);
 
     /// Emit a terminator instruction.
     /// @param term the terminator instruction to emit

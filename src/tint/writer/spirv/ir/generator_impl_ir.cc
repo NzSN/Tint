@@ -31,6 +31,7 @@
 #include "src/tint/ir/exit_loop.h"
 #include "src/tint/ir/exit_switch.h"
 #include "src/tint/ir/if.h"
+#include "src/tint/ir/let.h"
 #include "src/tint/ir/load.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
@@ -39,9 +40,12 @@
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
 #include "src/tint/ir/switch.h"
+#include "src/tint/ir/terminate_invocation.h"
 #include "src/tint/ir/terminator.h"
 #include "src/tint/ir/transform/add_empty_entry_point.h"
 #include "src/tint/ir/transform/block_decorated_structs.h"
+#include "src/tint/ir/transform/builtin_polyfill_spirv.h"
+#include "src/tint/ir/transform/demote_to_helper.h"
 #include "src/tint/ir/transform/merge_return.h"
 #include "src/tint/ir/transform/shader_io_spirv.h"
 #include "src/tint/ir/transform/var_for_dynamic_index.h"
@@ -88,6 +92,8 @@ void Sanitize(ir::Module* module) {
 
     manager.Add<ir::transform::AddEmptyEntryPoint>();
     manager.Add<ir::transform::BlockDecoratedStructs>();
+    manager.Add<ir::transform::BuiltinPolyfillSpirv>();
+    manager.Add<ir::transform::DemoteToHelper>();
     manager.Add<ir::transform::MergeReturn>();
     manager.Add<ir::transform::ShaderIOSpirv>();
     manager.Add<ir::transform::VarForDynamicIndex>();
@@ -735,23 +741,27 @@ void GeneratorImplIr::EmitIncomingPhis(ir::MultiInBlock* block) {
 void GeneratorImplIr::EmitBlockInstructions(ir::Block* block) {
     for (auto* inst : *block) {
         Switch(
-            inst,                                             //
-            [&](ir::Access* a) { EmitAccess(a); },            //
-            [&](ir::Binary* b) { EmitBinary(b); },            //
-            [&](ir::Bitcast* b) { EmitBitcast(b); },          //
-            [&](ir::BuiltinCall* b) { EmitBuiltinCall(b); },  //
-            [&](ir::Construct* c) { EmitConstruct(c); },      //
-            [&](ir::Convert* c) { EmitConvert(c); },          //
-            [&](ir::Load* l) { EmitLoad(l); },                //
-            [&](ir::Loop* l) { EmitLoop(l); },                //
-            [&](ir::Switch* sw) { EmitSwitch(sw); },          //
-            [&](ir::Swizzle* s) { EmitSwizzle(s); },          //
-            [&](ir::Store* s) { EmitStore(s); },              //
-            [&](ir::UserCall* c) { EmitUserCall(c); },        //
-            [&](ir::Unary* u) { EmitUnary(u); },              //
-            [&](ir::Var* v) { EmitVar(v); },                  //
-            [&](ir::If* i) { EmitIf(i); },                    //
-            [&](ir::Terminator* t) { EmitTerminator(t); },    //
+            inst,                                                           //
+            [&](ir::Access* a) { EmitAccess(a); },                          //
+            [&](ir::Binary* b) { EmitBinary(b); },                          //
+            [&](ir::Bitcast* b) { EmitBitcast(b); },                        //
+            [&](ir::BuiltinCall* b) { EmitBuiltinCall(b); },                //
+            [&](ir::Construct* c) { EmitConstruct(c); },                    //
+            [&](ir::Convert* c) { EmitConvert(c); },                        //
+            [&](ir::IntrinsicCall* i) { EmitIntrinsicCall(i); },            //
+            [&](ir::Load* l) { EmitLoad(l); },                              //
+            [&](ir::LoadVectorElement* l) { EmitLoadVectorElement(l); },    //
+            [&](ir::Loop* l) { EmitLoop(l); },                              //
+            [&](ir::Switch* sw) { EmitSwitch(sw); },                        //
+            [&](ir::Swizzle* s) { EmitSwizzle(s); },                        //
+            [&](ir::Store* s) { EmitStore(s); },                            //
+            [&](ir::StoreVectorElement* s) { EmitStoreVectorElement(s); },  //
+            [&](ir::UserCall* c) { EmitUserCall(c); },                      //
+            [&](ir::Unary* u) { EmitUnary(u); },                            //
+            [&](ir::Var* v) { EmitVar(v); },                                //
+            [&](ir::Let* l) { EmitLet(l); },                                //
+            [&](ir::If* i) { EmitIf(i); },                                  //
+            [&](ir::Terminator* t) { EmitTerminator(t); },                  //
             [&](Default) {
                 TINT_ICE(Writer, diagnostics_)
                     << "unimplemented instruction: " << inst->TypeInfo().name;
@@ -804,6 +814,7 @@ void GeneratorImplIr::EmitTerminator(ir::Terminator* t) {
         [&](ir::NextIteration*) {
             current_function_.push_inst(spv::Op::OpBranch, {loop_header_label_});
         },
+        [&](ir::TerminateInvocation*) { current_function_.push_inst(spv::Op::OpKill, {}); },
         [&](ir::Unreachable*) { current_function_.push_inst(spv::Op::OpUnreachable, {}); },
 
         [&](Default) {
@@ -1204,6 +1215,12 @@ void GeneratorImplIr::EmitBuiltinCall(ir::BuiltinCall* builtin) {
         case builtin::Function::kFloor:
             glsl_ext_inst(GLSLstd450Floor);
             break;
+        case builtin::Function::kFract:
+            glsl_ext_inst(GLSLstd450Fract);
+            break;
+        case builtin::Function::kFrexp:
+            glsl_ext_inst(GLSLstd450FrexpStruct);
+            break;
         case builtin::Function::kInverseSqrt:
             glsl_ext_inst(GLSLstd450InverseSqrt);
             break;
@@ -1233,6 +1250,9 @@ void GeneratorImplIr::EmitBuiltinCall(ir::BuiltinCall* builtin) {
             } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450UMin);
             }
+            break;
+        case builtin::Function::kModf:
+            glsl_ext_inst(GLSLstd450ModfStruct);
             break;
         case builtin::Function::kNormalize:
             glsl_ext_inst(GLSLstd450Normalize);
@@ -1359,9 +1379,41 @@ void GeneratorImplIr::EmitConvert(ir::Convert* convert) {
     current_function_.push_inst(op, std::move(operands));
 }
 
+void GeneratorImplIr::EmitIntrinsicCall(ir::IntrinsicCall* call) {
+    auto id = Value(call);
+
+    spv::Op op = spv::Op::Max;
+    switch (call->Kind()) {
+        case ir::IntrinsicCall::Kind::kSpirvDot:
+            op = spv::Op::OpDot;
+            break;
+        case ir::IntrinsicCall::Kind::kSpirvSelect:
+            op = spv::Op::OpSelect;
+            break;
+    }
+
+    OperandList operands = {Type(call->Result()->Type()), id};
+    for (auto* arg : call->Args()) {
+        operands.push_back(Value(arg));
+    }
+    current_function_.push_inst(op, operands);
+}
+
 void GeneratorImplIr::EmitLoad(ir::Load* load) {
     current_function_.push_inst(spv::Op::OpLoad,
                                 {Type(load->Result()->Type()), Value(load), Value(load->From())});
+}
+
+void GeneratorImplIr::EmitLoadVectorElement(ir::LoadVectorElement* load) {
+    auto* vec_ptr_ty = load->From()->Type()->As<type::Pointer>();
+    auto* el_ty = load->Result()->Type();
+    auto* el_ptr_ty = ir_->Types().ptr(vec_ptr_ty->AddressSpace(), el_ty, vec_ptr_ty->Access());
+    auto el_ptr_id = module_.NextId();
+    current_function_.push_inst(
+        spv::Op::OpAccessChain,
+        {Type(el_ptr_ty), el_ptr_id, Value(load->From()), Value(load->Index())});
+    current_function_.push_inst(spv::Op::OpLoad,
+                                {Type(load->Result()->Type()), Value(load), el_ptr_id});
 }
 
 void GeneratorImplIr::EmitLoop(ir::Loop* loop) {
@@ -1471,6 +1523,17 @@ void GeneratorImplIr::EmitStore(ir::Store* store) {
     current_function_.push_inst(spv::Op::OpStore, {Value(store->To()), Value(store->From())});
 }
 
+void GeneratorImplIr::EmitStoreVectorElement(ir::StoreVectorElement* store) {
+    auto* vec_ptr_ty = store->To()->Type()->As<type::Pointer>();
+    auto* el_ty = store->Value()->Type();
+    auto* el_ptr_ty = ir_->Types().ptr(vec_ptr_ty->AddressSpace(), el_ty, vec_ptr_ty->Access());
+    auto el_ptr_id = module_.NextId();
+    current_function_.push_inst(
+        spv::Op::OpAccessChain,
+        {Type(el_ptr_ty), el_ptr_id, Value(store->To()), Value(store->Index())});
+    current_function_.push_inst(spv::Op::OpStore, {el_ptr_id, Value(store->Value())});
+}
+
 void GeneratorImplIr::EmitUnary(ir::Unary* unary) {
     auto id = Value(unary);
     auto* ty = unary->Result()->Type();
@@ -1567,6 +1630,11 @@ void GeneratorImplIr::EmitVar(ir::Var* var) {
     if (auto name = ir_->NameOf(var)) {
         module_.PushDebug(spv::Op::OpName, {id, Operand(name.Name())});
     }
+}
+
+void GeneratorImplIr::EmitLet(ir::Let* let) {
+    auto id = Value(let->Value());
+    values_.Add(let->Result(), id);
 }
 
 void GeneratorImplIr::EmitExitPhis(ir::ControlInstruction* inst) {

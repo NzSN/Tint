@@ -288,6 +288,8 @@ list(APPEND TINT_LIB_SRCS
   resolver/validator.h
   scope_stack.h
   switch.h
+  sem/accessor_expression.cc
+  sem/accessor_expression.h
   sem/array_count.cc
   sem/array_count.h
   sem/behavior.cc
@@ -675,6 +677,14 @@ if(${TINT_BUILD_SPV_WRITER})
 
   if(${TINT_BUILD_IR})
     list(APPEND TINT_LIB_SRCS
+      ir/transform/builtin_polyfill_spirv.cc
+      ir/transform/builtin_polyfill_spirv.h
+      ir/transform/merge_return.cc
+      ir/transform/merge_return.h
+      ir/transform/shader_io_spirv.cc
+      ir/transform/shader_io_spirv.h
+      ir/transform/var_for_dynamic_index.cc
+      ir/transform/var_for_dynamic_index.h
       writer/spirv/ir/generator_impl_ir.cc
       writer/spirv/ir/generator_impl_ir.h
     )
@@ -791,8 +801,14 @@ if(${TINT_BUILD_IR})
     ir/instruction.h
     ir/instruction_result.cc
     ir/instruction_result.h
+    ir/intrinsic_call.cc
+    ir/intrinsic_call.h
+    ir/let.cc
+    ir/let.h
     ir/load.cc
     ir/load.h
+    ir/load_vector_element.cc
+    ir/load_vector_element.h
     ir/location.h
     ir/loop.cc
     ir/loop.h
@@ -808,10 +824,14 @@ if(${TINT_BUILD_IR})
     ir/return.h
     ir/store.cc
     ir/store.h
+    ir/store_vector_element.cc
+    ir/store_vector_element.h
     ir/switch.cc
     ir/switch.h
     ir/swizzle.cc
     ir/swizzle.h
+    ir/terminate_invocation.cc
+    ir/terminate_invocation.h
     ir/terminator.cc
     ir/terminator.h
     ir/to_program.cc
@@ -832,16 +852,12 @@ if(${TINT_BUILD_IR})
     ir/transform/add_empty_entry_point.h
     ir/transform/block_decorated_structs.cc
     ir/transform/block_decorated_structs.h
-    ir/transform/merge_return.cc
-    ir/transform/merge_return.h
+    ir/transform/demote_to_helper.cc
+    ir/transform/demote_to_helper.h
     ir/transform/shader_io.cc
     ir/transform/shader_io.h
-    ir/transform/shader_io_spirv.cc
-    ir/transform/shader_io_spirv.h
     ir/transform/transform.cc
     ir/transform/transform.h
-    ir/transform/var_for_dynamic_index.cc
-    ir/transform/var_for_dynamic_index.h
   )
 endif()
 
@@ -1313,6 +1329,10 @@ if(TINT_BUILD_TESTS)
 
     if(${TINT_BUILD_IR})
       list(APPEND TINT_TEST_SRCS
+        ir/transform/builtin_polyfill_spirv_test.cc
+        ir/transform/merge_return_test.cc
+        ir/transform/shader_io_spirv_test.cc
+        ir/transform/var_for_dynamic_index_test.cc
         writer/spirv/ir/generator_impl_ir_access_test.cc
         writer/spirv/ir/generator_impl_ir_binary_test.cc
         writer/spirv/ir/generator_impl_ir_bitcast_test.cc
@@ -1320,8 +1340,10 @@ if(TINT_BUILD_TESTS)
         writer/spirv/ir/generator_impl_ir_constant_test.cc
         writer/spirv/ir/generator_impl_ir_construct_test.cc
         writer/spirv/ir/generator_impl_ir_convert_test.cc
+        writer/spirv/ir/generator_impl_ir_discard_test.cc
         writer/spirv/ir/generator_impl_ir_function_test.cc
         writer/spirv/ir/generator_impl_ir_if_test.cc
+        writer/spirv/ir/generator_impl_ir_let_test.cc
         writer/spirv/ir/generator_impl_ir_loop_test.cc
         writer/spirv/ir/generator_impl_ir_switch_test.cc
         writer/spirv/ir/generator_impl_ir_swizzle_test.cc
@@ -1571,6 +1593,7 @@ if(TINT_BUILD_TESTS)
       ir/from_program_builtin_test.cc
       ir/from_program_call_test.cc
       ir/from_program_function_test.cc
+      ir/from_program_let_test.cc
       ir/from_program_literal_test.cc
       ir/from_program_materialize_test.cc
       ir/from_program_store_test.cc
@@ -1582,8 +1605,11 @@ if(TINT_BUILD_TESTS)
       ir/if_test.cc
       ir/instruction_result_test.cc
       ir/instruction_test.cc
+      ir/intrinsic_call_test.cc
       ir/ir_test_helper.h
+      ir/let_test.cc
       ir/load_test.cc
+      ir/load_vector_element_test.cc
       ir/loop_test.cc
       ir/module_test.cc
       ir/multi_in_block_test.cc
@@ -1592,13 +1618,12 @@ if(TINT_BUILD_TESTS)
       ir/program_test_helper.h
       ir/return_test.cc
       ir/store_test.cc
+      ir/store_vector_element_test.cc
       ir/switch_test.cc
       ir/swizzle_test.cc
       ir/transform/add_empty_entry_point_test.cc
       ir/transform/block_decorated_structs_test.cc
-      ir/transform/merge_return_test.cc
-      ir/transform/shader_io_test.cc
-      ir/transform/var_for_dynamic_index_test.cc
+      ir/transform/demote_to_helper_test.cc
       ir/unary_test.cc
       ir/user_call_test.cc
       ir/validate_test.cc

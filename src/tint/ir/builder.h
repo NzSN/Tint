@@ -38,15 +38,20 @@
 #include "src/tint/ir/function_param.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/instruction_result.h"
+#include "src/tint/ir/intrinsic_call.h"
+#include "src/tint/ir/let.h"
 #include "src/tint/ir/load.h"
+#include "src/tint/ir/load_vector_element.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
 #include "src/tint/ir/multi_in_block.h"
 #include "src/tint/ir/next_iteration.h"
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
+#include "src/tint/ir/store_vector_element.h"
 #include "src/tint/ir/switch.h"
 #include "src/tint/ir/swizzle.h"
+#include "src/tint/ir/terminate_invocation.h"
 #include "src/tint/ir/unary.h"
 #include "src/tint/ir/unreachable.h"
 #include "src/tint/ir/user_call.h"
@@ -217,7 +222,10 @@ class Builder {
     /// Creates a ir::Constant for a bool Scalar
     /// @param v the value
     /// @returns the new constant
-    ir::Constant* Constant(bool v) { return Constant(ir.constant_values.Get(v)); }
+    template <typename BOOL, typename = std::enable_if_t<std::is_same_v<BOOL, bool>>>
+    ir::Constant* Constant(BOOL v) {
+        return Constant(ir.constant_values.Get(v));
+    }
 
     /// @param in the input value. One of: nullptr, ir::Value*, ir::Instruction* or a numeric value.
     /// @returns an ir::Value* from the given argument.
@@ -535,6 +543,17 @@ class Builder {
                                                               Values(std::forward<ARGS>(args)...)));
     }
 
+    /// Creates an intrinsic call instruction
+    /// @param type the return type of the call
+    /// @param kind the intrinsic function to call
+    /// @param args the call arguments
+    /// @returns the intrinsic call instruction
+    template <typename... ARGS>
+    ir::IntrinsicCall* Call(const type::Type* type, enum IntrinsicCall::Kind kind, ARGS&&... args) {
+        return Append(ir.instructions.Create<ir::IntrinsicCall>(
+            InstructionResult(type), kind, Values(std::forward<ARGS>(args)...)));
+    }
+
     /// Creates a value conversion instruction
     /// @param to the type converted to
     /// @param val the value to be converted
@@ -577,6 +596,33 @@ class Builder {
         return Append(ir.instructions.Create<ir::Store>(to_val, from_val));
     }
 
+    /// Creates a store vector element instruction
+    /// @param to the vector pointer expression being stored too
+    /// @param index the new vector element index
+    /// @param value the new vector element expression
+    /// @returns the instruction
+    template <typename TO, typename INDEX, typename VALUE>
+    ir::StoreVectorElement* StoreVectorElement(TO&& to, INDEX&& index, VALUE&& value) {
+        CheckForNonDeterministicEvaluation<TO, INDEX, VALUE>();
+        auto* to_val = Value(std::forward<TO>(to));
+        auto* index_val = Value(std::forward<INDEX>(index));
+        auto* value_val = Value(std::forward<VALUE>(value));
+        return Append(ir.instructions.Create<ir::StoreVectorElement>(to_val, index_val, value_val));
+    }
+
+    /// Creates a load vector element instruction
+    /// @param from the vector pointer expression being loaded from
+    /// @param index the new vector element index
+    /// @returns the instruction
+    template <typename FROM, typename INDEX>
+    ir::LoadVectorElement* LoadVectorElement(FROM&& from, INDEX&& index) {
+        CheckForNonDeterministicEvaluation<FROM, INDEX>();
+        auto* from_val = Value(std::forward<FROM>(from));
+        auto* index_val = Value(std::forward<INDEX>(index));
+        auto* res = InstructionResult(VectorPtrElementType(from_val->Type()));
+        return Append(ir.instructions.Create<ir::LoadVectorElement>(res, from_val, index_val));
+    }
+
     /// Creates a new `var` declaration
     /// @param type the var type
     /// @returns the instruction
@@ -587,6 +633,23 @@ class Builder {
     /// @param type the var type
     /// @returns the instruction
     ir::Var* Var(std::string_view name, const type::Pointer* type);
+
+    /// Creates a new `let` declaration
+    /// @param name the let name
+    /// @param value the let value
+    /// @returns the instruction
+    template <typename VALUE>
+    ir::Let* Let(std::string_view name, VALUE&& value) {
+        auto* val = Value(std::forward<VALUE>(value));
+        if (TINT_UNLIKELY(!val)) {
+            TINT_ASSERT(IR, val);
+            return nullptr;
+        }
+        auto* let = Append(ir.instructions.Create<ir::Let>(InstructionResult(val->Type()), val));
+        ir.SetName(let, name);
+        ir.SetName(let->Result(), name);
+        return let;
+    }
 
     /// Creates a return instruction
     /// @param func the function being returned
@@ -740,6 +803,10 @@ class Builder {
                                                           utils::Vector<uint32_t, 4>(indices)));
     }
 
+    /// Creates a terminate invocation instruction
+    /// @returns the instruction
+    ir::TerminateInvocation* TerminateInvocation();
+
     /// Creates an unreachable instruction
     /// @returns the instruction
     ir::Unreachable* Unreachable();
@@ -757,6 +824,11 @@ class Builder {
 
     /// The IR module.
     Module& ir;
+
+  private:
+    /// @returns the element type of the vector-pointer type
+    /// Asserts and return i32 if @p type is not a pointer to a vector
+    const type::Type* VectorPtrElementType(const type::Type* type);
 };
 
 }  // namespace tint::ir

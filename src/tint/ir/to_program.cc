@@ -30,18 +30,22 @@
 #include "src/tint/ir/construct.h"
 #include "src/tint/ir/continue.h"
 #include "src/tint/ir/convert.h"
+#include "src/tint/ir/discard.h"
 #include "src/tint/ir/exit_if.h"
 #include "src/tint/ir/exit_loop.h"
 #include "src/tint/ir/exit_switch.h"
 #include "src/tint/ir/if.h"
 #include "src/tint/ir/instruction.h"
+#include "src/tint/ir/let.h"
 #include "src/tint/ir/load.h"
+#include "src/tint/ir/load_vector_element.h"
 #include "src/tint/ir/loop.h"
 #include "src/tint/ir/module.h"
 #include "src/tint/ir/multi_in_block.h"
 #include "src/tint/ir/next_iteration.h"
 #include "src/tint/ir/return.h"
 #include "src/tint/ir/store.h"
+#include "src/tint/ir/store_vector_element.h"
 #include "src/tint/ir/switch.h"
 #include "src/tint/ir/unary.h"
 #include "src/tint/ir/unreachable.h"
@@ -278,25 +282,28 @@ class State {
 
     void Instruction(ir::Instruction* inst) {
         tint::Switch(
-            inst,                                       //
-            [&](ir::Access* i) { Access(i); },          //
-            [&](ir::Binary* i) { Binary(i); },          //
-            [&](ir::BreakIf* i) { BreakIf(i); },        //
-            [&](ir::Call* i) { Call(i); },              //
-            [&](ir::Continue*) {},                      //
-            [&](ir::ExitIf*) {},                        //
-            [&](ir::ExitLoop* i) { ExitLoop(i); },      //
-            [&](ir::ExitSwitch* i) { ExitSwitch(i); },  //
-            [&](ir::If* i) { If(i); },                  //
-            [&](ir::Load* l) { Load(l); },              //
-            [&](ir::Loop* l) { Loop(l); },              //
-            [&](ir::NextIteration*) {},                 //
-            [&](ir::Return* i) { Return(i); },          //
-            [&](ir::Store* i) { Store(i); },            //
-            [&](ir::Switch* i) { Switch(i); },          //
-            [&](ir::Unary* u) { Unary(u); },            //
-            [&](ir::Unreachable*) {},                   //
-            [&](ir::Var* i) { Var(i); },                //
+            inst,                                                       //
+            [&](ir::Access* i) { Access(i); },                          //
+            [&](ir::Binary* i) { Binary(i); },                          //
+            [&](ir::BreakIf* i) { BreakIf(i); },                        //
+            [&](ir::Call* i) { Call(i); },                              //
+            [&](ir::Continue*) {},                                      //
+            [&](ir::ExitIf*) {},                                        //
+            [&](ir::ExitLoop* i) { ExitLoop(i); },                      //
+            [&](ir::ExitSwitch* i) { ExitSwitch(i); },                  //
+            [&](ir::If* i) { If(i); },                                  //
+            [&](ir::Let* i) { Let(i); },                                //
+            [&](ir::Load* l) { Load(l); },                              //
+            [&](ir::LoadVectorElement* i) { LoadVectorElement(i); },    //
+            [&](ir::Loop* l) { Loop(l); },                              //
+            [&](ir::NextIteration*) {},                                 //
+            [&](ir::Return* i) { Return(i); },                          //
+            [&](ir::Store* i) { Store(i); },                            //
+            [&](ir::StoreVectorElement* i) { StoreVectorElement(i); },  //
+            [&](ir::Switch* i) { Switch(i); },                          //
+            [&](ir::Unary* u) { Unary(u); },                            //
+            [&](ir::Unreachable*) {},                                   //
+            [&](ir::Var* i) { Var(i); },                                //
             [&](Default) { UNHANDLED_CASE(inst); });
     }
 
@@ -329,12 +336,27 @@ class State {
     }
 
     void Loop(ir::Loop* l) {
+        // Build all the initializer statements
         auto init_stmts = Statements(l->Initializer());
-        auto* init = init_stmts.Length() == 1 ? init_stmts.Front()->As<ast::VariableDeclStatement>()
-                                              : nullptr;
 
+        // If there's a single initializer statement and meets the WGSL 'for_init' pattern, then
+        // this can be used as the initializer for a for-loop.
+        // @see https://www.w3.org/TR/WGSL/#syntax-for_init
+        auto* init = (init_stmts.Length() == 1) &&
+                             init_stmts.Front()
+                                 ->IsAnyOf<ast::VariableDeclStatement, ast::AssignmentStatement,
+                                           ast::CompoundAssignmentStatement,
+                                           ast::IncrementDecrementStatement, ast::CallStatement>()
+                         ? init_stmts.Front()
+                         : nullptr;
+
+        // Build the loop body statements. If the loop body starts with a if with the following
+        // pattern, then treat it as the loop condition:
+        //   if cond {
+        //     block { exit_if   }
+        //     block { exit_loop }
+        //   }
         const ast::Expression* cond = nullptr;
-
         StatementList body_stmts;
         {
             MarkInlinable(l->Body());
@@ -347,31 +369,59 @@ class State {
                             if_->False()->Length() == 1 &&                 //
                             tint::Is<ir::ExitIf>(if_->True()->Front()) &&  //
                             tint::Is<ir::ExitLoop>(if_->False()->Front())) {
+                            // Matched the loop condition.
                             cond = Expr(if_->Condition());
-                            continue;
+                            continue;  // Don't emit this as an instruction in the body.
                         }
                     }
                 }
 
+                // Process the loop body instruction. Append to 'body_stmts'
                 Instruction(inst);
             }
         }
 
+        // Build any continuing statements
         auto cont_stmts = Statements(l->Continuing());
-        auto* cont = cont_stmts.Length() == 1 ? cont_stmts.Front() : nullptr;
+        // If there's a single continuing statement and meets the WGSL 'for_update' pattern then
+        // this can be used as the continuing for a for-loop.
+        // @see https://www.w3.org/TR/WGSL/#syntax-for_update
+        auto* cont =
+            (cont_stmts.Length() == 1) &&
+                    cont_stmts.Front()
+                        ->IsAnyOf<ast::AssignmentStatement, ast::CompoundAssignmentStatement,
+                                  ast::IncrementDecrementStatement, ast::CallStatement>()
+                ? cont_stmts.Front()
+                : nullptr;
 
-        auto* body = b.Block(std::move(body_stmts));
-
+        // Depending on 'init', 'cond' and 'cont', build a 'for', 'while' or 'loop'
         const ast::Statement* loop = nullptr;
-        if (cond) {
-            if (init || cont) {
-                loop = b.For(init, cond, cont, body);
-            } else {
-                loop = b.While(cond, body);
+        if ((!cont && !cont_stmts.IsEmpty())  // Non-trivial continuing
+            || !cond                          // or non-trivial or no condition
+        ) {
+            // Build a loop
+            if (cond) {
+                body_stmts.Insert(0, b.If(b.Not(cond), b.Block(b.Break())));
             }
-        } else {
+            auto* body = b.Block(std::move(body_stmts));
             loop = cont_stmts.IsEmpty() ? b.Loop(body)  //
                                         : b.Loop(body, b.Block(std::move(cont_stmts)));
+            if (!init_stmts.IsEmpty()) {
+                init_stmts.Push(loop);
+                loop = b.Block(std::move(init_stmts));
+            }
+        } else if (init || cont) {
+            // Build a for-loop
+            auto* body = b.Block(std::move(body_stmts));
+            loop = b.For(init, cond, cont, body);
+            if (!init && !init_stmts.IsEmpty()) {
+                init_stmts.Push(loop);
+                loop = b.Block(std::move(init_stmts));
+            }
+        } else {
+            // Build a while-loop
+            auto* body = b.Block(std::move(body_stmts));
+            loop = b.While(cond, body);
             if (!init_stmts.IsEmpty()) {
                 init_stmts.Push(loop);
                 loop = b.Block(std::move(init_stmts));
@@ -417,7 +467,13 @@ class State {
 
     void ExitLoop(const ir::ExitLoop*) { Append(b.Break()); }
 
-    void BreakIf(ir::BreakIf* i) { Append(b.BreakIf(Expr(i->Condition()))); }
+    void BreakIf(ir::BreakIf* i) {
+        auto* cond = i->Condition();
+        if (IsConstant(cond, false)) {
+            return;
+        }
+        Append(b.BreakIf(Expr(cond)));
+    }
 
     void Return(ir::Return* ret) {
         if (ret->Args().IsEmpty()) {
@@ -465,16 +521,31 @@ class State {
             case builtin::AddressSpace::kStorage:
                 b.GlobalVar(name, ty, init, ptr->Access(), ptr->AddressSpace(), std::move(attrs));
                 return;
+            case builtin::AddressSpace::kHandle:
+                b.GlobalVar(name, ty, init, std::move(attrs));
+                return;
             default:
                 b.GlobalVar(name, ty, init, ptr->AddressSpace(), std::move(attrs));
                 return;
         }
     }
 
+    void Let(ir::Let* let) {
+        Symbol name = NameFor(let->Result());
+        Append(b.Decl(b.Let(name, Expr(let->Value(), PtrKind::kPtr))));
+        Bind(let->Result(), name, PtrKind::kPtr);
+    }
+
     void Store(ir::Store* store) {
         auto* dst = Expr(store->To());
         auto* src = Expr(store->From());
         Append(b.Assign(dst, src));
+    }
+
+    void StoreVectorElement(ir::StoreVectorElement* store) {
+        auto* ptr = Expr(store->To());
+        auto* val = Expr(store->Value());
+        Append(b.Assign(VectorMemberAccess(ptr, store->Index()), val));
     }
 
     void Call(ir::Call* call) {
@@ -494,7 +565,7 @@ class State {
             },
             [&](ir::BuiltinCall* c) {
                 auto* expr = b.Call(c->Func(), std::move(args));
-                if (!call->HasResults() || call->Result()->Usages().IsEmpty()) {
+                if (!call->HasResults() || call->Result()->Type()->Is<type::Void>()) {
                     Append(b.CallStmt(expr));
                     return;
                 }
@@ -512,10 +583,16 @@ class State {
                 auto ty = Type(c->Result()->Type());
                 Bind(c->Result(), b.Bitcast(ty, args[0]), PtrKind::kPtr);
             },
+            [&](ir::Discard*) { Append(b.Discard()); },  //
             [&](Default) { UNHANDLED_CASE(call); });
     }
 
     void Load(ir::Load* l) { Bind(l->Result(), Expr(l->From())); }
+
+    void LoadVectorElement(ir::LoadVectorElement* load) {
+        auto* ptr = Expr(load->From());
+        Bind(load->Result(), VectorMemberAccess(ptr, load->Index()));
+    }
 
     void Unary(ir::Unary* u) {
         const ast::Expression* expr = nullptr;
@@ -538,23 +615,7 @@ class State {
                 obj_ty,
                 [&](const type::Vector* vec) {
                     TINT_DEFER(obj_ty = vec->type());
-                    if (auto* c = index->As<ir::Constant>()) {
-                        switch (c->Value()->ValueAs<int>()) {
-                            case 0:
-                                expr = b.MemberAccessor(expr, "x");
-                                return;
-                            case 1:
-                                expr = b.MemberAccessor(expr, "y");
-                                return;
-                            case 2:
-                                expr = b.MemberAccessor(expr, "z");
-                                return;
-                            case 3:
-                                expr = b.MemberAccessor(expr, "w");
-                                return;
-                        }
-                    }
-                    expr = b.IndexAccessor(expr, Expr(index));
+                    expr = VectorMemberAccess(expr, index);
                 },
                 [&](const type::Matrix* mat) {
                     obj_ty = mat->ColumnType();
@@ -570,7 +631,7 @@ class State {
                         TINT_ASSERT_OR_RETURN(IR, i < s->Members().Length());
                         auto* member = s->Members()[i];
                         obj_ty = member->Type();
-                        expr = b.IndexAccessor(expr, member->Name().NameView());
+                        expr = b.MemberAccessor(expr, member->Name().NameView());
                     } else {
                         TINT_ICE(IR, b.Diagnostics())
                             << "invalid index for struct type: " << index->TypeInfo().name;
@@ -901,9 +962,17 @@ class State {
             if (value->Type()->Is<type::Pointer>()) {
                 expr = ToPtrKind(expr, ptr_kind, PtrKind::kPtr);
             }
-            Symbol name = NameFor(value);
-            Append(b.Decl(b.Let(name, expr)));
-            Bind(value, name, PtrKind::kPtr);
+            auto mod_name = mod.NameOf(value);
+            if (value->Usages().IsEmpty() && !mod_name.IsValid()) {
+                // Value has no usages and no name.
+                // Assign to a phony. These support more data types than a 'let', and avoids
+                // allocation of unused names.
+                Append(b.Assign(b.Phony(), expr));
+            } else {
+                Symbol name = NameFor(value, mod_name.NameView());
+                Append(b.Decl(b.Let(name, expr)));
+                Bind(value, name, PtrKind::kPtr);
+            }
             return;
         }
 
@@ -995,6 +1064,22 @@ class State {
             }
         }
         return false;
+    }
+
+    const ast::Expression* VectorMemberAccess(const ast::Expression* expr, ir::Value* index) {
+        if (auto* c = index->As<ir::Constant>()) {
+            switch (c->Value()->ValueAs<int>()) {
+                case 0:
+                    return b.MemberAccessor(expr, "x");
+                case 1:
+                    return b.MemberAccessor(expr, "y");
+                case 2:
+                    return b.MemberAccessor(expr, "z");
+                case 3:
+                    return b.MemberAccessor(expr, "w");
+            }
+        }
+        return b.IndexAccessor(expr, Expr(index));
     }
 };
 
