@@ -12,26 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SRC_TINT_IR_DISCARD_H_
-#define SRC_TINT_IR_DISCARD_H_
+#include "src/tint/ir/core_builtin_call.h"
+
+#include <utility>
 
 #include "src/tint/debug.h"
-#include "src/tint/ir/call.h"
-#include "src/tint/utils/castable.h"
+
+TINT_INSTANTIATE_TYPEINFO(tint::ir::CoreBuiltinCall);
 
 namespace tint::ir {
 
-/// A discard instruction in the IR.
-class Discard : public utils::Castable<Discard, Call> {
-  public:
-    /// Constructor
-    Discard();
-    ~Discard() override;
+CoreBuiltinCall::CoreBuiltinCall(InstructionResult* result,
+                                 builtin::Function func,
+                                 utils::VectorRef<Value*> arguments)
+    : Base(result, arguments), func_(func) {
+    TINT_ASSERT(IR, func != builtin::Function::kNone);
+    TINT_ASSERT(IR, func != builtin::Function::kTintMaterialize);
+}
 
-    /// @returns the friendly name for the instruction
-    std::string_view FriendlyName() override { return "discard"; }
-};
+CoreBuiltinCall::~CoreBuiltinCall() = default;
 
 }  // namespace tint::ir
-
-#endif  // SRC_TINT_IR_DISCARD_H_

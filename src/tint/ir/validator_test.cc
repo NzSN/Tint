@@ -18,7 +18,7 @@
 #include "gmock/gmock.h"
 #include "src/tint/ir/builder.h"
 #include "src/tint/ir/ir_test_helper.h"
-#include "src/tint/ir/validate.h"
+#include "src/tint/ir/validator.h"
 #include "src/tint/type/array.h"
 #include "src/tint/type/matrix.h"
 #include "src/tint/type/pointer.h"
@@ -31,16 +31,16 @@ namespace {
 using namespace tint::builtin::fluent_types;  // NOLINT
 using namespace tint::number_suffixes;        // NOLINT
 
-using IR_ValidateTest = IRTestHelper;
+using IR_ValidatorTest = IRTestHelper;
 
-TEST_F(IR_ValidateTest, RootBlock_Var) {
+TEST_F(IR_ValidatorTest, RootBlock_Var) {
     mod.root_block = b.RootBlock();
     mod.root_block->Append(b.Var(ty.ptr<private_, i32>()));
     auto res = ir::Validate(mod);
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, RootBlock_NonVar) {
+TEST_F(IR_ValidatorTest, RootBlock_NonVar) {
     auto* l = b.Loop();
     l->Body()->Append(b.Continue(l));
 
@@ -69,7 +69,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Function) {
+TEST_F(IR_ValidatorTest, Function) {
     auto* f = b.Function("my_func", ty.void_());
 
     f->SetParams({b.FunctionParam(ty.i32()), b.FunctionParam(ty.f32())});
@@ -79,7 +79,7 @@ TEST_F(IR_ValidateTest, Function) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, Function_Duplicate) {
+TEST_F(IR_ValidatorTest, Function_Duplicate) {
     auto* f = b.Function("my_func", ty.void_());
     // Function would auto-push by the builder, so this adds a duplicate
     mod.functions.Push(f);
@@ -104,7 +104,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Block_NoTerminator) {
+TEST_F(IR_ValidatorTest, Block_NoTerminator) {
     b.Function("my_func", ty.void_());
 
     auto res = ir::Validate(mod);
@@ -121,7 +121,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_NegativeIndex) {
+TEST_F(IR_ValidatorTest, Access_NegativeIndex) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.vec3<f32>());
     f->SetParams({obj});
@@ -151,7 +151,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_OOB_Index_Value) {
+TEST_F(IR_ValidatorTest, Access_OOB_Index_Value) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.mat3x2<f32>());
     f->SetParams({obj});
@@ -185,7 +185,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_OOB_Index_Ptr) {
+TEST_F(IR_ValidatorTest, Access_OOB_Index_Ptr) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, array<array<f32, 2>, 3>>());
     f->SetParams({obj});
@@ -220,7 +220,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_StaticallyUnindexableType_Value) {
+TEST_F(IR_ValidatorTest, Access_StaticallyUnindexableType_Value) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.f32());
     f->SetParams({obj});
@@ -250,7 +250,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_StaticallyUnindexableType_Ptr) {
+TEST_F(IR_ValidatorTest, Access_StaticallyUnindexableType_Ptr) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, f32>());
     f->SetParams({obj});
@@ -280,7 +280,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_DynamicallyUnindexableType_Value) {
+TEST_F(IR_ValidatorTest, Access_DynamicallyUnindexableType_Value) {
     auto* str_ty = ty.Struct(mod.symbols.New("MyStruct"), {
                                                               {mod.symbols.New("a"), ty.i32()},
                                                               {mod.symbols.New("b"), ty.i32()},
@@ -322,7 +322,7 @@ MyStruct = struct @align(4) {
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_DynamicallyUnindexableType_Ptr) {
+TEST_F(IR_ValidatorTest, Access_DynamicallyUnindexableType_Ptr) {
     auto* str_ty = ty.Struct(mod.symbols.New("MyStruct"), {
                                                               {mod.symbols.New("a"), ty.i32()},
                                                               {mod.symbols.New("b"), ty.i32()},
@@ -364,7 +364,7 @@ MyStruct = struct @align(4) {
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_Incorrect_Type_Value_Value) {
+TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Value_Value) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.mat3x2<f32>());
     f->SetParams({obj});
@@ -395,7 +395,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_Incorrect_Type_Ptr_Ptr) {
+TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Ptr_Ptr) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, array<array<f32, 2>, 3>>());
     f->SetParams({obj});
@@ -427,7 +427,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_Incorrect_Type_Ptr_Value) {
+TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Ptr_Value) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, array<array<f32, 2>, 3>>());
     f->SetParams({obj});
@@ -459,7 +459,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_IndexVectorPtr) {
+TEST_F(IR_ValidatorTest, Access_IndexVectorPtr) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, vec3<f32>>());
     f->SetParams({obj});
@@ -490,7 +490,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_IndexVectorPtr_ViaMatrixPtr) {
+TEST_F(IR_ValidatorTest, Access_IndexVectorPtr_ViaMatrixPtr) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.ptr<private_, mat3x2<f32>>());
     f->SetParams({obj});
@@ -521,7 +521,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Access_IndexVector) {
+TEST_F(IR_ValidatorTest, Access_IndexVector) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.vec3<f32>());
     f->SetParams({obj});
@@ -535,7 +535,7 @@ TEST_F(IR_ValidateTest, Access_IndexVector) {
     ASSERT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, Access_IndexVector_ViaMatrix) {
+TEST_F(IR_ValidatorTest, Access_IndexVector_ViaMatrix) {
     auto* f = b.Function("my_func", ty.void_());
     auto* obj = b.FunctionParam(ty.mat3x2<f32>());
     f->SetParams({obj});
@@ -549,7 +549,7 @@ TEST_F(IR_ValidateTest, Access_IndexVector_ViaMatrix) {
     ASSERT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, Block_TerminatorInMiddle) {
+TEST_F(IR_ValidatorTest, Block_TerminatorInMiddle) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -578,7 +578,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, If_EmptyFalse) {
+TEST_F(IR_ValidatorTest, If_EmptyFalse) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(true);
@@ -591,7 +591,7 @@ TEST_F(IR_ValidateTest, If_EmptyFalse) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, If_EmptyTrue) {
+TEST_F(IR_ValidatorTest, If_EmptyTrue) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(true);
@@ -622,7 +622,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, If_ConditionIsBool) {
+TEST_F(IR_ValidatorTest, If_ConditionIsBool) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(1_i);
@@ -659,7 +659,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, If_ConditionIsNullptr) {
+TEST_F(IR_ValidatorTest, If_ConditionIsNullptr) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(nullptr);
@@ -696,7 +696,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, If_NullResult) {
+TEST_F(IR_ValidatorTest, If_NullResult) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(true);
@@ -710,7 +710,7 @@ TEST_F(IR_ValidateTest, If_NullResult) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: if: instruction result is undefined
     undef = if true [t: %b2, f: %b3] {  # if_1
     ^^^^^
 
@@ -735,7 +735,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Loop_OnlyBody) {
+TEST_F(IR_ValidatorTest, Loop_OnlyBody) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* l = b.Loop();
@@ -749,7 +749,7 @@ TEST_F(IR_ValidateTest, Loop_OnlyBody) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, Loop_EmptyBody) {
+TEST_F(IR_ValidatorTest, Loop_EmptyBody) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -775,13 +775,13 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Var_RootBlock_NullResult) {
+TEST_F(IR_ValidatorTest, Var_RootBlock_NullResult) {
     auto* v = mod.instructions.Create<ir::Var>(nullptr);
     b.RootBlock()->Append(v);
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:2:3 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:2:3 error: var: instruction result is undefined
   undef = var
   ^^^^^
 
@@ -797,7 +797,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Var_Function_NullResult) {
+TEST_F(IR_ValidatorTest, Var_Function_NullResult) {
     auto* v = mod.instructions.Create<ir::Var>(nullptr);
 
     auto* f = b.Function("my_func", ty.void_());
@@ -808,7 +808,7 @@ TEST_F(IR_ValidateTest, Var_Function_NullResult) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: var: instruction result is undefined
     undef = var
     ^^^^^
 
@@ -826,7 +826,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Var_Init_WrongType) {
+TEST_F(IR_ValidatorTest, Var_Init_WrongType) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -838,7 +838,7 @@ TEST_F(IR_ValidateTest, Var_Init_WrongType) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: var initializer has incorrect type
+    EXPECT_EQ(res.Failure().str(), R"(:3:41 error: var: initializer has incorrect type
     %2:ptr<function, f32, read_write> = var, %3
                                         ^^^
 
@@ -856,7 +856,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Let_NullResult) {
+TEST_F(IR_ValidatorTest, Let_NullResult) {
     auto* v = mod.instructions.Create<ir::Let>(nullptr, b.Constant(1_i));
 
     auto* f = b.Function("my_func", ty.void_());
@@ -867,7 +867,7 @@ TEST_F(IR_ValidateTest, Let_NullResult) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: let: instruction result is undefined
     undef = let 1i
     ^^^^^
 
@@ -885,7 +885,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Let_NullValue) {
+TEST_F(IR_ValidatorTest, Let_NullValue) {
     auto* v = mod.instructions.Create<ir::Let>(b.InstructionResult(ty.f32()), nullptr);
 
     auto* f = b.Function("my_func", ty.void_());
@@ -914,7 +914,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Let_WrongType) {
+TEST_F(IR_ValidatorTest, Let_WrongType) {
     auto* v = mod.instructions.Create<ir::Let>(b.InstructionResult(ty.f32()), b.Constant(1_i));
 
     auto* f = b.Function("my_func", ty.void_());
@@ -925,7 +925,7 @@ TEST_F(IR_ValidateTest, Let_WrongType) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:14 error: let result type does not match value type
+    EXPECT_EQ(res.Failure().str(), R"(:3:14 error: let: result type does not match value type
     %2:f32 = let 1i
              ^^^
 
@@ -943,7 +943,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Instruction_AppendedDead) {
+TEST_F(IR_ValidatorTest, Instruction_AppendedDead) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -956,7 +956,7 @@ TEST_F(IR_ValidateTest, Instruction_AppendedDead) {
     auto addr = utils::ToString(v);
     auto arrows = std::string(addr.length(), '^');
 
-    std::string expected = R"(:3:5 error: destroyed instruction found in instruction list
+    std::string expected = R"(:3:5 error: var: destroyed instruction found in instruction list
     <destroyed tint::ir::Var $ADDRESS>
     ^^^^^^^^^^^^^^^^^^^^^^^^^$ARROWS^
 
@@ -981,7 +981,7 @@ note: # Disassembly
     EXPECT_EQ(res.Failure().str(), expected);
 }
 
-TEST_F(IR_ValidateTest, Instruction_NullSource) {
+TEST_F(IR_ValidatorTest, Instruction_NullSource) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -992,7 +992,7 @@ TEST_F(IR_ValidateTest, Instruction_NullSource) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result source is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: var: instruction result source is undefined
     %2:ptr<function, f32, read_write> = var
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -1010,7 +1010,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Instruction_DeadOperand) {
+TEST_F(IR_ValidatorTest, Instruction_DeadOperand) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -1023,7 +1023,7 @@ TEST_F(IR_ValidateTest, Instruction_DeadOperand) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:46 error: instruction has operand which is not alive
+    EXPECT_EQ(res.Failure().str(), R"(:3:46 error: var: instruction has operand which is not alive
     %2:ptr<function, f32, read_write> = var, %3
                                              ^^
 
@@ -1041,7 +1041,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Instruction_OperandUsageRemoved) {
+TEST_F(IR_ValidatorTest, Instruction_OperandUsageRemoved) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -1054,7 +1054,7 @@ TEST_F(IR_ValidateTest, Instruction_OperandUsageRemoved) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:46 error: instruction operand missing usage
+    EXPECT_EQ(res.Failure().str(), R"(:3:46 error: var: instruction operand missing usage
     %2:ptr<function, f32, read_write> = var, %3
                                              ^^
 
@@ -1072,7 +1072,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Binary_LHS_Nullptr) {
+TEST_F(IR_ValidatorTest, Binary_LHS_Nullptr) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -1099,7 +1099,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Binary_RHS_Nullptr) {
+TEST_F(IR_ValidatorTest, Binary_RHS_Nullptr) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -1126,7 +1126,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Binary_Result_Nullptr) {
+TEST_F(IR_ValidatorTest, Binary_Result_Nullptr) {
     auto* bin = mod.instructions.Create<ir::Binary>(nullptr, ir::Binary::Kind::kAdd,
                                                     b.Constant(3_i), b.Constant(2_i));
 
@@ -1138,7 +1138,7 @@ TEST_F(IR_ValidateTest, Binary_Result_Nullptr) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: binary: instruction result is undefined
     undef = add 3i, 2i
     ^^^^^
 
@@ -1156,7 +1156,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Unary_Value_Nullptr) {
+TEST_F(IR_ValidatorTest, Unary_Value_Nullptr) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto sb = b.With(f->Block());
@@ -1183,7 +1183,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Unary_Result_Nullptr) {
+TEST_F(IR_ValidatorTest, Unary_Result_Nullptr) {
     auto* bin =
         mod.instructions.Create<ir::Unary>(nullptr, ir::Unary::Kind::kNegation, b.Constant(2_i));
 
@@ -1195,7 +1195,7 @@ TEST_F(IR_ValidateTest, Unary_Result_Nullptr) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:5 error: unary: instruction result is undefined
     undef = negation 2i
     ^^^^^
 
@@ -1213,7 +1213,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, Unary_ResultTypeNotMatchValueType) {
+TEST_F(IR_ValidatorTest, Unary_ResultTypeNotMatchValueType) {
     auto* bin = b.Complement(ty.f32(), 2_i);
 
     auto* f = b.Function("my_func", ty.void_());
@@ -1242,7 +1242,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf) {
+TEST_F(IR_ValidatorTest, ExitIf) {
     auto* if_ = b.If(true);
     if_->True()->Append(b.ExitIf(if_));
 
@@ -1255,7 +1255,7 @@ TEST_F(IR_ValidateTest, ExitIf) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitIf_NullIf) {
+TEST_F(IR_ValidatorTest, ExitIf_NullIf) {
     auto* if_ = b.If(true);
     if_->True()->Append(mod.instructions.Create<ExitIf>(nullptr));
 
@@ -1266,7 +1266,7 @@ TEST_F(IR_ValidateTest, ExitIf_NullIf) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit: has no parent control instruction
+    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit-if: has no parent control instruction
         exit_if  # undef
         ^^^^^^^
 
@@ -1288,7 +1288,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_LessOperandsThenIfParams) {
+TEST_F(IR_ValidatorTest, ExitIf_LessOperandsThenIfParams) {
     auto* if_ = b.If(true);
     if_->True()->Append(b.ExitIf(if_, 1_i));
 
@@ -1305,13 +1305,17 @@ TEST_F(IR_ValidateTest, ExitIf_LessOperandsThenIfParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (1) does not match control instruction result count (2)
+        R"(:5:9 error: exit-if: args count (1) does not match control instruction result count (2)
         exit_if 1i  # if_1
         ^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # true
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = if true [t: %b2] {  # if_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1328,7 +1332,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_MoreOperandsThenIfParams) {
+TEST_F(IR_ValidatorTest, ExitIf_MoreOperandsThenIfParams) {
     auto* if_ = b.If(true);
     if_->True()->Append(b.ExitIf(if_, 1_i, 2_f, 3_i));
 
@@ -1345,13 +1349,17 @@ TEST_F(IR_ValidateTest, ExitIf_MoreOperandsThenIfParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (3) does not match control instruction result count (2)
+        R"(:5:9 error: exit-if: args count (3) does not match control instruction result count (2)
         exit_if 1i, 2.0f, 3i  # if_1
         ^^^^^^^^^^^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # true
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = if true [t: %b2] {  # if_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1368,7 +1376,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_WithResult) {
+TEST_F(IR_ValidatorTest, ExitIf_WithResult) {
     auto* if_ = b.If(true);
     if_->True()->Append(b.ExitIf(if_, 1_i, 2_f));
 
@@ -1385,7 +1393,7 @@ TEST_F(IR_ValidateTest, ExitIf_WithResult) {
     ASSERT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitIf_IncorrectResultType) {
+TEST_F(IR_ValidatorTest, ExitIf_IncorrectResultType) {
     auto* if_ = b.If(true);
     if_->True()->Append(b.ExitIf(if_, 1_i, 2_i));
 
@@ -1402,13 +1410,17 @@ TEST_F(IR_ValidateTest, ExitIf_IncorrectResultType) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:21 error: exit: argument type (f32) does not match control instruction type (i32)
+        R"(:5:21 error: exit-if: argument type (f32) does not match control instruction type (i32)
         exit_if 1i, 2i  # if_1
                     ^^
 
 :4:7 note: In block
       %b2 = block {  # true
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = if true [t: %b2] {  # if_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1425,7 +1437,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_NotInParentIf) {
+TEST_F(IR_ValidatorTest, ExitIf_NotInParentIf) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_ = b.If(true);
@@ -1438,7 +1450,7 @@ TEST_F(IR_ValidateTest, ExitIf_NotInParentIf) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:8:5 error: exit: found outside all control instructions
+              R"(:8:5 error: exit-if: found outside all control instructions
     exit_if  # if_1
     ^^^^^^^
 
@@ -1460,7 +1472,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_InvalidJumpsOverIf) {
+TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpsOverIf) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* if_inner = b.If(true);
@@ -1481,7 +1493,7 @@ TEST_F(IR_ValidateTest, ExitIf_InvalidJumpsOverIf) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit_if: if target jumps over other control instructions
+              R"(:7:13 error: exit-if: if target jumps over other control instructions
             exit_if  # if_1
             ^^^^^^^
 
@@ -1512,7 +1524,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_InvalidJumpOverSwitch) {
+TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpOverSwitch) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* switch_inner = b.Switch(1_i);
@@ -1534,7 +1546,7 @@ TEST_F(IR_ValidateTest, ExitIf_InvalidJumpOverSwitch) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit_if: if target jumps over other control instructions
+              R"(:7:13 error: exit-if: if target jumps over other control instructions
             exit_if  # if_1
             ^^^^^^^
 
@@ -1565,7 +1577,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitIf_InvalidJumpOverLoop) {
+TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpOverLoop) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* loop = b.Loop();
@@ -1586,7 +1598,7 @@ TEST_F(IR_ValidateTest, ExitIf_InvalidJumpOverLoop) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit_if: if target jumps over other control instructions
+              R"(:7:13 error: exit-if: if target jumps over other control instructions
             exit_if  # if_1
             ^^^^^^^
 
@@ -1617,7 +1629,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch) {
+TEST_F(IR_ValidatorTest, ExitSwitch) {
     auto* switch_ = b.Switch(true);
 
     auto* def = b.Case(switch_, {Switch::CaseSelector{}});
@@ -1632,7 +1644,7 @@ TEST_F(IR_ValidateTest, ExitSwitch) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_NullSwitch) {
+TEST_F(IR_ValidatorTest, ExitSwitch_NullSwitch) {
     auto* switch_ = b.Switch(true);
 
     auto* def = b.Case(switch_, {Switch::CaseSelector{}});
@@ -1645,7 +1657,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_NullSwitch) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit: has no parent control instruction
+    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit-switch: has no parent control instruction
         exit_switch  # undef
         ^^^^^^^^^^^
 
@@ -1667,7 +1679,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_LessOperandsThenSwitchParams) {
+TEST_F(IR_ValidatorTest, ExitSwitch_LessOperandsThenSwitchParams) {
     auto* switch_ = b.Switch(true);
 
     auto* r1 = b.InstructionResult(ty.i32());
@@ -1686,13 +1698,17 @@ TEST_F(IR_ValidateTest, ExitSwitch_LessOperandsThenSwitchParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (1) does not match control instruction result count (2)
+        R"(:5:9 error: exit-switch: args count (1) does not match control instruction result count (2)
         exit_switch 1i  # switch_1
         ^^^^^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # case
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = switch true [c: (default, %b2)] {  # switch_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1708,7 +1724,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_MoreOperandsThenSwitchParams) {
+TEST_F(IR_ValidatorTest, ExitSwitch_MoreOperandsThenSwitchParams) {
     auto* switch_ = b.Switch(true);
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -1726,13 +1742,17 @@ TEST_F(IR_ValidateTest, ExitSwitch_MoreOperandsThenSwitchParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (3) does not match control instruction result count (2)
+        R"(:5:9 error: exit-switch: args count (3) does not match control instruction result count (2)
         exit_switch 1i, 2.0f, 3i  # switch_1
         ^^^^^^^^^^^^^^^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # case
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = switch true [c: (default, %b2)] {  # switch_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1748,7 +1768,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_WithResult) {
+TEST_F(IR_ValidatorTest, ExitSwitch_WithResult) {
     auto* switch_ = b.Switch(true);
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -1766,7 +1786,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_WithResult) {
     ASSERT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_IncorrectResultType) {
+TEST_F(IR_ValidatorTest, ExitSwitch_IncorrectResultType) {
     auto* switch_ = b.Switch(true);
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -1784,13 +1804,17 @@ TEST_F(IR_ValidateTest, ExitSwitch_IncorrectResultType) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:25 error: exit: argument type (f32) does not match control instruction type (i32)
+        R"(:5:25 error: exit-switch: argument type (f32) does not match control instruction type (i32)
         exit_switch 1i, 2i  # switch_1
                         ^^
 
 :4:7 note: In block
       %b2 = block {  # case
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = switch true [c: (default, %b2)] {  # switch_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -1806,7 +1830,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_NotInParentSwitch) {
+TEST_F(IR_ValidatorTest, ExitSwitch_NotInParentSwitch) {
     auto* switch_ = b.Switch(true);
 
     auto* f = b.Function("my_func", ty.void_());
@@ -1824,7 +1848,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_NotInParentSwitch) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:10:9 error: exit: switch not found in parent control instructions
+              R"(:10:9 error: exit-switch: switch not found in parent control instructions
         exit_switch  # switch_1
         ^^^^^^^^^^^
 
@@ -1851,7 +1875,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_JumpsOverIfs) {
+TEST_F(IR_ValidatorTest, ExitSwitch_JumpsOverIfs) {
     // switch(true) {
     //   default: {
     //     if (true) {
@@ -1884,7 +1908,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_JumpsOverIfs) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_InvalidJumpOverSwitch) {
+TEST_F(IR_ValidatorTest, ExitSwitch_InvalidJumpOverSwitch) {
     auto* switch_ = b.Switch(true);
 
     auto* def = b.Case(switch_, {Switch::CaseSelector{}});
@@ -1906,7 +1930,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_InvalidJumpOverSwitch) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit: switch target jumps over other control instructions
+              R"(:7:13 error: exit-switch: switch target jumps over other control instructions
             exit_switch  # switch_1
             ^^^^^^^^^^^
 
@@ -1937,7 +1961,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitSwitch_InvalidJumpOverLoop) {
+TEST_F(IR_ValidatorTest, ExitSwitch_InvalidJumpOverLoop) {
     auto* switch_ = b.Switch(true);
 
     auto* def = b.Case(switch_, {Switch::CaseSelector{}});
@@ -1957,7 +1981,7 @@ TEST_F(IR_ValidateTest, ExitSwitch_InvalidJumpOverLoop) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit: switch target jumps over other control instructions
+              R"(:7:13 error: exit-switch: switch target jumps over other control instructions
             exit_switch  # switch_1
             ^^^^^^^^^^^
 
@@ -1988,7 +2012,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop) {
+TEST_F(IR_ValidatorTest, ExitLoop) {
     auto* loop = b.Loop();
     loop->Continuing()->Append(b.NextIteration(loop));
     loop->Body()->Append(b.ExitLoop(loop));
@@ -2002,7 +2026,7 @@ TEST_F(IR_ValidateTest, ExitLoop) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_NullLoop) {
+TEST_F(IR_ValidatorTest, ExitLoop_NullLoop) {
     auto* loop = b.Loop();
     loop->Continuing()->Append(b.NextIteration(loop));
     loop->Body()->Append(mod.instructions.Create<ExitLoop>(nullptr));
@@ -2014,7 +2038,7 @@ TEST_F(IR_ValidateTest, ExitLoop_NullLoop) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit: has no parent control instruction
+    EXPECT_EQ(res.Failure().str(), R"(:5:9 error: exit-loop: has no parent control instruction
         exit_loop  # undef
         ^^^^^^^^^
 
@@ -2039,7 +2063,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_LessOperandsThenLoopParams) {
+TEST_F(IR_ValidatorTest, ExitLoop_LessOperandsThenLoopParams) {
     auto* loop = b.Loop();
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -2057,13 +2081,17 @@ TEST_F(IR_ValidateTest, ExitLoop_LessOperandsThenLoopParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (1) does not match control instruction result count (2)
+        R"(:5:9 error: exit-loop: args count (1) does not match control instruction result count (2)
         exit_loop 1i  # loop_1
         ^^^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # body
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = loop [b: %b2, c: %b3] {  # loop_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -2082,7 +2110,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_MoreOperandsThenLoopParams) {
+TEST_F(IR_ValidatorTest, ExitLoop_MoreOperandsThenLoopParams) {
     auto* loop = b.Loop();
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -2100,13 +2128,17 @@ TEST_F(IR_ValidateTest, ExitLoop_MoreOperandsThenLoopParams) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:9 error: exit: args count (3) does not match control instruction result count (2)
+        R"(:5:9 error: exit-loop: args count (3) does not match control instruction result count (2)
         exit_loop 1i, 2.0f, 3i  # loop_1
         ^^^^^^^^^^^^^^^^^^^^^^
 
 :4:7 note: In block
       %b2 = block {  # body
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = loop [b: %b2, c: %b3] {  # loop_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -2125,7 +2157,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_WithResult) {
+TEST_F(IR_ValidatorTest, ExitLoop_WithResult) {
     auto* loop = b.Loop();
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -2143,7 +2175,7 @@ TEST_F(IR_ValidateTest, ExitLoop_WithResult) {
     ASSERT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_IncorrectResultType) {
+TEST_F(IR_ValidatorTest, ExitLoop_IncorrectResultType) {
     auto* loop = b.Loop();
     auto* r1 = b.InstructionResult(ty.i32());
     auto* r2 = b.InstructionResult(ty.f32());
@@ -2161,13 +2193,17 @@ TEST_F(IR_ValidateTest, ExitLoop_IncorrectResultType) {
     ASSERT_FALSE(res);
     EXPECT_EQ(
         res.Failure().str(),
-        R"(:5:23 error: exit: argument type (f32) does not match control instruction type (i32)
+        R"(:5:23 error: exit-loop: argument type (f32) does not match control instruction type (i32)
         exit_loop 1i, 2i  # loop_1
                       ^^
 
 :4:7 note: In block
       %b2 = block {  # body
       ^^^^^^^^^^^
+
+:3:5 note: control instruction
+    %2:i32, %3:f32 = loop [b: %b2, c: %b3] {  # loop_1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void -> %b1 {
@@ -2186,7 +2222,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_NotInParentLoop) {
+TEST_F(IR_ValidatorTest, ExitLoop_NotInParentLoop) {
     auto* f = b.Function("my_func", ty.void_());
 
     auto* loop = b.Loop();
@@ -2203,7 +2239,7 @@ TEST_F(IR_ValidateTest, ExitLoop_NotInParentLoop) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:13:9 error: exit: loop not found in parent control instructions
+              R"(:13:9 error: exit-loop: loop not found in parent control instructions
         exit_loop  # loop_1
         ^^^^^^^^^
 
@@ -2233,7 +2269,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_JumpsOverIfs) {
+TEST_F(IR_ValidatorTest, ExitLoop_JumpsOverIfs) {
     // loop {
     //   if (true) {
     //    if (false) {
@@ -2265,7 +2301,7 @@ TEST_F(IR_ValidateTest, ExitLoop_JumpsOverIfs) {
     EXPECT_TRUE(res) << res.Failure().str();
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidJumpOverSwitch) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidJumpOverSwitch) {
     auto* loop = b.Loop();
     loop->Continuing()->Append(b.NextIteration(loop));
 
@@ -2287,7 +2323,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidJumpOverSwitch) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit: loop target jumps over other control instructions
+              R"(:7:13 error: exit-loop: loop target jumps over other control instructions
             exit_loop  # loop_1
             ^^^^^^^^^
 
@@ -2321,7 +2357,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidJumpOverLoop) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidJumpOverLoop) {
     auto* outer_loop = b.Loop();
 
     outer_loop->Continuing()->Append(b.NextIteration(outer_loop));
@@ -2342,7 +2378,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidJumpOverLoop) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit: loop target jumps over other control instructions
+              R"(:7:13 error: exit-loop: loop target jumps over other control instructions
             exit_loop  # loop_1
             ^^^^^^^^^
 
@@ -2376,7 +2412,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideContinuing) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideContinuing) {
     auto* loop = b.Loop();
 
     loop->Continuing()->Append(b.ExitLoop(loop));
@@ -2392,7 +2428,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideContinuing) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:8:9 error: exit_loop: loop exit jumps out of continuing block
+              R"(:8:9 error: exit-loop: loop exit jumps out of continuing block
         exit_loop  # loop_1
         ^^^^^^^^^
 
@@ -2417,7 +2453,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideContinuingNested) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideContinuingNested) {
     auto* loop = b.Loop();
 
     b.With(loop->Continuing(), [&]() {
@@ -2438,7 +2474,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideContinuingNested) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:10:13 error: exit_loop: loop exit jumps out of continuing block
+              R"(:10:13 error: exit-loop: loop exit jumps out of continuing block
             exit_loop  # loop_1
             ^^^^^^^^^
 
@@ -2472,7 +2508,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideInitializer) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideInitializer) {
     auto* loop = b.Loop();
 
     loop->Initializer()->Append(b.ExitLoop(loop));
@@ -2490,7 +2526,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideInitializer) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:5:9 error: exit_loop: loop exit not permitted in loop initializer
+              R"(:5:9 error: exit-loop: loop exit not permitted in loop initializer
         exit_loop  # loop_1
         ^^^^^^^^^
 
@@ -2518,7 +2554,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideInitializerNested) {
+TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideInitializerNested) {
     auto* loop = b.Loop();
 
     b.With(loop->Initializer(), [&]() {
@@ -2540,7 +2576,7 @@ TEST_F(IR_ValidateTest, ExitLoop_InvalidInsideInitializerNested) {
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
     EXPECT_EQ(res.Failure().str(),
-              R"(:7:13 error: exit_loop: loop exit not permitted in loop initializer
+              R"(:7:13 error: exit-loop: loop exit not permitted in loop initializer
             exit_loop  # loop_1
             ^^^^^^^^^
 
@@ -2577,7 +2613,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, LoadVectorElement_NullResult) {
+TEST_F(IR_ValidatorTest, LoadVectorElement_NullResult) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2589,7 +2625,8 @@ TEST_F(IR_ValidateTest, LoadVectorElement_NullResult) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:4:5 error: instruction result is undefined
+    EXPECT_EQ(res.Failure().str(),
+              R"(:4:5 error: load-vector-element: instruction result is undefined
     undef = load_vector_element %2, 1i
     ^^^^^
 
@@ -2608,7 +2645,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, LoadVectorElement_NullFrom) {
+TEST_F(IR_ValidatorTest, LoadVectorElement_NullFrom) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2619,7 +2656,7 @@ TEST_F(IR_ValidateTest, LoadVectorElement_NullFrom) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:34 error: load_vector_element: operand is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:34 error: load-vector-element: operand is undefined
     %2:f32 = load_vector_element undef, 1i
                                  ^^^^^
 
@@ -2637,7 +2674,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, LoadVectorElement_NullIndex) {
+TEST_F(IR_ValidatorTest, LoadVectorElement_NullIndex) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2649,7 +2686,7 @@ TEST_F(IR_ValidateTest, LoadVectorElement_NullIndex) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:4:38 error: load_vector_element: operand is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:4:38 error: load-vector-element: operand is undefined
     %3:f32 = load_vector_element %2, undef
                                      ^^^^^
 
@@ -2668,7 +2705,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, StoreVectorElement_NullTo) {
+TEST_F(IR_ValidatorTest, StoreVectorElement_NullTo) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2679,7 +2716,7 @@ TEST_F(IR_ValidateTest, StoreVectorElement_NullTo) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:3:32 error: store_vector_element: operand is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:3:32 error: store-vector-element: operand is undefined
     store_vector_element undef undef, 1i, 2i
                                ^^^^^
 
@@ -2697,7 +2734,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, StoreVectorElement_NullIndex) {
+TEST_F(IR_ValidatorTest, StoreVectorElement_NullIndex) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2709,7 +2746,7 @@ TEST_F(IR_ValidateTest, StoreVectorElement_NullIndex) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:4:33 error: store_vector_element: operand is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:4:33 error: store-vector-element: operand is undefined
     store_vector_element %2 %2, undef, 2i
                                 ^^^^^
 
@@ -2736,7 +2773,7 @@ note: # Disassembly
 )");
 }
 
-TEST_F(IR_ValidateTest, StoreVectorElement_NullValue) {
+TEST_F(IR_ValidatorTest, StoreVectorElement_NullValue) {
     auto* f = b.Function("my_func", ty.void_());
 
     b.With(f->Block(), [&] {
@@ -2748,7 +2785,7 @@ TEST_F(IR_ValidateTest, StoreVectorElement_NullValue) {
 
     auto res = ir::Validate(mod);
     ASSERT_FALSE(res);
-    EXPECT_EQ(res.Failure().str(), R"(:4:37 error: store_vector_element: operand is undefined
+    EXPECT_EQ(res.Failure().str(), R"(:4:37 error: store-vector-element: operand is undefined
     store_vector_element %2 %2, 1i, undef
                                     ^^^^^
 
