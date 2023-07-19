@@ -30,7 +30,17 @@ class IntrinsicCall : public utils::Castable<IntrinsicCall, Call> {
     enum class Kind {
         // SPIR-V backend intrinsics.
         kSpirvDot,
+        kSpirvImageSampleImplicitLod,
+        kSpirvImageSampleExplicitLod,
+        kSpirvImageSampleDrefImplicitLod,
+        kSpirvImageSampleDrefExplicitLod,
+        kSpirvMatrixTimesMatrix,
+        kSpirvMatrixTimesScalar,
+        kSpirvMatrixTimesVector,
+        kSpirvSampledImage,
         kSpirvSelect,
+        kSpirvVectorTimesMatrix,
+        kSpirvVectorTimesScalar,
     };
 
     /// Constructor

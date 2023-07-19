@@ -679,6 +679,10 @@ if(${TINT_BUILD_SPV_WRITER})
     list(APPEND TINT_LIB_SRCS
       ir/transform/builtin_polyfill_spirv.cc
       ir/transform/builtin_polyfill_spirv.h
+      ir/transform/expand_implicit_splats.cc
+      ir/transform/expand_implicit_splats.h
+      ir/transform/handle_matrix_arithmetic.cc
+      ir/transform/handle_matrix_arithmetic.h
       ir/transform/merge_return.cc
       ir/transform/merge_return.h
       ir/transform/shader_io_spirv.cc
@@ -1332,6 +1336,8 @@ if(TINT_BUILD_TESTS)
     if(${TINT_BUILD_IR})
       list(APPEND TINT_TEST_SRCS
         ir/transform/builtin_polyfill_spirv_test.cc
+        ir/transform/handle_matrix_arithmetic_test.cc
+        ir/transform/expand_implicit_splats_test.cc
         ir/transform/merge_return_test.cc
         ir/transform/shader_io_spirv_test.cc
         ir/transform/var_for_dynamic_index_test.cc
@@ -1350,6 +1356,7 @@ if(TINT_BUILD_TESTS)
         writer/spirv/ir/generator_impl_ir_switch_test.cc
         writer/spirv/ir/generator_impl_ir_swizzle_test.cc
         writer/spirv/ir/generator_impl_ir_test.cc
+        writer/spirv/ir/generator_impl_ir_texture_builtin_test.cc
         writer/spirv/ir/generator_impl_ir_type_test.cc
         writer/spirv/ir/generator_impl_ir_unary_test.cc
         writer/spirv/ir/generator_impl_ir_var_test.cc

@@ -152,7 +152,35 @@ TEST_F(SpvGeneratorImplTest, Builtin_Abs_vec2u) {
 )");
 }
 
-// Test that any of an scalar just folds away.
+// Test that all of a scalar just folds away.
+TEST_F(SpvGeneratorImplTest, Builtin_All_Scalar) {
+    auto* arg = b.FunctionParam("arg", ty.bool_());
+    auto* func = b.Function("foo", ty.bool_());
+    func->SetParams({arg});
+    b.With(func->Block(), [&] {
+        auto* result = b.Call(ty.bool_(), builtin::Function::kAll, arg);
+        b.Return(func, result);
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("OpReturnValue %arg");
+}
+
+TEST_F(SpvGeneratorImplTest, Builtin_All_Vector) {
+    auto* arg = b.FunctionParam("arg", ty.vec4<bool>());
+    auto* func = b.Function("foo", ty.bool_());
+    func->SetParams({arg});
+    b.With(func->Block(), [&] {
+        auto* result = b.Call(ty.bool_(), builtin::Function::kAll, arg);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("%result = OpAll %bool %arg");
+}
+
+// Test that any of a scalar just folds away.
 TEST_F(SpvGeneratorImplTest, Builtin_Any_Scalar) {
     auto* arg = b.FunctionParam("arg", ty.bool_());
     auto* func = b.Function("foo", ty.bool_());
@@ -364,7 +392,11 @@ INSTANTIATE_TEST_SUITE_P(SpvGeneratorImplTest,
                                          BuiltinTestCase{kU32, builtin::Function::kMax, "UMax"},
                                          BuiltinTestCase{kF32, builtin::Function::kMin, "FMin"},
                                          BuiltinTestCase{kI32, builtin::Function::kMin, "SMin"},
-                                         BuiltinTestCase{kU32, builtin::Function::kMin, "UMin"}));
+                                         BuiltinTestCase{kU32, builtin::Function::kMin, "UMin"},
+                                         BuiltinTestCase{kF32, builtin::Function::kPow, "Pow"},
+                                         BuiltinTestCase{kF16, builtin::Function::kPow, "Pow"},
+                                         BuiltinTestCase{kF32, builtin::Function::kStep, "Step"},
+                                         BuiltinTestCase{kF16, builtin::Function::kStep, "Step"}));
 
 TEST_F(SpvGeneratorImplTest, Builtin_Cross_vec3f) {
     auto* arg1 = b.FunctionParam("arg1", ty.vec3<f32>());
@@ -508,12 +540,53 @@ TEST_P(Builtin_3arg, Vector) {
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(params.spirv_inst);
 }
-INSTANTIATE_TEST_SUITE_P(SpvGeneratorImplTest,
-                         Builtin_3arg,
-                         testing::Values(BuiltinTestCase{kF32, builtin::Function::kClamp, "NClamp"},
-                                         BuiltinTestCase{kI32, builtin::Function::kClamp, "SClamp"},
-                                         BuiltinTestCase{kU32, builtin::Function::kClamp,
-                                                         "UClamp"}));
+INSTANTIATE_TEST_SUITE_P(
+    SpvGeneratorImplTest,
+    Builtin_3arg,
+    testing::Values(BuiltinTestCase{kF32, builtin::Function::kClamp, "NClamp"},
+                    BuiltinTestCase{kI32, builtin::Function::kClamp, "SClamp"},
+                    BuiltinTestCase{kU32, builtin::Function::kClamp, "UClamp"},
+                    BuiltinTestCase{kF32, builtin::Function::kFma, "Fma"},
+                    BuiltinTestCase{kF16, builtin::Function::kFma, "Fma"},
+                    BuiltinTestCase{kF32, builtin::Function::kMix, "Mix"},
+                    BuiltinTestCase{kF16, builtin::Function::kMix, "Mix"},
+                    BuiltinTestCase{kF32, builtin::Function::kSmoothstep, "SmoothStep"},
+                    BuiltinTestCase{kF16, builtin::Function::kSmoothstep, "SmoothStep"}));
+
+TEST_F(SpvGeneratorImplTest, Builtin_Mix_VectorOperands_ScalarFactor) {
+    auto* arg1 = b.FunctionParam("arg1", ty.vec4<f32>());
+    auto* arg2 = b.FunctionParam("arg2", ty.vec4<f32>());
+    auto* factor = b.FunctionParam("factor", ty.f32());
+    auto* func = b.Function("foo", ty.vec4<f32>());
+    func->SetParams({arg1, arg2, factor});
+
+    b.With(func->Block(), [&] {
+        auto* result = b.Call(ty.vec4<f32>(), builtin::Function::kMix, arg1, arg2, factor);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("%9 = OpCompositeConstruct %v4float %factor %factor %factor %factor");
+    EXPECT_INST("%result = OpExtInst %v4float %11 FMix %arg1 %arg2 %9");
+}
+
+TEST_F(SpvGeneratorImplTest, Builtin_Mix_VectorOperands_VectorFactor) {
+    auto* arg1 = b.FunctionParam("arg1", ty.vec4<f32>());
+    auto* arg2 = b.FunctionParam("arg2", ty.vec4<f32>());
+    auto* factor = b.FunctionParam("factor", ty.vec4<f32>());
+    auto* func = b.Function("foo", ty.vec4<f32>());
+    func->SetParams({arg1, arg2, factor});
+
+    b.With(func->Block(), [&] {
+        auto* result = b.Call(ty.vec4<f32>(), builtin::Function::kMix, arg1, arg2, factor);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("%result = OpExtInst %v4float %10 FMix %arg1 %arg2 %factor");
+}
 
 TEST_F(SpvGeneratorImplTest, Builtin_Select_ScalarCondition_ScalarOperands) {
     auto* argf = b.FunctionParam("argf", ty.i32());
@@ -565,6 +638,28 @@ TEST_F(SpvGeneratorImplTest, Builtin_Select_ScalarCondition_VectorOperands) {
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST("%11 = OpCompositeConstruct %v4bool %cond %cond %cond %cond");
     EXPECT_INST("%result = OpSelect %v4int %11 %argt %argf");
+}
+
+TEST_F(SpvGeneratorImplTest, Builtin_StorageBarrier) {
+    auto* func = b.Function("foo", ty.void_());
+    b.With(func->Block(), [&] {
+        b.Call(ty.void_(), builtin::Function::kStorageBarrier);
+        b.Return(func);
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("OpControlBarrier %uint_2 %uint_2 %uint_72");
+}
+
+TEST_F(SpvGeneratorImplTest, Builtin_WorkgroupBarrier) {
+    auto* func = b.Function("foo", ty.void_());
+    b.With(func->Block(), [&] {
+        b.Call(ty.void_(), builtin::Function::kWorkgroupBarrier);
+        b.Return(func);
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST("OpControlBarrier %uint_2 %uint_2 %uint_264");
 }
 
 }  // namespace
