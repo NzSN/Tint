@@ -218,6 +218,11 @@ def add_ci_builder(name, os, clang, debug, cpu):
     dimensions_ci = get_default_dimensions(os)
     dimensions_ci["pool"] = "luci.flex.ci"
     properties_ci = get_default_properties(os, clang, debug, cpu)
+    properties_ci["$build/reclient"] = {
+        "instance": "rbe-chromium-trusted",
+        "metrics_project": "chromium-reclient-metrics",
+        "scandeps_server": True,
+    }
     triggered_by_ci = ["primary-poller"]
     luci.builder(
         name = name,
@@ -245,6 +250,11 @@ def add_try_builder(name, os, clang, debug, cpu):
     properties_try = get_default_properties(os, clang, debug, cpu)
     properties_try["$depot_tools/bot_update"] = {
         "apply_patch_on_gclient": True,
+    }
+    properties_try["$build/reclient"] = {
+        "instance": "rbe-chromium-untrusted",
+        "metrics_project": "chromium-reclient-metrics",
+        "scandeps_server": True,
     }
     luci.builder(
         name = name,
