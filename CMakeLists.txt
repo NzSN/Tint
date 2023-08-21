@@ -46,7 +46,7 @@ endif()
 #   option(name description default)
 # If a variable is not already defined with the given name, otherwise the
 # function does nothing.
-# Simplifies customization by projects that use Dawn as a dependency.
+# Simplifies customization by projects that use Tint as a dependency.
 function (option_if_not_defined name description default)
     if(NOT DEFINED ${name})
         option(${name} ${description} ${default})
@@ -58,7 +58,7 @@ endfunction()
 #   set(${name} ${value} CACHE STRING ${description})
 # If a variable is not already defined with the given name, otherwise the
 # function does nothing.
-# Simplifies customization by projects that use Dawn as a dependency.
+# Simplifies customization by projects that use Tint as a dependency.
 function (set_if_not_defined name value description)
     if(NOT DEFINED ${name})
         set(${name} ${value} CACHE STRING ${description})
@@ -66,8 +66,21 @@ function (set_if_not_defined name value description)
 endfunction()
 
 set_if_not_defined(TINT_THIRD_PARTY_DIR "${tint_SOURCE_DIR}/third_party" "Directory in which to find third-party dependencies.")
+set_if_not_defined(TINT_VULKAN_DEPS_DIR "${TINT_THIRD_PARTY_DIR}/vulkan-deps" "Directory in which to find vulkan-deps")
 
-option_if_not_defined(TINT_BUILD_SAMPLES "Build samples" ON)
+set_if_not_defined(TINT_ABSEIL_DIR "${TINT_THIRD_PARTY_DIR}/abseil-cpp" "Directory in which to find Abseil")
+set_if_not_defined(TINT_GLFW_DIR "${TINT_THIRD_PARTY_DIR}/glfw" "Directory in which to find GLFW")
+set_if_not_defined(TINT_JINJA2_DIR "${TINT_THIRD_PARTY_DIR}/jinja2" "Directory in which to find Jinja2")
+set_if_not_defined(TINT_MARKUPSAFE_DIR "${TINT_THIRD_PARTY_DIR}/markupsafe" "Directory in which to find MarkupSafe")
+set_if_not_defined(TINT_KHRONOS_DIR "${TINT_THIRD_PARTY_DIR}/khronos" "Directory in which to find Khronos GL headers")
+set_if_not_defined(TINT_SWIFTSHADER_DIR "${TINT_THIRD_PARTY_DIR}/swiftshader" "Directory in which to find swiftshader")
+
+set_if_not_defined(TINT_SPIRV_TOOLS_DIR "${TINT_VULKAN_DEPS_DIR}/spirv-tools/src" "Directory in which to find SPIRV-Tools")
+set_if_not_defined(TINT_SPIRV_HEADERS_DIR "${TINT_VULKAN_DEPS_DIR}/spirv-headers/src" "Directory in which to find SPIRV-Headers")
+set_if_not_defined(TINT_VULKAN_HEADERS_DIR "${TINT_VULKAN_DEPS_DIR}/vulkan-headers/src" "Directory in which to find Vulkan-Headers")
+set_if_not_defined(TINT_VULKAN_TOOLS_DIR "${TINT_VULKAN_DEPS_DIR}/vulkan-tools/src" "Directory in which to find Vulkan-Tools")
+
+option_if_not_defined(TINT_BUILD_CMD_TOOLS "Build the Tint command line tools" ON)
 option_if_not_defined(TINT_BUILD_DOCS "Build documentation" ${TINT_BUILD_DOCS_DEFAULT})
 option_if_not_defined(TINT_DOCS_WARN_AS_ERROR "When building documentation, treat warnings as errors" OFF)
 option_if_not_defined(TINT_BUILD_SPV_READER "Build the SPIR-V input reader" ON)
@@ -104,7 +117,7 @@ option_if_not_defined(TINT_CHECK_CHROMIUM_STYLE "Check for [chromium-style] issu
 
 option_if_not_defined(TINT_SYMBOL_STORE_DEBUG_NAME "Enable storing of name in tint::ast::Symbol to help debugging the AST" OFF)
 
-message(STATUS "Tint build samples: ${TINT_BUILD_SAMPLES}")
+message(STATUS "Tint build command line executable tools: ${TINT_BUILD_CMD_TOOLS}")
 message(STATUS "Tint build docs: ${TINT_BUILD_DOCS}")
 message(STATUS "Tint build docs with warn as error: ${TINT_DOCS_WARN_AS_ERROR}")
 message(STATUS "Tint build SPIR-V reader: ${TINT_BUILD_SPV_READER}")
@@ -134,6 +147,53 @@ endif()
 
 message(STATUS "Using python3")
 find_package(PythonInterp 3 REQUIRED)
+
+################################################################################
+# common_compile_options - sets common Tint compiler and linker options for the
+# given target
+################################################################################
+function(common_compile_options TARGET)
+  if (COMPILER_IS_LIKE_GNU)
+    target_compile_options(${TARGET} PRIVATE
+      -fno-exceptions
+      -fno-rtti
+
+      -Wno-deprecated-builtins
+      -Wno-unknown-warning-option
+    )
+
+    if (${TINT_ENABLE_MSAN})
+      target_compile_options(${TARGET} PUBLIC -fsanitize=memory)
+      target_link_options(${TARGET} PUBLIC -fsanitize=memory)
+    elseif (${TINT_ENABLE_ASAN})
+      target_compile_options(${TARGET} PUBLIC -fsanitize=address)
+      target_link_options(${TARGET} PUBLIC -fsanitize=address)
+    elseif (${TINT_ENABLE_TSAN})
+      target_compile_options(${TARGET} PUBLIC -fsanitize=thread)
+      target_link_options(${TARGET} PUBLIC -fsanitize=thread)
+    elseif (${TINT_ENABLE_UBSAN})
+      target_compile_options(${TARGET} PUBLIC -fsanitize=undefined -fsanitize=float-divide-by-zero)
+      target_link_options(${TARGET} PUBLIC -fsanitize=undefined -fsanitize=float-divide-by-zero)
+    endif()
+  endif(COMPILER_IS_LIKE_GNU)
+
+  if(MSVC)
+      target_compile_options(${TARGET} PUBLIC /utf-8)
+  endif()
+
+  if (TINT_EMIT_COVERAGE)
+    target_compile_definitions(${TARGET} PRIVATE "TINT_EMIT_COVERAGE")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        target_compile_options(${TARGET} PRIVATE "--coverage")
+        target_link_options(${TARGET} PRIVATE "gcov")
+    elseif(COMPILER_IS_CLANG OR COMPILER_IS_CLANG_CL)
+        target_compile_options(${TARGET} PRIVATE "-fprofile-instr-generate" "-fcoverage-mapping")
+        target_link_options(${TARGET} PRIVATE "-fprofile-instr-generate" "-fcoverage-mapping")
+    else()
+        message(FATAL_ERROR "Coverage generation not supported for the ${CMAKE_CXX_COMPILER_ID} toolchain")
+    endif()
+  endif(TINT_EMIT_COVERAGE)
+endfunction()
 
 if (${TINT_BUILD_SPIRV_TOOLS_FUZZER})
   message(STATUS "TINT_BUILD_SPIRV_TOOLS_FUZZER is ON - setting
@@ -325,97 +385,8 @@ function(tint_core_compile_options TARGET)
   endif(TINT_EMIT_COVERAGE)
 endfunction()
 
-function(tint_default_compile_options TARGET)
-  tint_core_compile_options(${TARGET})
-
-  set(COMMON_GNU_OPTIONS
-    -Wall
-    -Werror
-    -Wextra
-    -Wno-documentation-unknown-command
-    -Wno-padded
-    -Wno-switch-enum
-    -Wno-unknown-pragmas
-  )
-
-  set(COMMON_CLANG_OPTIONS
-    -Wno-c++98-compat
-    -Wno-c++98-compat-pedantic
-    -Wno-format-pedantic
-    -Wno-return-std-move-in-c++11
-    -Wno-unknown-warning-option
-    -Wno-undefined-var-template
-    -Wno-used-but-marked-unused
-    -Weverything
-  )
-
-  if (COMPILER_IS_LIKE_GNU)
-    target_compile_options(${TARGET} PRIVATE
-      -pedantic-errors
-      ${COMMON_GNU_OPTIONS}
-    )
-
-    if (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang") OR
-        ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang"))
-      target_compile_options(${TARGET} PRIVATE
-        ${COMMON_CLANG_OPTIONS}
-      )
-    endif()
-  endif(COMPILER_IS_LIKE_GNU)
-
-  if (MSVC)
-    # Specify /EHs for exception handling.
-    target_compile_options(${TARGET} PRIVATE
-      /bigobj
-      /EHsc
-      /W4
-      /WX
-      /wd4068 # unknown pragma
-      /wd4127 # conditional expression is constant
-      /wd4244 # 'conversion' conversion from 'type1' to 'type2', possible loss of data
-      /wd4267 # 'var' : conversion from 'size_t' to 'type', possible loss of data
-      /wd4324 # 'struct_name' : structure was padded due to __declspec(align())
-      /wd4459 # declaration of 'identifier' hides global declaration
-      /wd4458 # declaration of 'identifier' hides class member
-      /wd4514 # 'function' : unreferenced inline function has been removed
-      /wd4571 # catch(...) semantics changed since Visual C++ 7.1; structured exceptions (SEH) are no longer caught
-      /wd4625 # 'derived class' : copy constructor was implicitly defined as deleted because a base class copy constructor is inaccessible or deleted
-      /wd4626 # 'derived class' : assignment operator was implicitly defined as deleted because a base class assignment operator is inaccessible or deleted
-      /wd4710 # 'function' : function not inlined
-      /wd4774 # 'function' : format string 'string' requires an argument of type 'type', but variadic argument number has type 'type'
-      /wd4820 # 'bytes' bytes padding added after construct 'member_name'
-      /wd5026 # 'type': move constructor was implicitly defined as deleted
-      /wd5027 # 'type': move assignment operator was implicitly defined as deleted
-    )
-
-    # When building with clang-cl on Windows, try to match our clang build
-    # options as much as possible.
-    if (COMPILER_IS_CLANG_CL)
-      target_compile_options(${TARGET} PRIVATE
-        ${COMMON_GNU_OPTIONS}
-        ${COMMON_CLANG_OPTIONS}
-        # Disable warnings that are usually disabled in downstream deps for
-        # gcc/clang, but aren't for clang-cl.
-        -Wno-global-constructors
-        -Wno-zero-as-null-pointer-constant
-        -Wno-shorten-64-to-32
-        -Wno-shadow-field-in-constructor
-        -Wno-reserved-id-macro
-        -Wno-language-extension-token
-      )
-    endif()
-  endif()
-endfunction()
-
 add_subdirectory(third_party)
 add_subdirectory(src/tint)
-if (TINT_BUILD_SAMPLES)
-  add_subdirectory(src/tint/cmd)
-endif()
-
-if (TINT_BUILD_FUZZERS)
-  add_subdirectory(src/tint/fuzzers)
-endif()
 
 add_custom_target(tint-lint
   COMMAND ./tools/lint
@@ -442,8 +413,4 @@ if (TINT_EMIT_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     WORKING_DIRECTORY ${TINT_ROOT_SOURCE_DIR}
     COMMENT "Generating tint coverage data"
     VERBATIM)
-endif()
-
-if (TINT_BUILD_REMOTE_COMPILE)
-  add_subdirectory(tools/src/cmd/remote-compile)
 endif()

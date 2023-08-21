@@ -121,7 +121,7 @@ deps = {
   },
 
   'third_party/benchmark': {
-    'url': '{chromium_git}/external/github.com/google/benchmark.git@e991355c02b93fe17713efe04cbc2e278e00fdbd',
+    'url': '{chromium_git}/external/github.com/google/benchmark.git@efc89f0b524780b1994d5dddd83a92718e5be492',
   },
 
   'third_party/googletest': {

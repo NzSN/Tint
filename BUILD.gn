@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import("scripts/tint_overrides_with_defaults.gni")
+
 # This target is built when no specific target is specified on the command line.
 group("default") {
   testonly = true
   deps = [
-    "src/tint:libtint",
-    "src/tint:tint_unittests",
-    "src/tint/cmd:tint",
+    "src/tint/api",
     "src/tint/fuzzers",
   ]
+  if (tint_build_unittests) {
+    deps += [ "src/tint/cmd/test" ]
+  }
 }
