@@ -13,6 +13,18 @@ vars = {
 
   # We don't use location metadata in our test isolates.
   'generate_location_tags': False,
+
+  # Fetch configuration files required for the 'use_remoteexec' gn arg
+  'download_remoteexec_cfg': False,
+  # RBE instance to use for running remote builds
+  'rbe_instance': Str('projects/rbe-chrome-untrusted/instances/default_instance'),
+  # RBE project to download rewrapper config files for. Only needed if
+  # different from the project used in 'rbe_instance'
+  'rewrapper_cfg_project': Str(''),
+  # reclient CIPD package
+  'reclient_package': 'infra/rbe/client/',
+  # reclient CIPD package version
+  'reclient_version': 're_client_version:0.108.0.7cdbbe9-gomaip',
 }
 
 deps = {
@@ -64,6 +76,16 @@ deps = {
     }],
     'dep_type': 'cipd',
     'condition': 'host_os == "win"',
+  },
+
+ 'buildtools/reclient': {
+    'packages': [
+      {
+        'package': Var('reclient_package') + '${{platform}}',
+        'version': Var('reclient_version'),
+      }
+    ],
+    'dep_type': 'cipd',
   },
 
   'buildtools/third_party/libc++/trunk': {
@@ -213,6 +235,22 @@ hooks = [
     'pattern': '.',
     'action': ['python3', 'build/util/lastchange.py',
                '-o', 'build/util/LASTCHANGE'],
+  },
+  {
+    # Download remote exec cfg files
+    'name': 'fetch_reclient_cfgs',
+    'pattern': '.',
+    'condition': 'download_remoteexec_cfg',
+    'action': ['python3',
+               'buildtools/reclient_cfgs/fetch_reclient_cfgs.py',
+               '--rbe_instance',
+               Var('rbe_instance'),
+               '--reproxy_cfg_template',
+               'reproxy.cfg.template',
+               '--rewrapper_cfg_project',
+               Var('rewrapper_cfg_project'),
+               '--quiet',
+               ],
   },
 ]
 
