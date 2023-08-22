@@ -190,18 +190,6 @@ def get_default_properties(os, clang, debug, cpu):
     properties["target_cpu"] = cpu
 
     properties["clang"] = clang
-    msvc = os.category == os_category.WINDOWS and not clang
-
-    if msvc != True:
-        goma_props = {}
-        goma_props.update({
-            "server_host": "goma.chromium.org",
-            "rpc_extra_params": "?prod",
-            "use_luci_auth": True,
-        })
-        if os.category != os_category.MAC:
-            goma_props["enable_ats"] = True
-        properties["$build/goma"] = goma_props
 
     return properties
 
