@@ -16,12 +16,12 @@
 # Target flags
 ################################################################################
 if(NOT TINT_BUILD_AS_OTHER_OS)
-  if(UNIX)
-    set(IS_LINUX TRUE)
-    set(IS_LINUX TRUE)
-  elseif(APPLE)
+  if(APPLE)  # Must come before UNIX
     set(IS_MAC TRUE)
     set(IS_MAC TRUE)
+  elseif(UNIX)
+    set(IS_LINUX TRUE)
+    set(IS_LINUX TRUE)
   elseif(WIN32)
     set(IS_WIN TRUE)
     set(IS_WIN TRUE)
@@ -395,7 +395,7 @@ endfunction()
 #   KIND         - The target kind
 #   DEPENDENCIES - a list of external target names
 #
-# See tools/src/cmd/gen/build/externals.json for the list of external dependencies.
+# See src/tint/externals.json for the list of external dependencies.
 function(tint_target_add_external_dependencies UNSUFFIXED_TARGET KIND)
   set(DEPENDENCIES ${ARGN})
 
@@ -411,28 +411,10 @@ function(tint_target_add_external_dependencies UNSUFFIXED_TARGET KIND)
   endif()
 
   foreach(TARGET ${TARGETS})
-    foreach(DEPENDENCY ${DEPENDENCIES})
-      # Each external dependency requires special handling...
+    foreach(DEPENDENCY ${DEPENDENCIES})  # Each external dependency requires special handling...
       if(${DEPENDENCY} STREQUAL "abseil")
         target_link_libraries(${TARGET} PRIVATE
           absl_strings
-        )
-      elseif(${DEPENDENCY} STREQUAL "gtest")
-        target_include_directories(${TARGET} PRIVATE ${gmock_SOURCE_DIR}/include)
-        target_link_libraries(${TARGET} PRIVATE gmock)
-      elseif(${DEPENDENCY} STREQUAL "spirv-headers")
-        tint_spvheaders_compile_options(${TARGET})
-      elseif(${DEPENDENCY} STREQUAL "spirv-tools")
-        tint_spvtools_compile_options(${TARGET})
-      elseif(${DEPENDENCY} STREQUAL "spirv-opt-internal")
-        target_link_libraries(${TARGET} PRIVATE
-          SPIRV-Tools-opt
-        )
-        target_include_directories(${TARGET} PRIVATE
-          "${TINT_SPIRV_TOOLS_DIR}"
-          "${TINT_SPIRV_TOOLS_DIR}/include"
-          "${TINT_SPIRV_TOOLS_DIR}/source"
-          "${spirv-tools_BINARY_DIR}"
         )
       elseif(${DEPENDENCY} STREQUAL "glslang")
         target_link_libraries(${TARGET} PRIVATE glslang)
@@ -448,6 +430,30 @@ function(tint_target_add_external_dependencies UNSUFFIXED_TARGET KIND)
         target_link_libraries(${TARGET} PRIVATE
           glslang-default-resource-limits
         )
+      elseif(${DEPENDENCY} STREQUAL "gtest")
+        target_include_directories(${TARGET} PRIVATE ${gmock_SOURCE_DIR}/include)
+        target_link_libraries(${TARGET} PRIVATE gmock)
+      elseif(${DEPENDENCY} STREQUAL "metal")
+        find_library(FoundationFramework Foundation REQUIRED)
+        find_library(MetalFramework Metal REQUIRED)
+        target_link_libraries(${TARGET} PRIVATE ${FoundationFramework} ${MetalFramework})
+      elseif(${DEPENDENCY} STREQUAL "spirv-headers")
+        tint_spvheaders_compile_options(${TARGET})
+      elseif(${DEPENDENCY} STREQUAL "spirv-tools")
+        tint_spvtools_compile_options(${TARGET})
+      elseif(${DEPENDENCY} STREQUAL "spirv-opt-internal")
+        target_link_libraries(${TARGET} PRIVATE
+          SPIRV-Tools-opt
+        )
+        target_include_directories(${TARGET} PRIVATE
+          "${TINT_SPIRV_TOOLS_DIR}"
+          "${TINT_SPIRV_TOOLS_DIR}/include"
+          "${TINT_SPIRV_TOOLS_DIR}/source"
+          "${spirv-tools_BINARY_DIR}"
+        )
+      elseif(${DEPENDENCY} STREQUAL "thread")
+        find_package(Threads REQUIRED)
+        target_link_libraries(${TARGET} PRIVATE Threads::Threads)
       elseif(${DEPENDENCY} STREQUAL "winsock")
         target_link_libraries(${TARGET} PRIVATE ws2_32)
       else()
@@ -493,24 +499,6 @@ endfunction()
 # Include the generated build files
 ################################################################################
 include("BUILD.cmake")
-
-find_package(Threads REQUIRED)
-target_link_libraries(tint_cmd_remote_compile_cmd PRIVATE Threads::Threads)
-
-# If we're building on mac / ios and we have CoreGraphics, then we can use the
-# metal API to validate our shaders. This is roughly 4x faster than invoking
-# the metal shader compiler executable.
-if(APPLE AND TINT_BUILD_MSL_WRITER)
-  find_library(LIB_CORE_GRAPHICS CoreGraphics)
-
-  if(LIB_CORE_GRAPHICS)
-    target_sources("tint_lang_msl_validate" PRIVATE "lang/msl/validate/msl_metal.mm")
-    target_compile_definitions("tint_cmd_remote_compile_cmd" PRIVATE "-DTINT_ENABLE_MSL_VALIDATION_USING_METAL_API=1")
-    target_compile_definitions("tint_lang_msl_validate" PUBLIC "-DTINT_ENABLE_MSL_VALIDATION_USING_METAL_API=1")
-    target_compile_options("tint_lang_msl_validate" PRIVATE "-fmodules" "-fcxx-modules")
-    target_link_options("tint_lang_msl_validate" PUBLIC "-framework" "CoreGraphics")
-  endif()
-endif()
 
 ################################################################################
 # Additional fuzzer tests
