@@ -33,7 +33,7 @@ deps = {
   },
 
   'third_party/vulkan-deps': {
-    'url': '{chromium_git}/vulkan-deps@5b82cc4a7eaa9befcf893bd0528b9cf93aae740a',
+    'url': '{chromium_git}/vulkan-deps@62a84300c2fee0c5957675b0c1e5a0fe9ea7ac40',
   },
 
   # Dependencies required to use GN/Clang in standalone
