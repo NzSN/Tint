@@ -33,11 +33,12 @@
 #include "spirv-tools/libspirv.hpp"
 #endif  // TINT_BUILD_SPV_READER || TINT_BUILD_SPV_WRITER
 
+#include "src/tint/api/options/pixel_local.h"
 #include "src/tint/api/tint.h"
 #include "src/tint/cmd/common/generate_external_texture_bindings.h"
 #include "src/tint/cmd/common/helper.h"
-#include "src/tint/lang/hlsl/validate/val.h"
-#include "src/tint/lang/msl/validate/val.h"
+#include "src/tint/lang/core/ir/disassembler.h"
+#include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/ast/transform/first_index_offset.h"
 #include "src/tint/lang/wgsl/ast/transform/manager.h"
@@ -45,6 +46,7 @@
 #include "src/tint/lang/wgsl/ast/transform/single_entry_point.h"
 #include "src/tint/lang/wgsl/ast/transform/substitute_override.h"
 #include "src/tint/lang/wgsl/helpers/flatten_bindings.h"
+#include "src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.h"
 #include "src/tint/utils/cli/cli.h"
 #include "src/tint/utils/command/command.h"
 #include "src/tint/utils/containers/transform.h"
@@ -71,22 +73,18 @@
 #endif  // TINT_BUILD_WGSL_WRITER
 
 #if TINT_BUILD_MSL_WRITER
+#include "src/tint/lang/msl/validate/val.h"
 #include "src/tint/lang/msl/writer/writer.h"
 #endif  // TINT_BUILD_MSL_WRITER
 
 #if TINT_BUILD_HLSL_WRITER
+#include "src/tint/lang/hlsl/validate/val.h"
 #include "src/tint/lang/hlsl/writer/writer.h"
 #endif  // TINT_BUILD_HLSL_WRITER
 
 #if TINT_BUILD_GLSL_WRITER
 #include "src/tint/lang/glsl/writer/writer.h"
 #endif  // TINT_BUILD_GLSL_WRITER
-
-#if TINT_BUILD_IR
-#include "src/tint/lang/core/ir/disassembler.h"                     // nogncheck
-#include "src/tint/lang/core/ir/module.h"                           // nogncheck
-#include "src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.h"  // nogncheck
-#endif                                                              // TINT_BUILD_IR
 
 #if TINT_BUILD_SPV_WRITER
 #define SPV_WRITER_ONLY(x) x
@@ -121,7 +119,7 @@
 namespace {
 
 /// Prints the given hash value in a format string that the end-to-end test runner can parse.
-void PrintHash(uint32_t hash) {
+[[maybe_unused]] void PrintHash(uint32_t hash) {
     std::cout << "<<HASH: 0x" << std::hex << hash << ">>" << std::endl;
 }
 
@@ -169,11 +167,10 @@ struct Options {
     std::string xcrun_path;
     tint::Hashmap<std::string, double, 8> overrides;
     std::optional<tint::BindingPoint> hlsl_root_constant_binding_point;
+    tint::PixelLocalOptions pixel_local_options;
 
-#if TINT_BUILD_IR
     bool dump_ir = false;
     bool use_ir = false;
-#endif  // TINT_BUILD_IR
 
 #if TINT_BUILD_SYNTAX_TREE_WRITER
     bool dump_ast = false;
@@ -279,7 +276,6 @@ When specified, automatically enables MSL validation)",
         }
     });
 
-#if TINT_BUILD_IR
     auto& dump_ir = options.Add<BoolOption>("dump-ir", "Writes the IR to stdout", Alias{"emit-ir"},
                                             Default{false});
     TINT_DEFER(opts->dump_ir = *dump_ir.value);
@@ -287,7 +283,6 @@ When specified, automatically enables MSL validation)",
     auto& use_ir = options.Add<BoolOption>(
         "use-ir", "Use the IR for writers and transforms when possible", Default{false});
     TINT_DEFER(opts->use_ir = *use_ir.value);
-#endif  // TINT_BUILD_IR
 
     auto& verbose =
         options.Add<BoolOption>("verbose", "Verbose output", ShortName{"v"}, Default{false});
@@ -364,6 +359,15 @@ Specify the binding point for generated uniform buffer
 used for num_workgroups in HLSL. If not specified, then
 default to binding 0 of the largest used group plus 1,
 or group 0 if no resource bound)");
+
+    auto& pixel_local_attachments =
+        options.Add<StringOption>("pixel_local_attachments",
+                                  R"(Pixel local storage attachment bindings, comma-separated
+Each binding is of the form MEMBER_INDEX=ATTACHMENT_INDEX,
+where MEMBER_INDEX is the pixel-local structure member
+index and ATTACHMENT_INDEX is the index of the emitted
+attachment.
+)");
 
     auto& skip_hash = options.Add<StringOption>(
         "skip-hash", R"(Skips validation if the hash of the output is equal to any
@@ -443,6 +447,32 @@ Options:
             return false;
         }
         opts->hlsl_root_constant_binding_point = tint::BindingPoint{group.Get(), binding.Get()};
+    }
+
+    if (pixel_local_attachments.value.has_value()) {
+        auto bindings = tint::Split(*pixel_local_attachments.value, ",");
+        for (auto& binding : bindings) {
+            auto values = tint::Split(binding, "=");
+            if (values.Length() != 2) {
+                std::cerr << "Invalid binding " << pixel_local_attachments.name << ": " << binding
+                          << std::endl;
+                return false;
+            }
+            auto member_index = tint::ParseUint32(values[0]);
+            if (!member_index) {
+                std::cerr << "Invalid member index for " << pixel_local_attachments.name << ": "
+                          << values[0] << std::endl;
+                return false;
+            }
+            auto attachment_index = tint::ParseUint32(values[1]);
+            if (!attachment_index) {
+                std::cerr << "Invalid attachment index for " << pixel_local_attachments.name << ": "
+                          << values[1] << std::endl;
+                return false;
+            }
+            opts->pixel_local_options.attachments.emplace(member_index.Get(),
+                                                          attachment_index.Get());
+        }
     }
 
     auto files = result.Get();
@@ -551,9 +581,8 @@ bool GenerateSpirv(const tint::Program* program, const Options& options) {
     gen_options.disable_workgroup_init = options.disable_workgroup_init;
     gen_options.external_texture_options.bindings_map =
         tint::cmd::GenerateExternalTextureBindings(program);
-#if TINT_BUILD_IR
     gen_options.use_tint_ir = options.use_ir;
-#endif
+
     auto result = tint::spirv::writer::Generate(program, gen_options);
     if (!result) {
         tint::cmd::PrintWGSL(std::cerr, *program);
@@ -658,11 +687,10 @@ bool GenerateMsl(const tint::Program* program, const Options& options) {
 
     // TODO(jrprice): Provide a way for the user to set non-default options.
     tint::msl::writer::Options gen_options;
-#if TINT_BUILD_IR
     gen_options.use_tint_ir = options.use_ir;
-#endif
     gen_options.disable_robustness = !options.enable_robustness;
     gen_options.disable_workgroup_init = options.disable_workgroup_init;
+    gen_options.pixel_local_options = options.pixel_local_options;
     gen_options.external_texture_options.bindings_map =
         tint::cmd::GenerateExternalTextureBindings(input_program);
     gen_options.array_length_from_uniform.ubo_binding = tint::BindingPoint{0, 30};
@@ -691,7 +719,10 @@ bool GenerateMsl(const tint::Program* program, const Options& options) {
     auto msl_version = tint::msl::validate::MslVersion::kMsl_1_2;
     for (auto* enable : program->AST().Enables()) {
         if (enable->HasExtension(tint::core::Extension::kChromiumExperimentalSubgroups)) {
-            msl_version = tint::msl::validate::MslVersion::kMsl_2_1;
+            msl_version = std::max(msl_version, tint::msl::validate::MslVersion::kMsl_2_1);
+        }
+        if (enable->HasExtension(tint::core::Extension::kChromiumExperimentalPixelLocal)) {
+            msl_version = std::max(msl_version, tint::msl::validate::MslVersion::kMsl_2_3);
         }
     }
 
@@ -1084,7 +1115,7 @@ int main(int argc, const char** argv) {
     }
 #endif  // TINT_BUILD_SYNTAX_TREE_WRITER
 
-#if TINT_BUILD_WGSL_READER && TINT_BUILD_IR
+#if TINT_BUILD_WGSL_READER
     if (options.dump_ir) {
         auto result = tint::wgsl::reader::ProgramToIR(program.get());
         if (!result) {
@@ -1097,7 +1128,7 @@ int main(int argc, const char** argv) {
             }
         }
     }
-#endif  // TINT_BUILD_WGSL_READER && TINT_BUILD_IR
+#endif  // TINT_BUILD_WGSL_READER
 
     tint::inspector::Inspector inspector(program.get());
     if (options.dump_inspector_bindings) {

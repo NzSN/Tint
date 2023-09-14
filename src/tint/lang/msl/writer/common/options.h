@@ -18,6 +18,7 @@
 #include "src/tint/api/options/array_length_from_uniform.h"
 #include "src/tint/api/options/binding_remapper.h"
 #include "src/tint/api/options/external_texture.h"
+#include "src/tint/api/options/pixel_local.h"
 #include "src/tint/utils/reflection/reflection.h"
 
 namespace tint::msl::writer {
@@ -52,6 +53,9 @@ struct Options {
     /// Set to `true` to disable workgroup memory zero initialization
     bool disable_workgroup_init = false;
 
+    /// Options used for dealing with pixel local storage
+    PixelLocalOptions pixel_local_options = {};
+
     /// Options used in the binding mappings for external textures
     ExternalTextureOptions external_texture_options = {};
 
@@ -62,10 +66,8 @@ struct Options {
     /// Options used in the bindings remapper
     BindingRemapperOptions binding_remapper_options = {};
 
-#if TINT_BUILD_IR
     /// Set to `true` to generate MSL via the Tint IR instead of from the AST.
     bool use_tint_ir = false;
-#endif
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(disable_robustness,
@@ -74,7 +76,9 @@ struct Options {
                  emit_vertex_point_size,
                  disable_workgroup_init,
                  external_texture_options,
-                 array_length_from_uniform);
+                 array_length_from_uniform,
+                 binding_remapper_options,
+                 use_tint_ir);
 };
 
 }  // namespace tint::msl::writer

@@ -188,6 +188,16 @@ int CommonFuzzer::Run(const uint8_t* data, size_t size) {
         return 0;
     }
 
+    // Helper that returns `true` if the program uses the given extension.
+    auto uses_extension = [&program](tint::core::Extension extension) {
+        for (auto* enable : program.AST().Enables()) {
+            if (enable->HasExtension(extension)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
 #if TINT_BUILD_SPV_READER
     if (input_ == InputFormat::kSpv && !SPIRVToolsValidationCheck(program, spirv_input)) {
         FATAL_ERROR(program.Diagnostics(),
@@ -289,6 +299,13 @@ int CommonFuzzer::Run(const uint8_t* data, size_t size) {
         }
         case OutputFormat::kSpv: {
 #if TINT_BUILD_SPV_WRITER
+            // Skip fuzzing the SPIR-V writer when the `clamp_frag_depth` option is used with a
+            // module that already contains push constants.
+            if (uses_extension(tint::core::Extension::kChromiumExperimentalPushConstant) &&
+                options_spirv_.clamp_frag_depth) {
+                return 0;
+            }
+
             auto result = spirv::writer::Generate(&program, options_spirv_);
             if (result) {
                 generated_spirv_ = std::move(result->spirv);
@@ -310,6 +327,12 @@ int CommonFuzzer::Run(const uint8_t* data, size_t size) {
         }
         case OutputFormat::kMSL: {
 #if TINT_BUILD_MSL_WRITER
+            // TODO(crbug.com/tint/1967): Skip fuzzing of the IR version of the MSL writer, which is
+            // still under construction.
+            if (options_msl_.use_tint_ir) {
+                return 0;
+            }
+
             // Remap resource numbers to a flat namespace.
             // TODO(crbug.com/tint/1501): Do this via Options::BindingMap.
             auto input_program = &program;
@@ -346,9 +369,6 @@ void CommonFuzzer::RunInspector(Program* program) {
     CHECK_INSPECTOR(program, inspector);
 
     for (auto& ep : entry_points) {
-        inspector.GetStorageSize(ep.name);
-        CHECK_INSPECTOR(program, inspector);
-
         inspector.GetResourceBindings(ep.name);
         CHECK_INSPECTOR(program, inspector);
 
@@ -386,9 +406,6 @@ void CommonFuzzer::RunInspector(Program* program) {
         CHECK_INSPECTOR(program, inspector);
 
         inspector.GetSamplerTextureUses(ep.name);
-        CHECK_INSPECTOR(program, inspector);
-
-        inspector.GetWorkgroupStorageSize(ep.name);
         CHECK_INSPECTOR(program, inspector);
     }
 }

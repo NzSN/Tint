@@ -89,12 +89,6 @@ config("tint_public_config") {
     defines += [ "TINT_BUILD_SYNTAX_TREE_WRITER=0" ]
   }
 
-  if (tint_build_ir) {
-    defines += [ "TINT_BUILD_IR=1" ]
-  } else {
-    defines += [ "TINT_BUILD_IR=0" ]
-  }
-
   include_dirs = [
     "${tint_root_dir}/",
     "${tint_root_dir}/include/",
@@ -115,6 +109,7 @@ source_set("thread") {
 
 source_set("metal") {
   frameworks = [
+    "CoreGraphics.framework",
     "Foundation.framework",
     "Metal.framework",
   ]

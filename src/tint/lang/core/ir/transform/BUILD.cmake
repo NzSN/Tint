@@ -21,11 +21,9 @@
 #                       Do not modify this file directly
 ################################################################################
 
-if(TINT_BUILD_IR)
 ################################################################################
 # Target:    tint_lang_core_ir_transform
 # Kind:      lib
-# Condition: TINT_BUILD_IR
 ################################################################################
 tint_add_target(tint_lang_core_ir_transform lib
   lang/core/ir/transform/add_empty_entry_point.cc
@@ -44,6 +42,8 @@ tint_add_target(tint_lang_core_ir_transform lib
   lang/core/ir/transform/demote_to_helper.h
   lang/core/ir/transform/multiplanar_external_texture.cc
   lang/core/ir/transform/multiplanar_external_texture.h
+  lang/core/ir/transform/robustness.cc
+  lang/core/ir/transform/robustness.h
   lang/core/ir/transform/shader_io.cc
   lang/core/ir/transform/shader_io.h
   lang/core/ir/transform/std140.cc
@@ -55,6 +55,9 @@ tint_target_add_dependencies(tint_lang_core_ir_transform lib
   tint_api_options
   tint_lang_core
   tint_lang_core_constant
+  tint_lang_core_intrinsic
+  tint_lang_core_intrinsic_data
+  tint_lang_core_ir
   tint_lang_core_type
   tint_utils_containers
   tint_utils_diagnostic
@@ -71,18 +74,9 @@ tint_target_add_dependencies(tint_lang_core_ir_transform lib
   tint_utils_traits
 )
 
-if(TINT_BUILD_IR)
-  tint_target_add_dependencies(tint_lang_core_ir_transform lib
-    tint_lang_core_ir
-  )
-endif(TINT_BUILD_IR)
-
-endif(TINT_BUILD_IR)
-if(TINT_BUILD_IR)
 ################################################################################
 # Target:    tint_lang_core_ir_transform_test
 # Kind:      test
-# Condition: TINT_BUILD_IR
 ################################################################################
 tint_add_target(tint_lang_core_ir_transform_test test
   lang/core/ir/transform/add_empty_entry_point_test.cc
@@ -94,6 +88,7 @@ tint_add_target(tint_lang_core_ir_transform_test test
   lang/core/ir/transform/demote_to_helper_test.cc
   lang/core/ir/transform/helper_test.h
   lang/core/ir/transform/multiplanar_external_texture_test.cc
+  lang/core/ir/transform/robustness_test.cc
   lang/core/ir/transform/std140_test.cc
 )
 
@@ -102,6 +97,10 @@ tint_target_add_dependencies(tint_lang_core_ir_transform_test test
   tint_api_options
   tint_lang_core
   tint_lang_core_constant
+  tint_lang_core_intrinsic
+  tint_lang_core_intrinsic_data
+  tint_lang_core_ir
+  tint_lang_core_ir_transform
   tint_lang_core_type
   tint_utils_containers
   tint_utils_diagnostic
@@ -121,12 +120,3 @@ tint_target_add_dependencies(tint_lang_core_ir_transform_test test
 tint_target_add_external_dependencies(tint_lang_core_ir_transform_test test
   "gtest"
 )
-
-if(TINT_BUILD_IR)
-  tint_target_add_dependencies(tint_lang_core_ir_transform_test test
-    tint_lang_core_ir
-    tint_lang_core_ir_transform
-  )
-endif(TINT_BUILD_IR)
-
-endif(TINT_BUILD_IR)
