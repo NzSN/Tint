@@ -52,6 +52,10 @@ core::BuiltinValue FunctionParamBuiltin(enum FunctionParam::Builtin builtin) {
             return core::BuiltinValue::kSampleIndex;
         case FunctionParam::Builtin::kSampleMask:
             return core::BuiltinValue::kSampleMask;
+        case FunctionParam::Builtin::kSubgroupInvocationId:
+            return core::BuiltinValue::kSubgroupInvocationId;
+        case FunctionParam::Builtin::kSubgroupSize:
+            return core::BuiltinValue::kSubgroupSize;
     }
     return core::BuiltinValue::kUndefined;
 }
@@ -100,6 +104,15 @@ struct State {
         // Process the parameters and return value to prepare for building a wrapper function.
         GatherInputs();
         GatherOutput();
+
+        // Add an output for the vertex point size if needed.
+        std::optional<uint32_t> vertex_point_size_index;
+        if (func->Stage() == Function::PipelineStage::kVertex && backend->NeedsVertexPointSize()) {
+            vertex_point_size_index =
+                backend->AddOutput(ir->symbols.New("vertex_point_size"), ty.f32(),
+                                   {{}, {}, {BuiltinValue::kPointSize}, {}, false});
+        }
+
         auto new_params = backend->FinalizeInputs();
         auto* new_ret_val = backend->FinalizeOutputs();
 
@@ -124,6 +137,9 @@ struct State {
         auto inner_call_args = BuildInnerCallArgs(wrapper);
         auto* inner_result = wrapper.Call(func->ReturnType(), func, std::move(inner_call_args));
         SetOutputs(wrapper, inner_result->Result());
+        if (vertex_point_size_index) {
+            backend->SetOutput(wrapper, vertex_point_size_index.value(), b.Constant(1_f));
+        }
 
         // Return the new result.
         wrapper.Return(ep, new_ret_val);
@@ -135,8 +151,12 @@ struct State {
             if (auto* str = param->Type()->As<core::type::Struct>()) {
                 for (auto* member : str->Members()) {
                     auto name = str->Name().Name() + "_" + member->Name().Name();
-                    backend->AddInput(ir->symbols.Register(name), member->Type(),
-                                      member->Attributes());
+                    auto attributes = member->Attributes();
+                    if (attributes.interpolation &&
+                        func->Stage() != Function::PipelineStage::kFragment) {
+                        attributes.interpolation = {};
+                    }
+                    backend->AddInput(ir->symbols.Register(name), member->Type(), attributes);
                     members_to_strip.Add(member);
                 }
             } else {
@@ -144,7 +164,7 @@ struct State {
                 core::type::StructMemberAttributes attributes;
                 if (auto loc = param->Location()) {
                     attributes.location = loc->value;
-                    if (loc->interpolation) {
+                    if (loc->interpolation && func->Stage() == Function::PipelineStage::kFragment) {
                         attributes.interpolation = *loc->interpolation;
                     }
                     param->ClearLocation();
@@ -170,8 +190,11 @@ struct State {
         if (auto* str = func->ReturnType()->As<core::type::Struct>()) {
             for (auto* member : str->Members()) {
                 auto name = str->Name().Name() + "_" + member->Name().Name();
-                backend->AddOutput(ir->symbols.Register(name), member->Type(),
-                                   member->Attributes());
+                auto attributes = member->Attributes();
+                if (attributes.interpolation && func->Stage() != Function::PipelineStage::kVertex) {
+                    attributes.interpolation = {};
+                }
+                backend->AddOutput(ir->symbols.Register(name), member->Type(), attributes);
                 members_to_strip.Add(member);
             }
         } else {
@@ -179,6 +202,9 @@ struct State {
             core::type::StructMemberAttributes attributes;
             if (auto loc = func->ReturnLocation()) {
                 attributes.location = loc->value;
+                if (loc->interpolation && func->Stage() == Function::PipelineStage::kVertex) {
+                    attributes.interpolation = *loc->interpolation;
+                }
                 func->ClearReturnLocation();
             } else if (auto builtin = func->ReturnBuiltin()) {
                 attributes.builtin = ReturnBuiltin(*builtin);
