@@ -263,14 +263,14 @@ bool Builder::Build() {
     if (!tint::writer::CheckSupportedExtensions(
             "SPIR-V", builder_.AST(), builder_.Diagnostics(),
             Vector{
-                core::Extension::kChromiumDisableUniformityAnalysis,
-                core::Extension::kChromiumExperimentalDp4A,
-                core::Extension::kChromiumExperimentalFullPtrParameters,
-                core::Extension::kChromiumExperimentalPushConstant,
-                core::Extension::kChromiumExperimentalReadWriteStorageTexture,
-                core::Extension::kChromiumExperimentalSubgroups,
-                core::Extension::kF16,
-                core::Extension::kChromiumInternalDualSourceBlending,
+                wgsl::Extension::kChromiumDisableUniformityAnalysis,
+                wgsl::Extension::kChromiumExperimentalDp4A,
+                wgsl::Extension::kChromiumExperimentalFullPtrParameters,
+                wgsl::Extension::kChromiumExperimentalPushConstant,
+                wgsl::Extension::kChromiumExperimentalReadWriteStorageTexture,
+                wgsl::Extension::kChromiumExperimentalSubgroups,
+                wgsl::Extension::kF16,
+                wgsl::Extension::kChromiumInternalDualSourceBlending,
             })) {
         return false;
     }
@@ -334,14 +334,14 @@ Operand Builder::result_op() {
     return Operand(module_.NextId());
 }
 
-bool Builder::GenerateExtension(core::Extension extension) {
+bool Builder::GenerateExtension(wgsl::Extension extension) {
     switch (extension) {
-        case core::Extension::kChromiumExperimentalDp4A:
+        case wgsl::Extension::kChromiumExperimentalDp4A:
             module_.PushExtension("SPV_KHR_integer_dot_product");
             module_.PushCapability(SpvCapabilityDotProductKHR);
             module_.PushCapability(SpvCapabilityDotProductInput4x8BitPackedKHR);
             break;
-        case core::Extension::kF16:
+        case wgsl::Extension::kF16:
             module_.PushCapability(SpvCapabilityFloat16);
             module_.PushCapability(SpvCapabilityUniformAndStorageBuffer16BitAccess);
             module_.PushCapability(SpvCapabilityStorageBuffer16BitAccess);
@@ -2570,6 +2570,19 @@ uint32_t Builder::GenerateBuiltinCall(const sem::Call* call, const sem::Builtin*
                     {Operand(result_type_id), result,
                      Operand(GenerateConstantIfNeeded(ScalarConstant::U32(SpvScopeSubgroup))),
                      Operand(GenerateConstantIfNeeded(ScalarConstant::Bool(true)))})) {
+                return 0;
+            }
+            return result_id;
+        }
+        case core::Function::kSubgroupBroadcast: {
+            module_.PushCapability(SpvCapabilityGroupNonUniformBallot);
+            auto first_param_id = get_arg_as_value_id(0);
+            auto second_param_id = get_arg_as_value_id(1);
+            if (!push_function_inst(
+                    spv::Op::OpGroupNonUniformBroadcast,
+                    {Operand(result_type_id), result,
+                     Operand(GenerateConstantIfNeeded(ScalarConstant::U32(SpvScopeSubgroup))),
+                     Operand(first_param_id), Operand(second_param_id)})) {
                 return 0;
             }
             return result_id;

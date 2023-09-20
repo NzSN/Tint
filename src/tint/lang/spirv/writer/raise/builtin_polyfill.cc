@@ -598,17 +598,17 @@ struct State {
             coords = AppendArrayIndex(coords, array_idx, builtin);
         }
 
-        // Determine which SPIR-V intrinsic to use and which optional image operands are needed.
-        enum spirv::ir::Intrinsic intrinsic;
+        // Determine which SPIR-V function to use and which optional image operands are needed.
+        enum spirv::ir::Function function;
         core::ir::Value* depth = nullptr;
         ImageOperands operands;
         switch (builtin->Func()) {
             case core::Function::kTextureGather:
-                intrinsic = spirv::ir::Intrinsic::kImageGather;
+                function = spirv::ir::Function::kImageGather;
                 operands.offset = next_arg();
                 break;
             case core::Function::kTextureGatherCompare:
-                intrinsic = spirv::ir::Intrinsic::kImageDrefGather;
+                function = spirv::ir::Function::kImageDrefGather;
                 depth = next_arg();
                 operands.offset = next_arg();
                 break;
@@ -616,25 +616,25 @@ struct State {
                 return nullptr;
         }
 
-        // Start building the argument list for the intrinsic.
+        // Start building the argument list for the function.
         // The first two operands are always the sampled image and then the coordinates, followed by
         // either the depth reference or the component.
-        Vector<core::ir::Value*, 8> intrinsic_args;
-        intrinsic_args.Push(sampled_image->Result());
-        intrinsic_args.Push(coords);
+        Vector<core::ir::Value*, 8> function_args;
+        function_args.Push(sampled_image->Result());
+        function_args.Push(coords);
         if (depth) {
-            intrinsic_args.Push(depth);
+            function_args.Push(depth);
         } else {
-            intrinsic_args.Push(component);
+            function_args.Push(component);
         }
 
         // Add the optional image operands, if any.
-        AppendImageOperands(operands, intrinsic_args, builtin, /* requires_float_lod */ true);
+        AppendImageOperands(operands, function_args, builtin, /* requires_float_lod */ true);
 
-        // Call the intrinsic.
+        // Call the function.
         auto* result_ty = builtin->Result()->Type();
         auto* texture_call =
-            b.Call<spirv::ir::IntrinsicCall>(result_ty, intrinsic, std::move(intrinsic_args));
+            b.Call<spirv::ir::BuiltinCall>(result_ty, function, std::move(function_args));
         texture_call->InsertBefore(builtin);
         return texture_call->Result();
     }
@@ -659,11 +659,11 @@ struct State {
             coords = AppendArrayIndex(coords, array_idx, builtin);
         }
 
-        // Start building the argument list for the intrinsic.
+        // Start building the argument list for the builtin.
         // The first two operands are always the texture and then the coordinates.
-        Vector<core::ir::Value*, 8> intrinsic_args;
-        intrinsic_args.Push(texture);
-        intrinsic_args.Push(coords);
+        Vector<core::ir::Value*, 8> builtin_args;
+        builtin_args.Push(texture);
+        builtin_args.Push(coords);
 
         // Add the optional image operands, if any.
         ImageOperands operands;
@@ -673,20 +673,19 @@ struct State {
         } else {
             operands.lod = next_arg();
         }
-        AppendImageOperands(operands, intrinsic_args, builtin, /* requires_float_lod */ false);
+        AppendImageOperands(operands, builtin_args, builtin, /* requires_float_lod */ false);
 
-        // Call the intrinsic.
+        // Call the builtin.
         // The result is always a vec4 in SPIR-V.
         auto* result_ty = builtin->Result()->Type();
         bool expects_scalar_result = result_ty->Is<core::type::Scalar>();
         if (expects_scalar_result) {
             result_ty = ty.vec4(result_ty);
         }
-        auto intrinsic = texture_ty->Is<core::type::StorageTexture>()
-                             ? spirv::ir::Intrinsic::kImageRead
-                             : spirv::ir::Intrinsic::kImageFetch;
+        auto kind = texture_ty->Is<core::type::StorageTexture>() ? spirv::ir::Function::kImageRead
+                                                                 : spirv::ir::Function::kImageFetch;
         auto* texture_call =
-            b.Call<spirv::ir::IntrinsicCall>(result_ty, intrinsic, std::move(intrinsic_args));
+            b.Call<spirv::ir::BuiltinCall>(result_ty, kind, std::move(builtin_args));
         texture_call->InsertBefore(builtin);
         auto* result = texture_call->Result();
 

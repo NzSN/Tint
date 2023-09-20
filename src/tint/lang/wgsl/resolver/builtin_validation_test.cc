@@ -537,7 +537,7 @@ using ResolverDP4aExtensionValidationTest = ResolverTest;
 TEST_F(ResolverDP4aExtensionValidationTest, Dot4I8PackedWithExtension) {
     // enable chromium_experimental_dp4a;
     // fn func { return dot4I8Packed(1u, 2u); }
-    Enable(core::Extension::kChromiumExperimentalDp4A);
+    Enable(wgsl::Extension::kChromiumExperimentalDp4A);
 
     Func("func", tint::Empty, ty.i32(),
          Vector{
@@ -565,7 +565,7 @@ TEST_F(ResolverDP4aExtensionValidationTest, Dot4I8PackedWithoutExtension) {
 TEST_F(ResolverDP4aExtensionValidationTest, Dot4U8PackedWithExtension) {
     // enable chromium_experimental_dp4a;
     // fn func { return dot4U8Packed(1u, 2u); }
-    Enable(core::Extension::kChromiumExperimentalDp4A);
+    Enable(wgsl::Extension::kChromiumExperimentalDp4A);
 
     Func("func", tint::Empty, ty.u32(),
          Vector{
@@ -670,7 +670,7 @@ TEST_F(ResolverBuiltinValidationTest, SubgroupBallotWithoutExtension) {
 TEST_F(ResolverBuiltinValidationTest, SubgroupBallotWithExtension) {
     // enable chromium_experimental_subgroups;
     // fn func -> vec4<u32> { return subgroupBallot(); }
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
 
     Func("func", tint::Empty, ty.vec4<u32>(),
          Vector{
@@ -684,7 +684,7 @@ TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastWithoutExtension) {
     // fn func -> i32 { return subgroupBroadcast(1,0); }
     Func("func", tint::Empty, ty.i32(),
          Vector{
-             Return(Call(Source{{12, 34}}, "subgroupBroadcast", 1_i, 0_i)),
+             Return(Call(Source{{12, 34}}, "subgroupBroadcast", 1_i, 0_u)),
          });
 
     EXPECT_FALSE(r()->Resolve());
@@ -696,11 +696,11 @@ TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastWithoutExtension) {
 TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastWithExtension) {
     // enable chromium_experimental_subgroups;
     // fn func -> i32 { return subgroupBroadcast(1,0); }
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
 
     Func("func", tint::Empty, ty.i32(),
          Vector{
-             Return(Call("subgroupBroadcast", 1_i, 0_i)),
+             Return(Call("subgroupBroadcast", 1_i, 0_u)),
          });
 
     EXPECT_TRUE(r()->Resolve());
@@ -709,7 +709,7 @@ TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastWithExtension) {
 TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInComputeStage) {
     // @vertex fn func { dpdx(1.0); }
 
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
 
     auto* call = Call("subgroupBroadcast", 1_f, 0_u);
     Func(Source{{1, 2}}, "func", tint::Empty, ty.void_(), Vector{Ignore(call)},
@@ -724,7 +724,7 @@ TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInComputeStage) {
 TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInVertexStageIsError) {
     // @vertex fn func { dpdx(1.0); }
 
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
 
     auto* call = Call(Source{{3, 4}}, "subgroupBroadcast", 1_f, 0_u);
     Func("func", tint::Empty, ty.vec4<f32>(), Vector{Ignore(call), Return(Call(ty.vec4<f32>()))},
@@ -740,7 +740,7 @@ TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInVertexStageIsError) {
 TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInFragmentStageIsError) {
     // @vertex fn func { dpdx(1.0); }
 
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
 
     auto* call = Call(Source{{3, 4}}, "subgroupBroadcast", 1_f, 0_u);
     Func("func",
@@ -754,125 +754,35 @@ TEST_F(ResolverBuiltinValidationTest, SubroupBroadcastInFragmentStageIsError) {
     EXPECT_EQ(r()->error(), "3:4 error: built-in cannot be used by fragment pipeline stage");
 }
 
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastTooFewArgs) {
-    // enable chromium_experimental_subgroups;
-    // fn func -> i32 { return subgroupBroadcast(1); }
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-
-    Func("func", tint::Empty, ty.i32(),
-         Vector{
-             Return(Call(Source{Source::Location{12, 34}}, "subgroupBroadcast", 1_i)),
-         });
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: no matching call to subgroupBroadcast(i32)
-
-1 candidate function:
-  subgroupBroadcast(value: T, sourceLaneIndex: L) -> T  where: T is f32, i32 or u32, L is i32 or u32
-)");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastTooManyArgs) {
-    // enable chromium_experimental_subgroups;
-    // fn func -> i32 { return subgroupBroadcast(1,1,1); }
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-
-    Func("func", tint::Empty, ty.i32(),
-         Vector{
-             Return(Call(Source{{12, 34}}, "subgroupBroadcast", 1_i, 1_i, 1_i)),
-         });
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: no matching call to subgroupBroadcast(i32, i32, i32)
-
-1 candidate function:
-  subgroupBroadcast(value: T, sourceLaneIndex: L) -> T  where: T is f32, i32 or u32, L is i32 or u32
-)");
-}
-
 TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueF32) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
     Func("func", tint::Empty, ty.f32(),
          Vector{
-             Return(Call("subgroupBroadcast", 1_f, 0_i)),
+             Return(Call("subgroupBroadcast", 1_f, 0_u)),
          });
     EXPECT_TRUE(r()->Resolve());
 }
 
 TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueI32) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
     Func("func", tint::Empty, ty.i32(),
          Vector{
-             Return(Call("subgroupBroadcast", 1_i, 0_i)),
+             Return(Call("subgroupBroadcast", 1_i, 0_u)),
          });
     EXPECT_TRUE(r()->Resolve());
 }
 
 TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueU32) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
     Func("func", tint::Empty, ty.u32(),
          Vector{
-             Return(Call("subgroupBroadcast", 1_u, 0_i)),
+             Return(Call("subgroupBroadcast", 1_u, 0_u)),
          });
     EXPECT_TRUE(r()->Resolve());
 }
 
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueBoolIsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    const bool value = false;  // could be true too
-    Func("func", tint::Empty, ty.bool_(),
-         Vector{
-             Return(Call(Source{{12, 34}}, "subgroupBroadcast", value, 0_i)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: no matching call to subgroupBroadcast(bool, i32)
-
-1 candidate function:
-  subgroupBroadcast(value: T, sourceLaneIndex: L) -> T  where: T is f32, i32 or u32, L is i32 or u32
-)");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueF32ResultTypeDifferentIsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.i32(),
-         Vector{
-             Return(Source{{12, 34}}, Call("subgroupBroadcast", 1_f, 0_i)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(
-        r()->error(),
-        R"(12:34 error: return statement type must match its function return type, returned 'f32', expected 'i32')");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueI32ResultTypeDifferentIsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.u32(),
-         Vector{
-             Return(Source{{12, 34}}, Call("subgroupBroadcast", 1_i, 0_i)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(
-        r()->error(),
-        R"(12:34 error: return statement type must match its function return type, returned 'i32', expected 'u32')");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastValueU32ResultTypeDifferentIsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.f32(),
-         Vector{
-             Return(Source{{12, 34}}, Call("subgroupBroadcast", 1_u, 0_i)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(
-        r()->error(),
-        R"(12:34 error: return statement type must match its function return type, returned 'u32', expected 'f32')");
-}
-
 TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgMustBeConst) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
+    Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
     Func("func", tint::Empty, ty.void_(),
          Vector{
              Decl(Let("lane", Expr(1_u))),
@@ -882,57 +792,6 @@ TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgMustBeConst) {
     EXPECT_EQ(
         r()->error(),
         R"(12:34 error: the sourceLaneIndex argument of subgroupBroadcast must be a const-expression)");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgI32) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.void_(),
-         Vector{
-             Ignore(Call("subgroupBroadcast", 1_f, 0_i)),
-         });
-    EXPECT_TRUE(r()->Resolve());
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgU32) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.void_(),
-         Vector{
-             Ignore(Call("subgroupBroadcast", 1_f, 0_u)),
-         });
-    EXPECT_TRUE(r()->Resolve());
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgF32IsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    Func("func", tint::Empty, ty.void_(),
-         Vector{
-             Decl(Let("lane", Expr(1_u))),
-             Ignore(Call(Source{{12, 34}}, "subgroupBroadcast", 1_f, 0_f)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: no matching call to subgroupBroadcast(f32, f32)
-
-1 candidate function:
-  subgroupBroadcast(value: T, sourceLaneIndex: L) -> T  where: T is f32, i32 or u32, L is i32 or u32
-)");
-}
-
-TEST_F(ResolverBuiltinValidationTest, SubgroupBroadcastLaneArgBoolIsError) {
-    Enable(core::Extension::kChromiumExperimentalSubgroups);
-    const bool value = false;  // could be true too
-    Func("func", tint::Empty, ty.void_(),
-         Vector{
-             Decl(Let("lane", Expr(1_u))),
-             Ignore(Call(Source{{12, 34}}, "subgroupBroadcast", 1_f, value)),
-         });
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: no matching call to subgroupBroadcast(f32, bool)
-
-1 candidate function:
-  subgroupBroadcast(value: T, sourceLaneIndex: L) -> T  where: T is f32, i32 or u32, L is i32 or u32
-)");
 }
 
 TEST_F(ResolverBuiltinValidationTest, TextureBarrierWithoutExtension) {
@@ -951,7 +810,7 @@ TEST_F(ResolverBuiltinValidationTest, TextureBarrierWithoutExtension) {
 TEST_F(ResolverBuiltinValidationTest, TextureBarrierWithExtension) {
     // enable chromium_experimental_read_write_storage_texture;
     // fn func { textureBarrier(); }
-    Enable(core::Extension::kChromiumExperimentalReadWriteStorageTexture);
+    Enable(wgsl::Extension::kChromiumExperimentalReadWriteStorageTexture);
 
     Func("func", tint::Empty, ty.void_(),
          Vector{
