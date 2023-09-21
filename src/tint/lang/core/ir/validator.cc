@@ -246,6 +246,10 @@ class Validator {
     /// @param l the exit loop to validate
     void CheckExitLoop(ExitLoop* l);
 
+    /// Validates the given store
+    /// @param s the store to validate
+    void CheckStore(Store* s);
+
     /// Validates the given load vector element
     /// @param l the load vector element to validate
     void CheckLoadVectorElement(LoadVectorElement* l);
@@ -483,7 +487,7 @@ void Validator::CheckInstruction(Instruction* inst) {
         [&](Load*) {},                                               //
         [&](LoadVectorElement* l) { CheckLoadVectorElement(l); },    //
         [&](Loop* l) { CheckLoop(l); },                              //
-        [&](Store*) {},                                              //
+        [&](Store* s) { CheckStore(s); },                            //
         [&](StoreVectorElement* s) { CheckStoreVectorElement(s); },  //
         [&](Switch* s) { CheckSwitch(s); },                          //
         [&](Swizzle*) {},                                            //
@@ -794,6 +798,19 @@ void Validator::CheckExitLoop(ExitLoop* l) {
     }
 }
 
+void Validator::CheckStore(Store* s) {
+    CheckOperandsNotNull(s, Store::kToOperandOffset, Store::kFromOperandOffset);
+
+    if (auto* from = s->From()) {
+        if (auto* to = s->To()) {
+            if (from->Type() != to->Type()->UnwrapPtr()) {
+                AddError(s, Store::kFromOperandOffset,
+                         "value type does not match pointer element type");
+            }
+        }
+    }
+}
+
 void Validator::CheckLoadVectorElement(LoadVectorElement* l) {
     CheckOperandsNotNull(l,  //
                          LoadVectorElement::kFromOperandOffset,
@@ -855,6 +872,14 @@ Result<SuccessType, diag::List> Validate(Module& mod) {
 
 Result<SuccessType, std::string> ValidateAndDumpIfNeeded([[maybe_unused]] Module& ir,
                                                          [[maybe_unused]] const char* msg) {
+#if TINT_DUMP_IR_WHEN_VALIDATING
+    Disassembler disasm(ir);
+    std::cout << "=========================================================" << std::endl;
+    std::cout << "== IR dump before " << msg << ":" << std::endl;
+    std::cout << "=========================================================" << std::endl;
+    std::cout << disasm.Disassemble();
+#endif
+
 #ifndef NDEBUG
     auto result = Validate(ir);
     if (!result) {
@@ -863,14 +888,6 @@ Result<SuccessType, std::string> ValidateAndDumpIfNeeded([[maybe_unused]] Module
         ss << "validating input to " << msg << " failed" << std::endl << result.Failure().str();
         return ss.str();
     }
-#endif
-
-#if TINT_DUMP_IR_WHEN_VALIDATING
-    Disassembler disasm(ir);
-    std::cout << "=========================================================" << std::endl;
-    std::cout << "== IR dump before " << msg << ":" << std::endl;
-    std::cout << "=========================================================" << std::endl;
-    std::cout << disasm.Disassemble();
 #endif
 
     return Success;

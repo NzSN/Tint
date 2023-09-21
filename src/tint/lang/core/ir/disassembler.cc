@@ -449,9 +449,9 @@ void Disassembler::EmitInstruction(Instruction* inst) {
         [&](Store* s) {
             EmitInstructionName(s);
             out_ << " ";
-            EmitValue(s->To());
+            EmitOperand(s, Store::kToOperandOffset);
             out_ << ", ";
-            EmitValue(s->From());
+            EmitOperand(s, Store::kFromOperandOffset);
         },
         [&](StoreVectorElement* s) {
             EmitInstructionName(s);
@@ -462,7 +462,7 @@ void Disassembler::EmitInstruction(Instruction* inst) {
             EmitValueWithType(uc);
             out_ << " = ";
             EmitInstructionName(uc);
-            out_ << " %" << IdOf(uc->Func());
+            out_ << " %" << IdOf(uc->Target());
             if (!uc->Args().IsEmpty()) {
                 out_ << ", ";
             }
