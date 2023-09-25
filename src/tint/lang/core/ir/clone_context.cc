@@ -12,19 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/lang/core/ir/intrinsic_call.h"
+#include "src/tint/lang/core/ir/clone_context.h"
 
-#include <utility>
-
-TINT_INSTANTIATE_TYPEINFO(tint::core::ir::IntrinsicCall);
+#include "src/tint/lang/core/ir/builder.h"
+#include "src/tint/lang/core/ir/let.h"
 
 namespace tint::core::ir {
 
-IntrinsicCall::IntrinsicCall(InstructionResult* result, VectorRef<Value*> arguments) {
-    AddOperands(IntrinsicCall::kArgsOperandOffset, std::move(arguments));
-    AddResult(result);
-}
-
-IntrinsicCall::~IntrinsicCall() = default;
+CloneContext::CloneContext(Module& module) : ir(module) {}
 
 }  // namespace tint::core::ir

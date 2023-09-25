@@ -38,7 +38,6 @@
 #include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/if.h"
 #include "src/tint/lang/core/ir/instruction_result.h"
-#include "src/tint/lang/core/ir/intrinsic_call.h"
 #include "src/tint/lang/core/ir/let.h"
 #include "src/tint/lang/core/ir/load.h"
 #include "src/tint/lang/core/ir/load_vector_element.h"
@@ -672,7 +671,7 @@ class Builder {
     /// @param args the call arguments
     /// @returns the instruction
     template <typename... ARGS>
-    ir::CoreBuiltinCall* Call(const core::type::Type* type, core::Function func, ARGS&&... args) {
+    ir::CoreBuiltinCall* Call(const core::type::Type* type, core::BuiltinFn func, ARGS&&... args) {
         return Append(ir.instructions.Create<ir::CoreBuiltinCall>(
             InstructionResult(type), func, Values(std::forward<ARGS>(args)...)));
     }
@@ -686,18 +685,6 @@ class Builder {
     tint::traits::EnableIf<tint::traits::IsTypeOrDerived<KLASS, ir::BuiltinCall>, KLASS*>
     Call(const core::type::Type* type, FUNC func, ARGS&&... args) {
         return Append(ir.instructions.Create<KLASS>(InstructionResult(type), func,
-                                                    Values(std::forward<ARGS>(args)...)));
-    }
-
-    /// Creates an intrinsic call instruction
-    /// @param type the return type of the call
-    /// @param kind the intrinsic function to call
-    /// @param args the call arguments
-    /// @returns the intrinsic call instruction
-    template <typename KLASS, typename KIND, typename... ARGS>
-    tint::traits::EnableIf<tint::traits::IsTypeOrDerived<KLASS, ir::IntrinsicCall>, KLASS*>
-    Call(const core::type::Type* type, KIND kind, ARGS&&... args) {
-        return Append(ir.instructions.Create<KLASS>(InstructionResult(type), kind,
                                                     Values(std::forward<ARGS>(args)...)));
     }
 
@@ -793,7 +780,6 @@ class Builder {
             return nullptr;
         }
         auto* let = Append(ir.instructions.Create<ir::Let>(InstructionResult(val->Type()), val));
-        ir.SetName(let, name);
         ir.SetName(let->Result(), name);
         return let;
     }

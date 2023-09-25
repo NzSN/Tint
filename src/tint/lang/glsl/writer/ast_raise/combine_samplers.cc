@@ -51,11 +51,11 @@ CombineSamplers::BindingInfo::~BindingInfo() = default;
 /// PIMPL state for the transform
 struct CombineSamplers::State {
     /// The source program
-    const Program* const src;
+    const Program& src;
     /// The target program builder
     ProgramBuilder b;
     /// The clone context
-    program::CloneContext ctx = {&b, src, /* auto_clone_symbols */ true};
+    program::CloneContext ctx = {&b, &src, /* auto_clone_symbols */ true};
 
     /// The binding info
     const BindingInfo* binding_info;
@@ -91,7 +91,7 @@ struct CombineSamplers::State {
     /// Constructor
     /// @param program the source program
     /// @param info the binding map information
-    State(const Program* program, const BindingInfo* info) : src(program), binding_info(info) {}
+    State(const Program& program, const BindingInfo* info) : src(program), binding_info(info) {}
 
     /// Creates a combined sampler global variables.
     /// (Note this is actually a Texture node at the AST level, but it will be
@@ -226,7 +226,7 @@ struct CombineSamplers::State {
             if (auto* call = sem.Get(expr)->UnwrapMaterialize()->As<sem::Call>()) {
                 Vector<const ast::Expression*, 8> args;
                 // Replace all texture builtin calls.
-                if (auto* builtin = call->Target()->As<sem::Builtin>()) {
+                if (auto* builtin = call->Target()->As<sem::BuiltinFn>()) {
                     const auto& signature = builtin->Signature();
                     auto sampler_index = signature.IndexOf(core::ParameterUsage::kSampler);
                     auto texture_index = signature.IndexOf(core::ParameterUsage::kTexture);
@@ -270,7 +270,7 @@ struct CombineSamplers::State {
                         }
                     }
                     const ast::Expression* value = ctx.dst->Call(ctx.Clone(expr->target), args);
-                    if (builtin->Type() == core::Function::kTextureLoad &&
+                    if (builtin->Fn() == core::BuiltinFn::kTextureLoad &&
                         texture_var->Type()->UnwrapRef()->Is<core::type::DepthTexture>() &&
                         !call->Stmt()->Declaration()->Is<ast::CallStatement>()) {
                         value = ctx.dst->MemberAccessor(value, "x");
@@ -336,7 +336,7 @@ CombineSamplers::CombineSamplers() = default;
 
 CombineSamplers::~CombineSamplers() = default;
 
-ast::transform::Transform::ApplyResult CombineSamplers::Apply(const Program* src,
+ast::transform::Transform::ApplyResult CombineSamplers::Apply(const Program& src,
                                                               const ast::transform::DataMap& inputs,
                                                               ast::transform::DataMap&) const {
     auto* binding_info = inputs.Get<BindingInfo>();

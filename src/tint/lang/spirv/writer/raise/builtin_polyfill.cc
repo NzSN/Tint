@@ -29,7 +29,6 @@
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
-#include "src/tint/lang/spirv/ir/intrinsic_call.h"
 #include "src/tint/lang/spirv/type/sampled_image.h"
 #include "src/tint/utils/ice/ice.h"
 
@@ -63,35 +62,35 @@ struct State {
             }
             if (auto* builtin = inst->As<core::ir::CoreBuiltinCall>()) {
                 switch (builtin->Func()) {
-                    case core::Function::kArrayLength:
-                    case core::Function::kAtomicAdd:
-                    case core::Function::kAtomicAnd:
-                    case core::Function::kAtomicCompareExchangeWeak:
-                    case core::Function::kAtomicExchange:
-                    case core::Function::kAtomicLoad:
-                    case core::Function::kAtomicMax:
-                    case core::Function::kAtomicMin:
-                    case core::Function::kAtomicOr:
-                    case core::Function::kAtomicStore:
-                    case core::Function::kAtomicSub:
-                    case core::Function::kAtomicXor:
-                    case core::Function::kDot:
-                    case core::Function::kSelect:
-                    case core::Function::kTextureDimensions:
-                    case core::Function::kTextureGather:
-                    case core::Function::kTextureGatherCompare:
-                    case core::Function::kTextureLoad:
-                    case core::Function::kTextureNumLayers:
-                    case core::Function::kTextureSample:
-                    case core::Function::kTextureSampleBias:
-                    case core::Function::kTextureSampleCompare:
-                    case core::Function::kTextureSampleCompareLevel:
-                    case core::Function::kTextureSampleGrad:
-                    case core::Function::kTextureSampleLevel:
-                    case core::Function::kTextureStore:
+                    case core::BuiltinFn::kArrayLength:
+                    case core::BuiltinFn::kAtomicAdd:
+                    case core::BuiltinFn::kAtomicAnd:
+                    case core::BuiltinFn::kAtomicCompareExchangeWeak:
+                    case core::BuiltinFn::kAtomicExchange:
+                    case core::BuiltinFn::kAtomicLoad:
+                    case core::BuiltinFn::kAtomicMax:
+                    case core::BuiltinFn::kAtomicMin:
+                    case core::BuiltinFn::kAtomicOr:
+                    case core::BuiltinFn::kAtomicStore:
+                    case core::BuiltinFn::kAtomicSub:
+                    case core::BuiltinFn::kAtomicXor:
+                    case core::BuiltinFn::kDot:
+                    case core::BuiltinFn::kSelect:
+                    case core::BuiltinFn::kTextureDimensions:
+                    case core::BuiltinFn::kTextureGather:
+                    case core::BuiltinFn::kTextureGatherCompare:
+                    case core::BuiltinFn::kTextureLoad:
+                    case core::BuiltinFn::kTextureNumLayers:
+                    case core::BuiltinFn::kTextureSample:
+                    case core::BuiltinFn::kTextureSampleBias:
+                    case core::BuiltinFn::kTextureSampleCompare:
+                    case core::BuiltinFn::kTextureSampleCompareLevel:
+                    case core::BuiltinFn::kTextureSampleGrad:
+                    case core::BuiltinFn::kTextureSampleLevel:
+                    case core::BuiltinFn::kTextureStore:
                         worklist.Push(builtin);
                         break;
-                    case core::Function::kQuantizeToF16:
+                    case core::BuiltinFn::kQuantizeToF16:
                         if (builtin->Result()->Type()->Is<core::type::Vector>()) {
                             worklist.Push(builtin);
                         }
@@ -106,53 +105,53 @@ struct State {
         for (auto* builtin : worklist) {
             core::ir::Value* replacement = nullptr;
             switch (builtin->Func()) {
-                case core::Function::kArrayLength:
+                case core::BuiltinFn::kArrayLength:
                     replacement = ArrayLength(builtin);
                     break;
-                case core::Function::kAtomicAdd:
-                case core::Function::kAtomicAnd:
-                case core::Function::kAtomicCompareExchangeWeak:
-                case core::Function::kAtomicExchange:
-                case core::Function::kAtomicLoad:
-                case core::Function::kAtomicMax:
-                case core::Function::kAtomicMin:
-                case core::Function::kAtomicOr:
-                case core::Function::kAtomicStore:
-                case core::Function::kAtomicSub:
-                case core::Function::kAtomicXor:
+                case core::BuiltinFn::kAtomicAdd:
+                case core::BuiltinFn::kAtomicAnd:
+                case core::BuiltinFn::kAtomicCompareExchangeWeak:
+                case core::BuiltinFn::kAtomicExchange:
+                case core::BuiltinFn::kAtomicLoad:
+                case core::BuiltinFn::kAtomicMax:
+                case core::BuiltinFn::kAtomicMin:
+                case core::BuiltinFn::kAtomicOr:
+                case core::BuiltinFn::kAtomicStore:
+                case core::BuiltinFn::kAtomicSub:
+                case core::BuiltinFn::kAtomicXor:
                     replacement = Atomic(builtin);
                     break;
-                case core::Function::kDot:
+                case core::BuiltinFn::kDot:
                     replacement = Dot(builtin);
                     break;
-                case core::Function::kSelect:
+                case core::BuiltinFn::kSelect:
                     replacement = Select(builtin);
                     break;
-                case core::Function::kTextureDimensions:
+                case core::BuiltinFn::kTextureDimensions:
                     replacement = TextureDimensions(builtin);
                     break;
-                case core::Function::kTextureGather:
-                case core::Function::kTextureGatherCompare:
+                case core::BuiltinFn::kTextureGather:
+                case core::BuiltinFn::kTextureGatherCompare:
                     replacement = TextureGather(builtin);
                     break;
-                case core::Function::kTextureLoad:
+                case core::BuiltinFn::kTextureLoad:
                     replacement = TextureLoad(builtin);
                     break;
-                case core::Function::kTextureNumLayers:
+                case core::BuiltinFn::kTextureNumLayers:
                     replacement = TextureNumLayers(builtin);
                     break;
-                case core::Function::kTextureSample:
-                case core::Function::kTextureSampleBias:
-                case core::Function::kTextureSampleCompare:
-                case core::Function::kTextureSampleCompareLevel:
-                case core::Function::kTextureSampleGrad:
-                case core::Function::kTextureSampleLevel:
+                case core::BuiltinFn::kTextureSample:
+                case core::BuiltinFn::kTextureSampleBias:
+                case core::BuiltinFn::kTextureSampleCompare:
+                case core::BuiltinFn::kTextureSampleCompareLevel:
+                case core::BuiltinFn::kTextureSampleGrad:
+                case core::BuiltinFn::kTextureSampleLevel:
                     replacement = TextureSample(builtin);
                     break;
-                case core::Function::kTextureStore:
+                case core::BuiltinFn::kTextureStore:
                     replacement = TextureStore(builtin);
                     break;
-                case core::Function::kQuantizeToF16:
+                case core::BuiltinFn::kQuantizeToF16:
                     replacement = QuantizeToF16Vec(builtin);
                     break;
                 default:
@@ -196,7 +195,7 @@ struct State {
 
         // Replace the builtin call with a call to the spirv.array_length intrinsic.
         auto* call = b.Call<spirv::ir::BuiltinCall>(
-            builtin->Result()->Type(), spirv::ir::Function::kArrayLength,
+            builtin->Result()->Type(), spirv::BuiltinFn::kArrayLength,
             Vector{access->Object(), Literal(u32(const_idx->Value()->ValueAs<uint32_t>()))});
         call->InsertBefore(builtin);
         return call->Result();
@@ -223,27 +222,27 @@ struct State {
         auto* memory_semantics = b.Constant(u32(SpvMemorySemanticsMaskNone));
 
         // Helper to build the builtin call with the common operands.
-        auto build = [&](const core::type::Type* type, enum spirv::ir::Function intrinsic) {
-            return b.Call<spirv::ir::BuiltinCall>(type, intrinsic, pointer, memory,
+        auto build = [&](const core::type::Type* type, enum spirv::BuiltinFn builtin_fn) {
+            return b.Call<spirv::ir::BuiltinCall>(type, builtin_fn, pointer, memory,
                                                   memory_semantics);
         };
 
         // Create the replacement call instruction.
         core::ir::Call* call = nullptr;
         switch (builtin->Func()) {
-            case core::Function::kAtomicAdd:
-                call = build(result_ty, spirv::ir::Function::kAtomicIadd);
+            case core::BuiltinFn::kAtomicAdd:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicIadd);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicAnd:
-                call = build(result_ty, spirv::ir::Function::kAtomicAnd);
+            case core::BuiltinFn::kAtomicAnd:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicAnd);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicCompareExchangeWeak: {
+            case core::BuiltinFn::kAtomicCompareExchangeWeak: {
                 auto* cmp = builtin->Args()[1];
                 auto* value = builtin->Args()[2];
                 auto* int_ty = value->Type();
-                call = build(int_ty, spirv::ir::Function::kAtomicCompareExchange);
+                call = build(int_ty, spirv::BuiltinFn::kAtomicCompareExchange);
                 call->AppendArg(memory_semantics);
                 call->AppendArg(value);
                 call->AppendArg(cmp);
@@ -260,43 +259,43 @@ struct State {
                     Vector{original, compare->Result()});
                 break;
             }
-            case core::Function::kAtomicExchange:
-                call = build(result_ty, spirv::ir::Function::kAtomicExchange);
+            case core::BuiltinFn::kAtomicExchange:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicExchange);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicLoad:
-                call = build(result_ty, spirv::ir::Function::kAtomicLoad);
+            case core::BuiltinFn::kAtomicLoad:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicLoad);
                 break;
-            case core::Function::kAtomicOr:
-                call = build(result_ty, spirv::ir::Function::kAtomicOr);
+            case core::BuiltinFn::kAtomicOr:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicOr);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicMax:
+            case core::BuiltinFn::kAtomicMax:
                 if (result_ty->is_signed_integer_scalar()) {
-                    call = build(result_ty, spirv::ir::Function::kAtomicSmax);
+                    call = build(result_ty, spirv::BuiltinFn::kAtomicSmax);
                 } else {
-                    call = build(result_ty, spirv::ir::Function::kAtomicUmax);
+                    call = build(result_ty, spirv::BuiltinFn::kAtomicUmax);
                 }
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicMin:
+            case core::BuiltinFn::kAtomicMin:
                 if (result_ty->is_signed_integer_scalar()) {
-                    call = build(result_ty, spirv::ir::Function::kAtomicSmin);
+                    call = build(result_ty, spirv::BuiltinFn::kAtomicSmin);
                 } else {
-                    call = build(result_ty, spirv::ir::Function::kAtomicUmin);
+                    call = build(result_ty, spirv::BuiltinFn::kAtomicUmin);
                 }
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicStore:
-                call = build(result_ty, spirv::ir::Function::kAtomicStore);
+            case core::BuiltinFn::kAtomicStore:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicStore);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicSub:
-                call = build(result_ty, spirv::ir::Function::kAtomicIsub);
+            case core::BuiltinFn::kAtomicSub:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicIsub);
                 call->AppendArg(builtin->Args()[1]);
                 break;
-            case core::Function::kAtomicXor:
-                call = build(result_ty, spirv::ir::Function::kAtomicXor);
+            case core::BuiltinFn::kAtomicXor:
+                call = build(result_ty, spirv::BuiltinFn::kAtomicXor);
                 call->AppendArg(builtin->Args()[1]);
                 break;
             default:
@@ -338,7 +337,7 @@ struct State {
         // Replace the builtin call with a call to the spirv.dot intrinsic.
         auto args = Vector<core::ir::Value*, 4>(builtin->Args());
         auto* call = b.Call<spirv::ir::BuiltinCall>(builtin->Result()->Type(),
-                                                    spirv::ir::Function::kDot, std::move(args));
+                                                    spirv::BuiltinFn::kDot, std::move(args));
         call->InsertBefore(builtin);
         return call->Result();
     }
@@ -369,7 +368,7 @@ struct State {
 
         // Replace the builtin call with a call to the spirv.select intrinsic.
         auto* call = b.Call<spirv::ir::BuiltinCall>(builtin->Result()->Type(),
-                                                    spirv::ir::Function::kSelect, std::move(args));
+                                                    spirv::BuiltinFn::kSelect, std::move(args));
         call->InsertBefore(builtin);
         return call->Result();
     }
@@ -480,7 +479,7 @@ struct State {
 
         // Use OpSampledImage to create an OpTypeSampledImage object.
         auto* sampled_image = b.Call<spirv::ir::BuiltinCall>(ty.Get<type::SampledImage>(texture_ty),
-                                                             spirv::ir::Function::kSampledImage,
+                                                             spirv::BuiltinFn::kSampledImage,
                                                              Vector{texture, sampler});
         sampled_image->InsertBefore(builtin);
 
@@ -490,39 +489,39 @@ struct State {
             coords = AppendArrayIndex(coords, array_idx, builtin);
         }
 
-        // Determine which SPIR-V intrinsic to use and which optional image operands are needed.
-        enum spirv::ir::Intrinsic intrinsic;
+        // Determine which SPIR-V function to use and which optional image operands are needed.
+        enum spirv::BuiltinFn function;
         core::ir::Value* depth = nullptr;
         ImageOperands operands;
         switch (builtin->Func()) {
-            case core::Function::kTextureSample:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleImplicitLod;
+            case core::BuiltinFn::kTextureSample:
+                function = spirv::BuiltinFn::kImageSampleImplicitLod;
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureSampleBias:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleImplicitLod;
+            case core::BuiltinFn::kTextureSampleBias:
+                function = spirv::BuiltinFn::kImageSampleImplicitLod;
                 operands.bias = next_arg();
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureSampleCompare:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleDrefImplicitLod;
+            case core::BuiltinFn::kTextureSampleCompare:
+                function = spirv::BuiltinFn::kImageSampleDrefImplicitLod;
                 depth = next_arg();
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureSampleCompareLevel:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleDrefExplicitLod;
+            case core::BuiltinFn::kTextureSampleCompareLevel:
+                function = spirv::BuiltinFn::kImageSampleDrefExplicitLod;
                 depth = next_arg();
                 operands.lod = b.Constant(0_f);
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureSampleGrad:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleExplicitLod;
+            case core::BuiltinFn::kTextureSampleGrad:
+                function = spirv::BuiltinFn::kImageSampleExplicitLod;
                 operands.ddx = next_arg();
                 operands.ddy = next_arg();
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureSampleLevel:
-                intrinsic = spirv::ir::Intrinsic::kImageSampleExplicitLod;
+            case core::BuiltinFn::kTextureSampleLevel:
+                function = spirv::BuiltinFn::kImageSampleExplicitLod;
                 operands.lod = next_arg();
                 operands.offset = next_arg();
                 break;
@@ -530,24 +529,24 @@ struct State {
                 return nullptr;
         }
 
-        // Start building the argument list for the intrinsic.
+        // Start building the argument list for the function.
         // The first two operands are always the sampled image and then the coordinates, followed by
         // the depth reference if used.
-        Vector<core::ir::Value*, 8> intrinsic_args;
-        intrinsic_args.Push(sampled_image->Result());
-        intrinsic_args.Push(coords);
+        Vector<core::ir::Value*, 8> function_args;
+        function_args.Push(sampled_image->Result());
+        function_args.Push(coords);
         if (depth) {
-            intrinsic_args.Push(depth);
+            function_args.Push(depth);
         }
 
         // Add the optional image operands, if any.
-        AppendImageOperands(operands, intrinsic_args, builtin, /* requires_float_lod */ true);
+        AppendImageOperands(operands, function_args, builtin, /* requires_float_lod */ true);
 
-        // Call the intrinsic.
+        // Call the function.
         // If this is a depth comparison, the result is always f32, otherwise vec4f.
         auto* result_ty = depth ? static_cast<const core::type::Type*>(ty.f32()) : ty.vec4<f32>();
         auto* texture_call =
-            b.Call<spirv::ir::IntrinsicCall>(result_ty, intrinsic, std::move(intrinsic_args));
+            b.Call<spirv::ir::BuiltinCall>(result_ty, function, std::move(function_args));
         texture_call->InsertBefore(builtin);
 
         auto* result = texture_call->Result();
@@ -588,7 +587,7 @@ struct State {
 
         // Use OpSampledImage to create an OpTypeSampledImage object.
         auto* sampled_image = b.Call<spirv::ir::BuiltinCall>(ty.Get<type::SampledImage>(texture_ty),
-                                                             spirv::ir::Function::kSampledImage,
+                                                             spirv::BuiltinFn::kSampledImage,
                                                              Vector{texture, sampler});
         sampled_image->InsertBefore(builtin);
 
@@ -599,16 +598,16 @@ struct State {
         }
 
         // Determine which SPIR-V function to use and which optional image operands are needed.
-        enum spirv::ir::Function function;
+        enum spirv::BuiltinFn function;
         core::ir::Value* depth = nullptr;
         ImageOperands operands;
         switch (builtin->Func()) {
-            case core::Function::kTextureGather:
-                function = spirv::ir::Function::kImageGather;
+            case core::BuiltinFn::kTextureGather:
+                function = spirv::BuiltinFn::kImageGather;
                 operands.offset = next_arg();
                 break;
-            case core::Function::kTextureGatherCompare:
-                function = spirv::ir::Function::kImageDrefGather;
+            case core::BuiltinFn::kTextureGatherCompare:
+                function = spirv::BuiltinFn::kImageDrefGather;
                 depth = next_arg();
                 operands.offset = next_arg();
                 break;
@@ -682,8 +681,8 @@ struct State {
         if (expects_scalar_result) {
             result_ty = ty.vec4(result_ty);
         }
-        auto kind = texture_ty->Is<core::type::StorageTexture>() ? spirv::ir::Function::kImageRead
-                                                                 : spirv::ir::Function::kImageFetch;
+        auto kind = texture_ty->Is<core::type::StorageTexture>() ? spirv::BuiltinFn::kImageRead
+                                                                 : spirv::BuiltinFn::kImageFetch;
         auto* texture_call =
             b.Call<spirv::ir::BuiltinCall>(result_ty, kind, std::move(builtin_args));
         texture_call->InsertBefore(builtin);
@@ -721,19 +720,19 @@ struct State {
 
         auto* texel = next_arg();
 
-        // Start building the argument list for the intrinsic.
+        // Start building the argument list for the function.
         // The first two operands are always the texture and then the coordinates.
-        Vector<core::ir::Value*, 8> intrinsic_args;
-        intrinsic_args.Push(texture);
-        intrinsic_args.Push(coords);
-        intrinsic_args.Push(texel);
+        Vector<core::ir::Value*, 8> function_args;
+        function_args.Push(texture);
+        function_args.Push(coords);
+        function_args.Push(texel);
 
         ImageOperands operands;
-        AppendImageOperands(operands, intrinsic_args, builtin, /* requires_float_lod */ false);
+        AppendImageOperands(operands, function_args, builtin, /* requires_float_lod */ false);
 
-        // Call the intrinsic.
-        auto* texture_call = b.Call<spirv::ir::IntrinsicCall>(
-            ty.void_(), spirv::ir::Intrinsic::kImageWrite, std::move(intrinsic_args));
+        // Call the function.
+        auto* texture_call = b.Call<spirv::ir::BuiltinCall>(
+            ty.void_(), spirv::BuiltinFn::kImageWrite, std::move(function_args));
         texture_call->InsertBefore(builtin);
         return texture_call->Result();
     }
@@ -755,13 +754,13 @@ struct State {
         function_args.Push(texture);
 
         // Determine which SPIR-V function to use, and add the Lod argument if needed.
-        enum spirv::ir::Function function;
+        enum spirv::BuiltinFn function;
         if (texture_ty
                 ->IsAnyOf<core::type::MultisampledTexture, core::type::DepthMultisampledTexture,
                           core::type::StorageTexture>()) {
-            function = spirv::ir::Function::kImageQuerySize;
+            function = spirv::BuiltinFn::kImageQuerySize;
         } else {
-            function = spirv::ir::Function::kImageQuerySizeLod;
+            function = spirv::BuiltinFn::kImageQuerySizeLod;
             if (auto* lod = next_arg()) {
                 function_args.Push(lod);
             } else {
@@ -805,13 +804,13 @@ struct State {
         function_args.Push(texture);
 
         // Determine which SPIR-V function to use, and add the Lod argument if needed.
-        enum spirv::ir::Function function;
+        enum spirv::BuiltinFn function;
         if (texture_ty
                 ->IsAnyOf<core::type::MultisampledTexture, core::type::DepthMultisampledTexture,
                           core::type::StorageTexture>()) {
-            function = spirv::ir::Function::kImageQuerySize;
+            function = spirv::BuiltinFn::kImageQuerySize;
         } else {
-            function = spirv::ir::Function::kImageQuerySizeLod;
+            function = spirv::BuiltinFn::kImageQuerySizeLod;
             function_args.Push(b.Constant(0_u));
         }
 
@@ -839,7 +838,7 @@ struct State {
         Vector<core::ir::Value*, 4> args;
         for (uint32_t i = 0; i < vec->Width(); i++) {
             auto* el = b.Access(ty.f32(), arg, u32(i));
-            auto* scalar_call = b.Call(ty.f32(), core::Function::kQuantizeToF16, el);
+            auto* scalar_call = b.Call(ty.f32(), core::BuiltinFn::kQuantizeToF16, el);
             args.Push(scalar_call->Result());
             el->InsertBefore(builtin);
             scalar_call->InsertBefore(builtin);

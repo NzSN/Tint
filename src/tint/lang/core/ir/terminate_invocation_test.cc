@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "src/tint/lang/spirv/ir/intrinsic_call.h"
+#include "src/tint/lang/core/ir/terminate_invocation.h"
+#include "gtest/gtest.h"
+#include "src/tint/lang/core/ir/ir_helper_test.h"
 
-#include <utility>
+namespace tint::core::ir {
+namespace {
 
-TINT_INSTANTIATE_TYPEINFO(tint::spirv::ir::IntrinsicCall);
+using IR_TerminateInvocationTest = IRTestHelper;
 
-namespace tint::spirv::ir {
+TEST_F(IR_TerminateInvocationTest, Clone) {
+    auto* ti = b.TerminateInvocation();
+    auto* new_ti = clone_ctx.Clone(ti);
 
-IntrinsicCall::IntrinsicCall(core::ir::InstructionResult* result,
-                             Intrinsic intrinsic,
-                             VectorRef<core::ir::Value*> arguments)
-    : Base(result, arguments), intrinsic_(intrinsic) {}
+    EXPECT_NE(ti, new_ti);
+    EXPECT_NE(nullptr, new_ti);
+    EXPECT_NE(ti, new_ti);
+}
 
-IntrinsicCall::~IntrinsicCall() = default;
-
-}  // namespace tint::spirv::ir
+}  // namespace
+}  // namespace tint::core::ir

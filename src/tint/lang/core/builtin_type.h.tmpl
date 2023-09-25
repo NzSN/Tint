@@ -1,6 +1,6 @@
 {{- /*
 --------------------------------------------------------------------------------
-Template file for use with tools/src/cmd/gen to generate intrinsics.h
+Template file for use with tools/src/cmd/gen to generate builtin_type.h
 
 To update the generated file, run:
     ./tools/run gen
@@ -11,24 +11,23 @@ See:
 --------------------------------------------------------------------------------
 */ -}}
 
-{{- $I := LoadIntrinsics "src/tint/lang/spirv/spirv.def" -}}
+{{- $I := LoadIntrinsics "src/tint/lang/core/core.def" -}}
 {{- Import "src/tint/utils/templates/enums.tmpl.inc" -}}
-{{- $enum := ($I.Sem.Enum "intrinsic") -}}
+{{- $enum := ($I.Sem.Enum "builtin_type") -}}
+{{- Eval "OverrideEnumName" "Enum" $enum "Name" "BuiltinType" -}}
 
-#ifndef SRC_TINT_LANG_SPIRV_IR_INTRINSIC_H_
-#define SRC_TINT_LANG_SPIRV_IR_INTRINSIC_H_
+#ifndef SRC_TINT_LANG_CORE_BUILTIN_TYPE_H_
+#define SRC_TINT_LANG_CORE_BUILTIN_TYPE_H_
 
 #include <cstdint>
-#include <string>
 
 #include "src/tint/utils/traits/traits.h"
 
-namespace tint::spirv::ir {
+namespace tint::core {
 
-/// Intrinsic
-{{ Eval "DeclareEnum" $enum }}
+/// An enumerator of builtin types.
+{{ Eval "DeclareEnum" $enum}}
 
-}  // namespace tint::spirv::ir
+}  // namespace tint::core
 
-#endif  // SRC_TINT_LANG_SPIRV_IR_INTRINSIC_H_
-
+#endif  // SRC_TINT_LANG_CORE_BUILTIN_TYPE_H_

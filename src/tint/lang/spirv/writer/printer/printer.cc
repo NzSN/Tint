@@ -35,7 +35,6 @@
 #include "src/tint/lang/core/ir/exit_loop.h"
 #include "src/tint/lang/core/ir/exit_switch.h"
 #include "src/tint/lang/core/ir/if.h"
-#include "src/tint/lang/core/ir/intrinsic_call.h"
 #include "src/tint/lang/core/ir/let.h"
 #include "src/tint/lang/core/ir/load.h"
 #include "src/tint/lang/core/ir/load_vector_element.h"
@@ -74,7 +73,6 @@
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/core/type/void.h"
-#include "src/tint/lang/spirv/ir/intrinsic_call.h"
 #include "src/tint/lang/spirv/type/sampled_image.h"
 #include "src/tint/lang/spirv/writer/ast_printer/ast_printer.h"
 #include "src/tint/lang/spirv/writer/common/module.h"
@@ -710,7 +708,6 @@ void Printer::EmitBlockInstructions(core::ir::Block* block) {
             [&](spirv::ir::BuiltinCall* b) { EmitSpirvBuiltinCall(b); },          //
             [&](core::ir::Construct* c) { EmitConstruct(c); },                    //
             [&](core::ir::Convert* c) { EmitConvert(c); },                        //
-            [&](spirv::ir::IntrinsicCall* i) { EmitIntrinsicCall(i); },           //
             [&](core::ir::Load* l) { EmitLoad(l); },                              //
             [&](core::ir::LoadVectorElement* l) { EmitLoadVectorElement(l); },    //
             [&](core::ir::Loop* l) { EmitLoop(l); },                              //
@@ -1036,93 +1033,108 @@ void Printer::EmitSpirvBuiltinCall(spirv::ir::BuiltinCall* builtin) {
 
     spv::Op op = spv::Op::Max;
     switch (builtin->Func()) {
-        case spirv::ir::Function::kArrayLength:
+        case spirv::BuiltinFn::kArrayLength:
             op = spv::Op::OpArrayLength;
             break;
-        case spirv::ir::Function::kAtomicIadd:
+        case spirv::BuiltinFn::kAtomicIadd:
             op = spv::Op::OpAtomicIAdd;
             break;
-        case spirv::ir::Function::kAtomicIsub:
+        case spirv::BuiltinFn::kAtomicIsub:
             op = spv::Op::OpAtomicISub;
             break;
-        case spirv::ir::Function::kAtomicAnd:
+        case spirv::BuiltinFn::kAtomicAnd:
             op = spv::Op::OpAtomicAnd;
             break;
-        case spirv::ir::Function::kAtomicCompareExchange:
+        case spirv::BuiltinFn::kAtomicCompareExchange:
             op = spv::Op::OpAtomicCompareExchange;
             break;
-        case spirv::ir::Function::kAtomicExchange:
+        case spirv::BuiltinFn::kAtomicExchange:
             op = spv::Op::OpAtomicExchange;
             break;
-        case spirv::ir::Function::kAtomicLoad:
+        case spirv::BuiltinFn::kAtomicLoad:
             op = spv::Op::OpAtomicLoad;
             break;
-        case spirv::ir::Function::kAtomicOr:
+        case spirv::BuiltinFn::kAtomicOr:
             op = spv::Op::OpAtomicOr;
             break;
-        case spirv::ir::Function::kAtomicSmax:
+        case spirv::BuiltinFn::kAtomicSmax:
             op = spv::Op::OpAtomicSMax;
             break;
-        case spirv::ir::Function::kAtomicSmin:
+        case spirv::BuiltinFn::kAtomicSmin:
             op = spv::Op::OpAtomicSMin;
             break;
-        case spirv::ir::Function::kAtomicStore:
+        case spirv::BuiltinFn::kAtomicStore:
             op = spv::Op::OpAtomicStore;
             break;
-        case spirv::ir::Function::kAtomicUmax:
+        case spirv::BuiltinFn::kAtomicUmax:
             op = spv::Op::OpAtomicUMax;
             break;
-        case spirv::ir::Function::kAtomicUmin:
+        case spirv::BuiltinFn::kAtomicUmin:
             op = spv::Op::OpAtomicUMin;
             break;
-        case spirv::ir::Function::kAtomicXor:
+        case spirv::BuiltinFn::kAtomicXor:
             op = spv::Op::OpAtomicXor;
             break;
-        case spirv::ir::Function::kDot:
+        case spirv::BuiltinFn::kDot:
             op = spv::Op::OpDot;
             break;
-        case spirv::ir::Function::kImageDrefGather:
+        case spirv::BuiltinFn::kImageDrefGather:
             op = spv::Op::OpImageDrefGather;
             break;
-        case spirv::ir::Function::kImageFetch:
+        case spirv::BuiltinFn::kImageFetch:
             op = spv::Op::OpImageFetch;
             break;
-        case spirv::ir::Function::kImageGather:
+        case spirv::BuiltinFn::kImageGather:
             op = spv::Op::OpImageGather;
             break;
-        case spirv::ir::Function::kImageQuerySize:
+        case spirv::BuiltinFn::kImageQuerySize:
             module_.PushCapability(SpvCapabilityImageQuery);
             op = spv::Op::OpImageQuerySize;
             break;
-        case spirv::ir::Function::kImageQuerySizeLod:
+        case spirv::BuiltinFn::kImageQuerySizeLod:
             module_.PushCapability(SpvCapabilityImageQuery);
             op = spv::Op::OpImageQuerySizeLod;
             break;
-        case spirv::ir::Function::kImageRead:
+        case spirv::BuiltinFn::kImageRead:
             op = spv::Op::OpImageRead;
             break;
-        case spirv::ir::Function::kMatrixTimesMatrix:
+        case spirv::BuiltinFn::kImageSampleImplicitLod:
+            op = spv::Op::OpImageSampleImplicitLod;
+            break;
+        case spirv::BuiltinFn::kImageSampleExplicitLod:
+            op = spv::Op::OpImageSampleExplicitLod;
+            break;
+        case spirv::BuiltinFn::kImageSampleDrefImplicitLod:
+            op = spv::Op::OpImageSampleDrefImplicitLod;
+            break;
+        case spirv::BuiltinFn::kImageSampleDrefExplicitLod:
+            op = spv::Op::OpImageSampleDrefExplicitLod;
+            break;
+        case spirv::BuiltinFn::kImageWrite:
+            op = spv::Op::OpImageWrite;
+            break;
+        case spirv::BuiltinFn::kMatrixTimesMatrix:
             op = spv::Op::OpMatrixTimesMatrix;
             break;
-        case spirv::ir::Function::kMatrixTimesScalar:
+        case spirv::BuiltinFn::kMatrixTimesScalar:
             op = spv::Op::OpMatrixTimesScalar;
             break;
-        case spirv::ir::Function::kMatrixTimesVector:
+        case spirv::BuiltinFn::kMatrixTimesVector:
             op = spv::Op::OpMatrixTimesVector;
             break;
-        case spirv::ir::Function::kSampledImage:
+        case spirv::BuiltinFn::kSampledImage:
             op = spv::Op::OpSampledImage;
             break;
-        case spirv::ir::Function::kSelect:
+        case spirv::BuiltinFn::kSelect:
             op = spv::Op::OpSelect;
             break;
-        case spirv::ir::Function::kVectorTimesMatrix:
+        case spirv::BuiltinFn::kVectorTimesMatrix:
             op = spv::Op::OpVectorTimesMatrix;
             break;
-        case spirv::ir::Function::kVectorTimesScalar:
+        case spirv::BuiltinFn::kVectorTimesScalar:
             op = spv::Op::OpVectorTimesScalar;
             break;
-        case spirv::ir::Function::kNone:
+        case spirv::BuiltinFn::kNone:
             TINT_ICE() << "undefined spirv ir function";
             return;
     }
@@ -1140,13 +1152,13 @@ void Printer::EmitSpirvBuiltinCall(spirv::ir::BuiltinCall* builtin) {
 void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
     auto* result_ty = builtin->Result()->Type();
 
-    if (builtin->Func() == core::Function::kAbs &&
+    if (builtin->Func() == core::BuiltinFn::kAbs &&
         result_ty->is_unsigned_integer_scalar_or_vector()) {
         // abs() is a no-op for unsigned integers.
         values_.Add(builtin->Result(), Value(builtin->Args()[0]));
         return;
     }
-    if ((builtin->Func() == core::Function::kAll || builtin->Func() == core::Function::kAny) &&
+    if ((builtin->Func() == core::BuiltinFn::kAll || builtin->Func() == core::BuiltinFn::kAny) &&
         builtin->Args()[0]->Type()->Is<core::type::Bool>()) {
         // all() and any() are passthroughs for scalar arguments.
         values_.Add(builtin->Result(), Value(builtin->Args()[0]));
@@ -1173,41 +1185,41 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
 
     // Determine the opcode.
     switch (builtin->Func()) {
-        case core::Function::kAbs:
+        case core::BuiltinFn::kAbs:
             if (result_ty->is_float_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450FAbs);
             } else if (result_ty->is_signed_integer_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450SAbs);
             }
             break;
-        case core::Function::kAll:
+        case core::BuiltinFn::kAll:
             op = spv::Op::OpAll;
             break;
-        case core::Function::kAny:
+        case core::BuiltinFn::kAny:
             op = spv::Op::OpAny;
             break;
-        case core::Function::kAcos:
+        case core::BuiltinFn::kAcos:
             glsl_ext_inst(GLSLstd450Acos);
             break;
-        case core::Function::kAcosh:
+        case core::BuiltinFn::kAcosh:
             glsl_ext_inst(GLSLstd450Acosh);
             break;
-        case core::Function::kAsin:
+        case core::BuiltinFn::kAsin:
             glsl_ext_inst(GLSLstd450Asin);
             break;
-        case core::Function::kAsinh:
+        case core::BuiltinFn::kAsinh:
             glsl_ext_inst(GLSLstd450Asinh);
             break;
-        case core::Function::kAtan:
+        case core::BuiltinFn::kAtan:
             glsl_ext_inst(GLSLstd450Atan);
             break;
-        case core::Function::kAtan2:
+        case core::BuiltinFn::kAtan2:
             glsl_ext_inst(GLSLstd450Atan2);
             break;
-        case core::Function::kAtanh:
+        case core::BuiltinFn::kAtanh:
             glsl_ext_inst(GLSLstd450Atanh);
             break;
-        case core::Function::kClamp:
+        case core::BuiltinFn::kClamp:
             if (result_ty->is_float_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450NClamp);
             } else if (result_ty->is_unsigned_integer_scalar_or_vector()) {
@@ -1216,107 +1228,107 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
                 glsl_ext_inst(GLSLstd450SClamp);
             }
             break;
-        case core::Function::kCeil:
+        case core::BuiltinFn::kCeil:
             glsl_ext_inst(GLSLstd450Ceil);
             break;
-        case core::Function::kCos:
+        case core::BuiltinFn::kCos:
             glsl_ext_inst(GLSLstd450Cos);
             break;
-        case core::Function::kCosh:
+        case core::BuiltinFn::kCosh:
             glsl_ext_inst(GLSLstd450Cosh);
             break;
-        case core::Function::kCountOneBits:
+        case core::BuiltinFn::kCountOneBits:
             op = spv::Op::OpBitCount;
             break;
-        case core::Function::kCross:
+        case core::BuiltinFn::kCross:
             glsl_ext_inst(GLSLstd450Cross);
             break;
-        case core::Function::kDegrees:
+        case core::BuiltinFn::kDegrees:
             glsl_ext_inst(GLSLstd450Degrees);
             break;
-        case core::Function::kDeterminant:
+        case core::BuiltinFn::kDeterminant:
             glsl_ext_inst(GLSLstd450Determinant);
             break;
-        case core::Function::kDistance:
+        case core::BuiltinFn::kDistance:
             glsl_ext_inst(GLSLstd450Distance);
             break;
-        case core::Function::kDpdx:
+        case core::BuiltinFn::kDpdx:
             op = spv::Op::OpDPdx;
             break;
-        case core::Function::kDpdxCoarse:
+        case core::BuiltinFn::kDpdxCoarse:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpDPdxCoarse;
             break;
-        case core::Function::kDpdxFine:
+        case core::BuiltinFn::kDpdxFine:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpDPdxFine;
             break;
-        case core::Function::kDpdy:
+        case core::BuiltinFn::kDpdy:
             op = spv::Op::OpDPdy;
             break;
-        case core::Function::kDpdyCoarse:
+        case core::BuiltinFn::kDpdyCoarse:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpDPdyCoarse;
             break;
-        case core::Function::kDpdyFine:
+        case core::BuiltinFn::kDpdyFine:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpDPdyFine;
             break;
-        case core::Function::kExp:
+        case core::BuiltinFn::kExp:
             glsl_ext_inst(GLSLstd450Exp);
             break;
-        case core::Function::kExp2:
+        case core::BuiltinFn::kExp2:
             glsl_ext_inst(GLSLstd450Exp2);
             break;
-        case core::Function::kExtractBits:
+        case core::BuiltinFn::kExtractBits:
             op = result_ty->is_signed_integer_scalar_or_vector() ? spv::Op::OpBitFieldSExtract
                                                                  : spv::Op::OpBitFieldUExtract;
             break;
-        case core::Function::kFaceForward:
+        case core::BuiltinFn::kFaceForward:
             glsl_ext_inst(GLSLstd450FaceForward);
             break;
-        case core::Function::kFloor:
+        case core::BuiltinFn::kFloor:
             glsl_ext_inst(GLSLstd450Floor);
             break;
-        case core::Function::kFma:
+        case core::BuiltinFn::kFma:
             glsl_ext_inst(GLSLstd450Fma);
             break;
-        case core::Function::kFract:
+        case core::BuiltinFn::kFract:
             glsl_ext_inst(GLSLstd450Fract);
             break;
-        case core::Function::kFrexp:
+        case core::BuiltinFn::kFrexp:
             glsl_ext_inst(GLSLstd450FrexpStruct);
             break;
-        case core::Function::kFwidth:
+        case core::BuiltinFn::kFwidth:
             op = spv::Op::OpFwidth;
             break;
-        case core::Function::kFwidthCoarse:
+        case core::BuiltinFn::kFwidthCoarse:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpFwidthCoarse;
             break;
-        case core::Function::kFwidthFine:
+        case core::BuiltinFn::kFwidthFine:
             module_.PushCapability(SpvCapabilityDerivativeControl);
             op = spv::Op::OpFwidthFine;
             break;
-        case core::Function::kInsertBits:
+        case core::BuiltinFn::kInsertBits:
             op = spv::Op::OpBitFieldInsert;
             break;
-        case core::Function::kInverseSqrt:
+        case core::BuiltinFn::kInverseSqrt:
             glsl_ext_inst(GLSLstd450InverseSqrt);
             break;
-        case core::Function::kLdexp:
+        case core::BuiltinFn::kLdexp:
             glsl_ext_inst(GLSLstd450Ldexp);
             break;
-        case core::Function::kLength:
+        case core::BuiltinFn::kLength:
             glsl_ext_inst(GLSLstd450Length);
             break;
-        case core::Function::kLog:
+        case core::BuiltinFn::kLog:
             glsl_ext_inst(GLSLstd450Log);
             break;
-        case core::Function::kLog2:
+        case core::BuiltinFn::kLog2:
             glsl_ext_inst(GLSLstd450Log2);
             break;
-        case core::Function::kMax:
+        case core::BuiltinFn::kMax:
             if (result_ty->is_float_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450FMax);
             } else if (result_ty->is_signed_integer_scalar_or_vector()) {
@@ -1325,7 +1337,7 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
                 glsl_ext_inst(GLSLstd450UMax);
             }
             break;
-        case core::Function::kMin:
+        case core::BuiltinFn::kMin:
             if (result_ty->is_float_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450FMin);
             } else if (result_ty->is_signed_integer_scalar_or_vector()) {
@@ -1334,74 +1346,74 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
                 glsl_ext_inst(GLSLstd450UMin);
             }
             break;
-        case core::Function::kMix:
+        case core::BuiltinFn::kMix:
             glsl_ext_inst(GLSLstd450FMix);
             break;
-        case core::Function::kModf:
+        case core::BuiltinFn::kModf:
             glsl_ext_inst(GLSLstd450ModfStruct);
             break;
-        case core::Function::kNormalize:
+        case core::BuiltinFn::kNormalize:
             glsl_ext_inst(GLSLstd450Normalize);
             break;
-        case core::Function::kPack2X16Float:
+        case core::BuiltinFn::kPack2X16Float:
             glsl_ext_inst(GLSLstd450PackHalf2x16);
             break;
-        case core::Function::kPack2X16Snorm:
+        case core::BuiltinFn::kPack2X16Snorm:
             glsl_ext_inst(GLSLstd450PackSnorm2x16);
             break;
-        case core::Function::kPack2X16Unorm:
+        case core::BuiltinFn::kPack2X16Unorm:
             glsl_ext_inst(GLSLstd450PackUnorm2x16);
             break;
-        case core::Function::kPack4X8Snorm:
+        case core::BuiltinFn::kPack4X8Snorm:
             glsl_ext_inst(GLSLstd450PackSnorm4x8);
             break;
-        case core::Function::kPack4X8Unorm:
+        case core::BuiltinFn::kPack4X8Unorm:
             glsl_ext_inst(GLSLstd450PackUnorm4x8);
             break;
-        case core::Function::kPow:
+        case core::BuiltinFn::kPow:
             glsl_ext_inst(GLSLstd450Pow);
             break;
-        case core::Function::kQuantizeToF16:
+        case core::BuiltinFn::kQuantizeToF16:
             op = spv::Op::OpQuantizeToF16;
             break;
-        case core::Function::kRadians:
+        case core::BuiltinFn::kRadians:
             glsl_ext_inst(GLSLstd450Radians);
             break;
-        case core::Function::kReflect:
+        case core::BuiltinFn::kReflect:
             glsl_ext_inst(GLSLstd450Reflect);
             break;
-        case core::Function::kRefract:
+        case core::BuiltinFn::kRefract:
             glsl_ext_inst(GLSLstd450Refract);
             break;
-        case core::Function::kReverseBits:
+        case core::BuiltinFn::kReverseBits:
             op = spv::Op::OpBitReverse;
             break;
-        case core::Function::kRound:
+        case core::BuiltinFn::kRound:
             glsl_ext_inst(GLSLstd450RoundEven);
             break;
-        case core::Function::kSign:
+        case core::BuiltinFn::kSign:
             if (result_ty->is_float_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450FSign);
             } else if (result_ty->is_signed_integer_scalar_or_vector()) {
                 glsl_ext_inst(GLSLstd450SSign);
             }
             break;
-        case core::Function::kSin:
+        case core::BuiltinFn::kSin:
             glsl_ext_inst(GLSLstd450Sin);
             break;
-        case core::Function::kSinh:
+        case core::BuiltinFn::kSinh:
             glsl_ext_inst(GLSLstd450Sinh);
             break;
-        case core::Function::kSmoothstep:
+        case core::BuiltinFn::kSmoothstep:
             glsl_ext_inst(GLSLstd450SmoothStep);
             break;
-        case core::Function::kSqrt:
+        case core::BuiltinFn::kSqrt:
             glsl_ext_inst(GLSLstd450Sqrt);
             break;
-        case core::Function::kStep:
+        case core::BuiltinFn::kStep:
             glsl_ext_inst(GLSLstd450Step);
             break;
-        case core::Function::kStorageBarrier:
+        case core::BuiltinFn::kStorageBarrier:
             op = spv::Op::OpControlBarrier;
             operands.clear();
             operands.push_back(Constant(b_.ConstantValue(u32(spv::Scope::Workgroup))));
@@ -1410,24 +1422,24 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
                 Constant(b_.ConstantValue(u32(spv::MemorySemanticsMask::UniformMemory |
                                               spv::MemorySemanticsMask::AcquireRelease))));
             break;
-        case core::Function::kSubgroupBallot:
+        case core::BuiltinFn::kSubgroupBallot:
             module_.PushCapability(SpvCapabilityGroupNonUniformBallot);
             op = spv::Op::OpGroupNonUniformBallot;
             operands.push_back(Constant(ir_->constant_values.Get(u32(spv::Scope::Subgroup))));
             operands.push_back(Constant(ir_->constant_values.Get(true)));
             break;
-        case core::Function::kSubgroupBroadcast:
+        case core::BuiltinFn::kSubgroupBroadcast:
             module_.PushCapability(SpvCapabilityGroupNonUniformBallot);
             op = spv::Op::OpGroupNonUniformBroadcast;
             operands.push_back(Constant(ir_->constant_values.Get(u32(spv::Scope::Subgroup))));
             break;
-        case core::Function::kTan:
+        case core::BuiltinFn::kTan:
             glsl_ext_inst(GLSLstd450Tan);
             break;
-        case core::Function::kTanh:
+        case core::BuiltinFn::kTanh:
             glsl_ext_inst(GLSLstd450Tanh);
             break;
-        case core::Function::kTextureBarrier:
+        case core::BuiltinFn::kTextureBarrier:
             op = spv::Op::OpControlBarrier;
             operands.clear();
             operands.push_back(Constant(b_.ConstantValue(u32(spv::Scope::Workgroup))));
@@ -1436,36 +1448,36 @@ void Printer::EmitCoreBuiltinCall(core::ir::CoreBuiltinCall* builtin) {
                 Constant(b_.ConstantValue(u32(spv::MemorySemanticsMask::ImageMemory |
                                               spv::MemorySemanticsMask::AcquireRelease))));
             break;
-        case core::Function::kTextureNumLevels:
+        case core::BuiltinFn::kTextureNumLevels:
             module_.PushCapability(SpvCapabilityImageQuery);
             op = spv::Op::OpImageQueryLevels;
             break;
-        case core::Function::kTextureNumSamples:
+        case core::BuiltinFn::kTextureNumSamples:
             module_.PushCapability(SpvCapabilityImageQuery);
             op = spv::Op::OpImageQuerySamples;
             break;
-        case core::Function::kTranspose:
+        case core::BuiltinFn::kTranspose:
             op = spv::Op::OpTranspose;
             break;
-        case core::Function::kTrunc:
+        case core::BuiltinFn::kTrunc:
             glsl_ext_inst(GLSLstd450Trunc);
             break;
-        case core::Function::kUnpack2X16Float:
+        case core::BuiltinFn::kUnpack2X16Float:
             glsl_ext_inst(GLSLstd450UnpackHalf2x16);
             break;
-        case core::Function::kUnpack2X16Snorm:
+        case core::BuiltinFn::kUnpack2X16Snorm:
             glsl_ext_inst(GLSLstd450UnpackSnorm2x16);
             break;
-        case core::Function::kUnpack2X16Unorm:
+        case core::BuiltinFn::kUnpack2X16Unorm:
             glsl_ext_inst(GLSLstd450UnpackUnorm2x16);
             break;
-        case core::Function::kUnpack4X8Snorm:
+        case core::BuiltinFn::kUnpack4X8Snorm:
             glsl_ext_inst(GLSLstd450UnpackSnorm4x8);
             break;
-        case core::Function::kUnpack4X8Unorm:
+        case core::BuiltinFn::kUnpack4X8Unorm:
             glsl_ext_inst(GLSLstd450UnpackUnorm4x8);
             break;
-        case core::Function::kWorkgroupBarrier:
+        case core::BuiltinFn::kWorkgroupBarrier:
             op = spv::Op::OpControlBarrier;
             operands.clear();
             operands.push_back(Constant(b_.ConstantValue(u32(spv::Scope::Workgroup))));
@@ -1584,41 +1596,6 @@ void Printer::EmitConvert(core::ir::Convert* convert) {
     }
 
     current_function_.push_inst(op, std::move(operands));
-}
-
-void Printer::EmitIntrinsicCall(spirv::ir::IntrinsicCall* call) {
-    auto id = Value(call);
-
-    spv::Op op = spv::Op::Max;
-    switch (call->Kind()) {
-        case spirv::ir::Intrinsic::kImageSampleImplicitLod:
-            op = spv::Op::OpImageSampleImplicitLod;
-            break;
-        case spirv::ir::Intrinsic::kImageSampleExplicitLod:
-            op = spv::Op::OpImageSampleExplicitLod;
-            break;
-        case spirv::ir::Intrinsic::kImageSampleDrefImplicitLod:
-            op = spv::Op::OpImageSampleDrefImplicitLod;
-            break;
-        case spirv::ir::Intrinsic::kImageSampleDrefExplicitLod:
-            op = spv::Op::OpImageSampleDrefExplicitLod;
-            break;
-        case spirv::ir::Intrinsic::kImageWrite:
-            op = spv::Op::OpImageWrite;
-            break;
-        case spirv::ir::Intrinsic::kUndefined:
-            TINT_ICE() << "undefined spirv intrinsic";
-            return;
-    }
-
-    OperandList operands;
-    if (!call->Result()->Type()->Is<core::type::Void>()) {
-        operands = {Type(call->Result()->Type()), id};
-    }
-    for (auto* arg : call->Args()) {
-        operands.push_back(Value(arg));
-    }
-    current_function_.push_inst(op, operands);
 }
 
 void Printer::EmitLoad(core::ir::Load* load) {
