@@ -14,6 +14,7 @@
 
 #include "src/tint/lang/spirv/writer/ast_printer/ast_printer.h"
 
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -97,7 +98,7 @@ SanitizedResult Sanitize(const Program& in, const Options& options) {
     manager.Add<ast::transform::BindingRemapper>();
     data.Add<ast::transform::BindingRemapper::Remappings>(
         options.binding_remapper_options.binding_points,
-        options.binding_remapper_options.access_controls,
+        std::unordered_map<BindingPoint, core::Access>{},
         options.binding_remapper_options.allow_collisions);
 
     // Note: it is more efficient for MultiplanarExternalTexture to come after Robustness
@@ -190,7 +191,7 @@ bool ASTPrinter::Generate() {
     if (builder_.Build()) {
         auto& module = builder_.Module();
         writer_.WriteHeader(module.IdBound());
-        writer_.WriteModule(&module);
+        writer_.WriteModule(module);
         return true;
     }
     return false;

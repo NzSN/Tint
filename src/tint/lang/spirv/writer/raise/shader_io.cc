@@ -47,7 +47,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     core::ir::Value* frag_depth_clamp_args = nullptr;
 
     /// Constructor
-    StateImpl(core::ir::Module* mod, core::ir::Function* f, const ShaderIOConfig& cfg)
+    StateImpl(core::ir::Module& mod, core::ir::Function* f, const ShaderIOConfig& cfg)
         : ShaderIOBackendState(mod, f), config(cfg) {}
 
     /// Destructor
@@ -66,7 +66,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                   const char* name_suffix) {
         for (auto io : entries) {
             StringStream name;
-            name << ir->NameOf(func).Name();
+            name << ir.NameOf(func).Name();
 
             if (io.attributes.builtin) {
                 // SampleMask must be an array for Vulkan.
@@ -96,7 +96,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 io.attributes.interpolation,
                 io.attributes.invariant,
             });
-            b.RootBlock()->Append(var);
+            ir.root_block->Append(var);
             vars.Push(var);
         }
     }
@@ -158,7 +158,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // Create the clamp args struct and variable.
         if (!frag_depth_clamp_args) {
             // Check that there are no push constants in the module already.
-            for (auto* inst : *b.RootBlock()) {
+            for (auto* inst : *ir.root_block) {
                 if (auto* var = inst->As<core::ir::Var>()) {
                     auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
                     if (ptr->AddressSpace() == core::AddressSpace::kPushConstant) {
@@ -168,16 +168,16 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             }
 
             // Declare the struct.
-            auto* str = ty.Struct(ir->symbols.Register("FragDepthClampArgs"),
+            auto* str = ty.Struct(ir.symbols.Register("FragDepthClampArgs"),
                                   {
-                                      {ir->symbols.Register("min"), ty.f32()},
-                                      {ir->symbols.Register("max"), ty.f32()},
+                                      {ir.symbols.Register("min"), ty.f32()},
+                                      {ir.symbols.Register("max"), ty.f32()},
                                   });
             str->SetStructFlag(core::type::kBlock);
 
             // Declare the variable.
             auto* var = b.Var("tint_frag_depth_clamp_args", ty.ptr(push_constant, str));
-            b.RootBlock()->Append(var);
+            ir.root_block->Append(var);
             frag_depth_clamp_args = var->Result();
         }
 
@@ -195,13 +195,13 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
 };
 }  // namespace
 
-Result<SuccessType, std::string> ShaderIO(core::ir::Module* ir, const ShaderIOConfig& config) {
-    auto result = ValidateAndDumpIfNeeded(*ir, "ShaderIO transform");
+Result<SuccessType> ShaderIO(core::ir::Module& ir, const ShaderIOConfig& config) {
+    auto result = ValidateAndDumpIfNeeded(ir, "ShaderIO transform");
     if (!result) {
         return result;
     }
 
-    core::ir::transform::RunShaderIOBase(ir, [&](core::ir::Module* mod, core::ir::Function* func) {
+    core::ir::transform::RunShaderIOBase(ir, [&](core::ir::Module& mod, core::ir::Function* func) {
         return std::make_unique<StateImpl>(mod, func, config);
     });
 

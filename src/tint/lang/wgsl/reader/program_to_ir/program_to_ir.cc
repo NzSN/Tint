@@ -84,6 +84,7 @@
 #include "src/tint/lang/wgsl/ast/var.h"
 #include "src/tint/lang/wgsl/ast/variable_decl_statement.h"
 #include "src/tint/lang/wgsl/ast/while_statement.h"
+#include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/lang/wgsl/program/program.h"
 #include "src/tint/lang/wgsl/sem/builtin_fn.h"
 #include "src/tint/lang/wgsl/sem/call.h"
@@ -111,7 +112,7 @@ using namespace tint::core::fluent_types;     // NOLINT
 namespace tint::wgsl::reader {
 namespace {
 
-using ResultType = tint::Result<core::ir::Module, diag::List>;
+using ResultType = tint::Result<core::ir::Module>;
 
 /// Impl is the private-implementation of FromProgram().
 class Impl {
@@ -231,7 +232,7 @@ class Impl {
                 [&](const ast::Variable* var) {
                     // Setup the current block to be the root block for the module. The builder
                     // will handle creating it if it doesn't exist already.
-                    TINT_SCOPED_ASSIGNMENT(current_block_, builder_.RootBlock());
+                    TINT_SCOPED_ASSIGNMENT(current_block_, mod.root_block);
                     EmitVariable(var);
                 },
                 [&](const ast::Function* func) { EmitFunction(func); },
@@ -251,10 +252,10 @@ class Impl {
         }
 
         if (diagnostics_.contains_errors()) {
-            return ResultType(std::move(diagnostics_));
+            return Failure{std::move(diagnostics_)};
         }
 
-        return ResultType{std::move(mod)};
+        return std::move(mod);
     }
 
     core::Interpolation ExtractInterpolation(const ast::InterpolateAttribute* interp) {
@@ -1098,7 +1099,9 @@ class Impl {
                 core::ir::Instruction* inst = nullptr;
                 // If this is a builtin function, emit the specific builtin value
                 if (auto* b = sem->Target()->As<sem::BuiltinFn>()) {
-                    inst = impl.builder_.Call(ty, b->Fn(), args);
+                    auto* res = impl.builder_.InstructionResult(ty);
+                    inst = impl.builder_.ir.instructions.Create<wgsl::ir::BuiltinCall>(
+                        res, b->Fn(), std::move(args));
                 } else if (sem->Target()->As<sem::ValueConstructor>()) {
                     inst = impl.builder_.Construct(ty, std::move(args));
                 } else if (sem->Target()->Is<sem::ValueConversion>()) {
@@ -1417,15 +1420,15 @@ class Impl {
 
 }  // namespace
 
-tint::Result<core::ir::Module, std::string> ProgramToIR(const Program& program) {
+tint::Result<core::ir::Module> ProgramToIR(const Program& program) {
     if (!program.IsValid()) {
-        return std::string("input program is not valid");
+        return Failure{program.Diagnostics()};
     }
 
     Impl b(program);
     auto r = b.Build();
     if (!r) {
-        return r.Failure().str();
+        return r.Failure();
     }
 
     return r.Move();

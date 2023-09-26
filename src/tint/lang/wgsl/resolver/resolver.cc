@@ -1941,7 +1941,7 @@ tint::Result<Vector<const core::constant::Value*, N>> Resolver::ConvertArguments
     for (size_t i = 0, n = std::min(args.Length(), target->Parameters().Length()); i < n; i++) {
         if (!Convert(const_args[i], target->Parameters()[i]->Type(),
                      args[i]->Declaration()->source)) {
-            return tint::Failure;
+            return Failure{};
         }
     }
     return const_args;
@@ -2325,7 +2325,7 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
                 });
         }
 
-        if (auto f = resolved->BuiltinFn(); f != core::BuiltinFn::kNone) {
+        if (auto f = resolved->BuiltinFn(); f != wgsl::BuiltinFn::kNone) {
             if (!TINT_LIKELY(CheckNotTemplated("builtin", ident))) {
                 return nullptr;
             }
@@ -2400,7 +2400,7 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
 
 template <size_t N>
 sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
-                                 core::BuiltinFn fn,
+                                 wgsl::BuiltinFn fn,
                                  Vector<const sem::ValueExpression*, N>& args) {
     auto arg_stage = core::EvaluationStage::kConstant;
     for (auto* arg : args) {
@@ -2439,7 +2439,7 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
             flags.Contains(OverloadFlag::kIsDeprecated), flags.Contains(OverloadFlag::kMustUse));
     });
 
-    if (fn == core::BuiltinFn::kTintMaterialize) {
+    if (fn == wgsl::BuiltinFn::kTintMaterialize) {
         args[0] = Materialize(args[0]);
         if (!args[0]) {
             return nullptr;
@@ -2498,13 +2498,13 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         CollectTextureSamplerPairs(target, call->Arguments());
     }
 
-    if (fn == core::BuiltinFn::kWorkgroupUniformLoad) {
+    if (fn == wgsl::BuiltinFn::kWorkgroupUniformLoad) {
         if (!validator_.WorkgroupUniformLoad(call)) {
             return nullptr;
         }
     }
 
-    if (fn == core::BuiltinFn::kSubgroupBroadcast) {
+    if (fn == wgsl::BuiltinFn::kSubgroupBroadcast) {
         if (!validator_.SubgroupBroadcast(call)) {
             return nullptr;
         }
@@ -3333,7 +3333,7 @@ sem::Expression* Resolver::Identifier(const ast::IdentifierExpression* expr) {
         return builder_->create<sem::TypeExpression>(expr, current_statement_, ty);
     }
 
-    if (resolved->BuiltinFn() != core::BuiltinFn::kNone) {
+    if (resolved->BuiltinFn() != wgsl::BuiltinFn::kNone) {
         AddError("missing '(' for builtin function call", expr->source.End());
         return nullptr;
     }
@@ -3739,19 +3739,19 @@ tint::Result<uint32_t> Resolver::LocationAttribute(const ast::LocationAttribute*
 
     auto* materialized = Materialize(ValueExpression(attr->expr));
     if (!materialized) {
-        return tint::Failure;
+        return Failure{};
     }
 
     if (!materialized->Type()->IsAnyOf<core::type::I32, core::type::U32>()) {
         AddError("@location must be an i32 or u32 value", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     auto const_value = materialized->ConstantValue();
     auto value = const_value->ValueAs<AInt>();
     if (value < 0) {
         AddError("@location value must be non-negative", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     return static_cast<uint32_t>(value);
@@ -3763,19 +3763,19 @@ tint::Result<uint32_t> Resolver::IndexAttribute(const ast::IndexAttribute* attr)
 
     auto* materialized = Materialize(ValueExpression(attr->expr));
     if (!materialized) {
-        return tint::Failure;
+        return Failure{};
     }
 
     if (!materialized->Type()->IsAnyOf<core::type::I32, core::type::U32>()) {
         AddError("@location must be an i32 or u32 value", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     auto const_value = materialized->ConstantValue();
     auto value = const_value->ValueAs<AInt>();
     if (value != 0 && value != 1) {
         AddError("@index value must be zero or one", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     return static_cast<uint32_t>(value);
@@ -3787,18 +3787,18 @@ tint::Result<uint32_t> Resolver::BindingAttribute(const ast::BindingAttribute* a
 
     auto* materialized = Materialize(ValueExpression(attr->expr));
     if (!materialized) {
-        return tint::Failure;
+        return Failure{};
     }
     if (!materialized->Type()->IsAnyOf<core::type::I32, core::type::U32>()) {
         AddError("@binding must be an i32 or u32 value", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     auto const_value = materialized->ConstantValue();
     auto value = const_value->ValueAs<AInt>();
     if (value < 0) {
         AddError("@binding value must be non-negative", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
     return static_cast<uint32_t>(value);
 }
@@ -3809,18 +3809,18 @@ tint::Result<uint32_t> Resolver::GroupAttribute(const ast::GroupAttribute* attr)
 
     auto* materialized = Materialize(ValueExpression(attr->expr));
     if (!materialized) {
-        return tint::Failure;
+        return Failure{};
     }
     if (!materialized->Type()->IsAnyOf<core::type::I32, core::type::U32>()) {
         AddError("@group must be an i32 or u32 value", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     auto const_value = materialized->ConstantValue();
     auto value = const_value->ValueAs<AInt>();
     if (value < 0) {
         AddError("@group value must be non-negative", attr->source);
-        return tint::Failure;
+        return Failure{};
     }
     return static_cast<uint32_t>(value);
 }
@@ -3849,18 +3849,18 @@ tint::Result<sem::WorkgroupSize> Resolver::WorkgroupAttribute(const ast::Workgro
         }
         const auto* expr = ValueExpression(value);
         if (!expr) {
-            return tint::Failure;
+            return Failure{};
         }
         auto* ty = expr->Type();
         if (!ty->IsAnyOf<core::type::I32, core::type::U32, core::type::AbstractInt>()) {
             AddError(kErrBadExpr, value->source);
-            return tint::Failure;
+            return Failure{};
         }
 
         if (expr->Stage() != core::EvaluationStage::kConstant &&
             expr->Stage() != core::EvaluationStage::kOverride) {
             AddError(kErrBadExpr, value->source);
-            return tint::Failure;
+            return Failure{};
         }
 
         args.Push(expr);
@@ -3871,7 +3871,7 @@ tint::Result<sem::WorkgroupSize> Resolver::WorkgroupAttribute(const ast::Workgro
     if (!common_ty) {
         AddError("workgroup_size arguments must be of the same type, either i32 or u32",
                  attr->source);
-        return tint::Failure;
+        return Failure{};
     }
 
     // If all arguments are abstract-integers, then materialize to i32.
@@ -3882,12 +3882,12 @@ tint::Result<sem::WorkgroupSize> Resolver::WorkgroupAttribute(const ast::Workgro
     for (size_t i = 0; i < args.Length(); i++) {
         auto* materialized = Materialize(args[i], common_ty);
         if (!materialized) {
-            return tint::Failure;
+            return Failure{};
         }
         if (auto* value = materialized->ConstantValue()) {
             if (value->ValueAs<AInt>() < 1) {
                 AddError("workgroup_size argument must be at least 1", values[i]->source);
-                return tint::Failure;
+                return Failure{};
             }
             ws[i] = value->ValueAs<u32>();
         } else {
@@ -3900,7 +3900,7 @@ tint::Result<sem::WorkgroupSize> Resolver::WorkgroupAttribute(const ast::Workgro
         total_size *= static_cast<uint64_t>(ws[i].value_or(1));
         if (total_size > 0xffffffff) {
             AddError("total workgroup grid size cannot exceed 0xffffffff", values[i]->source);
-            return tint::Failure;
+            return Failure{};
         }
     }
 
@@ -3911,7 +3911,7 @@ tint::Result<tint::core::BuiltinValue> Resolver::BuiltinAttribute(
     const ast::BuiltinAttribute* attr) {
     auto* builtin_expr = BuiltinValueExpression(attr->builtin);
     if (!builtin_expr) {
-        return tint::Failure;
+        return Failure{};
     }
     // Apply the resolved tint::sem::BuiltinEnumExpression<tint::core::BuiltinValue> to the
     // attribute.
@@ -3944,13 +3944,13 @@ tint::Result<core::Interpolation> Resolver::InterpolateAttribute(
     core::Interpolation out;
     auto* type = InterpolationType(attr->type);
     if (!type) {
-        return tint::Failure;
+        return Failure{};
     }
     out.type = type->Value();
     if (attr->sampling) {
         auto* sampling = InterpolationSampling(attr->sampling);
         if (!sampling) {
-            return tint::Failure;
+            return Failure{};
         }
         out.sampling = sampling->Value();
     }
