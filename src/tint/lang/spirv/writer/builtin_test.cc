@@ -1436,14 +1436,92 @@ INSTANTIATE_TEST_SUITE_P(
     SpirvWriterTest,
     Builtin_3arg,
     testing::Values(BuiltinTestCase{kF32, core::BuiltinFn::kClamp, "NClamp"},
-                    BuiltinTestCase{kI32, core::BuiltinFn::kClamp, "SClamp"},
-                    BuiltinTestCase{kU32, core::BuiltinFn::kClamp, "UClamp"},
                     BuiltinTestCase{kF32, core::BuiltinFn::kFma, "Fma"},
                     BuiltinTestCase{kF16, core::BuiltinFn::kFma, "Fma"},
                     BuiltinTestCase{kF32, core::BuiltinFn::kMix, "Mix"},
                     BuiltinTestCase{kF16, core::BuiltinFn::kMix, "Mix"},
                     BuiltinTestCase{kF32, core::BuiltinFn::kSmoothstep, "SmoothStep"},
                     BuiltinTestCase{kF16, core::BuiltinFn::kSmoothstep, "SmoothStep"}));
+
+TEST_F(SpirvWriterTest, Builtin_Clamp_Scalar_I32) {
+    auto* value = b.FunctionParam("value", ty.i32());
+    auto* low = b.FunctionParam("low", ty.i32());
+    auto* high = b.FunctionParam("high", ty.i32());
+    auto* func = b.Function("foo", ty.i32());
+    func->SetParams({value, low, high});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.i32(), core::BuiltinFn::kClamp, value, low, high);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+          %8 = OpExtInst %int %9 SMax %value %low
+     %result = OpExtInst %int %9 SMin %8 %high
+)");
+}
+
+TEST_F(SpirvWriterTest, Builtin_Clamp_Scalar_U32) {
+    auto* value = b.FunctionParam("value", ty.u32());
+    auto* low = b.FunctionParam("low", ty.u32());
+    auto* high = b.FunctionParam("high", ty.u32());
+    auto* func = b.Function("foo", ty.u32());
+    func->SetParams({value, low, high});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.u32(), core::BuiltinFn::kClamp, value, low, high);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+          %8 = OpExtInst %uint %9 UMax %value %low
+     %result = OpExtInst %uint %9 UMin %8 %high
+)");
+}
+
+TEST_F(SpirvWriterTest, Builtin_Clamp_Vector_I32) {
+    auto* value = b.FunctionParam("value", ty.vec4<i32>());
+    auto* low = b.FunctionParam("low", ty.vec4<i32>());
+    auto* high = b.FunctionParam("high", ty.vec4<i32>());
+    auto* func = b.Function("foo", ty.vec4<i32>());
+    func->SetParams({value, low, high});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.vec4<i32>(), core::BuiltinFn::kClamp, value, low, high);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+          %9 = OpExtInst %v4int %10 SMax %value %low
+     %result = OpExtInst %v4int %10 SMin %9 %high
+)");
+}
+
+TEST_F(SpirvWriterTest, Builtin_Clamp_Vector_U32) {
+    auto* value = b.FunctionParam("value", ty.vec2<u32>());
+    auto* low = b.FunctionParam("low", ty.vec2<u32>());
+    auto* high = b.FunctionParam("high", ty.vec2<u32>());
+    auto* func = b.Function("foo", ty.vec2<u32>());
+    func->SetParams({value, low, high});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.vec2<u32>(), core::BuiltinFn::kClamp, value, low, high);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+          %9 = OpExtInst %v2uint %10 UMax %value %low
+     %result = OpExtInst %v2uint %10 UMin %9 %high
+)");
+}
 
 TEST_F(SpirvWriterTest, Builtin_ExtractBits_Scalar_I32) {
     auto* arg = b.FunctionParam("arg", ty.i32());
@@ -1459,7 +1537,12 @@ TEST_F(SpirvWriterTest, Builtin_ExtractBits_Scalar_I32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldSExtract %int %arg %offset %count");
+    EXPECT_INST(R"(
+          %9 = OpExtInst %uint %10 UMin %offset %uint_32
+         %12 = OpISub %uint %uint_32 %9
+         %13 = OpExtInst %uint %10 UMin %count %12
+     %result = OpBitFieldSExtract %int %arg %9 %13
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_ExtractBits_Scalar_U32) {
@@ -1476,7 +1559,12 @@ TEST_F(SpirvWriterTest, Builtin_ExtractBits_Scalar_U32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldUExtract %uint %arg %offset %count");
+    EXPECT_INST(R"(
+          %8 = OpExtInst %uint %9 UMin %offset %uint_32
+         %11 = OpISub %uint %uint_32 %8
+         %12 = OpExtInst %uint %9 UMin %count %11
+     %result = OpBitFieldUExtract %uint %arg %8 %12
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_ExtractBits_Vector_I32) {
@@ -1493,7 +1581,12 @@ TEST_F(SpirvWriterTest, Builtin_ExtractBits_Vector_I32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldSExtract %v4int %arg %offset %count");
+    EXPECT_INST(R"(
+         %10 = OpExtInst %uint %11 UMin %offset %uint_32
+         %13 = OpISub %uint %uint_32 %10
+         %14 = OpExtInst %uint %11 UMin %count %13
+     %result = OpBitFieldSExtract %v4int %arg %10 %14
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_ExtractBits_Vector_U32) {
@@ -1510,7 +1603,12 @@ TEST_F(SpirvWriterTest, Builtin_ExtractBits_Vector_U32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldUExtract %v2uint %arg %offset %count");
+    EXPECT_INST(R"(
+          %9 = OpExtInst %uint %10 UMin %offset %uint_32
+         %12 = OpISub %uint %uint_32 %9
+         %13 = OpExtInst %uint %10 UMin %count %12
+     %result = OpBitFieldUExtract %v2uint %arg %9 %13
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_InsertBits_Scalar_I32) {
@@ -1528,7 +1626,12 @@ TEST_F(SpirvWriterTest, Builtin_InsertBits_Scalar_I32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldInsert %int %arg %newbits %offset %count");
+    EXPECT_INST(R"(
+         %10 = OpExtInst %uint %11 UMin %offset %uint_32
+         %13 = OpISub %uint %uint_32 %10
+         %14 = OpExtInst %uint %11 UMin %count %13
+     %result = OpBitFieldInsert %int %arg %newbits %10 %14
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_InsertBits_Scalar_U32) {
@@ -1546,7 +1649,12 @@ TEST_F(SpirvWriterTest, Builtin_InsertBits_Scalar_U32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldInsert %uint %arg %newbits %offset %count");
+    EXPECT_INST(R"(
+          %9 = OpExtInst %uint %10 UMin %offset %uint_32
+         %12 = OpISub %uint %uint_32 %9
+         %13 = OpExtInst %uint %10 UMin %count %12
+     %result = OpBitFieldInsert %uint %arg %newbits %9 %13
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_InsertBits_Vector_I32) {
@@ -1565,7 +1673,12 @@ TEST_F(SpirvWriterTest, Builtin_InsertBits_Vector_I32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldInsert %v4int %arg %newbits %offset %count");
+    EXPECT_INST(R"(
+         %11 = OpExtInst %uint %12 UMin %offset %uint_32
+         %14 = OpISub %uint %uint_32 %11
+         %15 = OpExtInst %uint %12 UMin %count %14
+     %result = OpBitFieldInsert %v4int %arg %newbits %11 %15
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_InsertBits_Vector_U32) {
@@ -1584,7 +1697,12 @@ TEST_F(SpirvWriterTest, Builtin_InsertBits_Vector_U32) {
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
-    EXPECT_INST("%result = OpBitFieldInsert %v2uint %arg %newbits %offset %count");
+    EXPECT_INST(R"(
+         %10 = OpExtInst %uint %11 UMin %offset %uint_32
+         %13 = OpISub %uint %uint_32 %10
+         %14 = OpExtInst %uint %11 UMin %count %13
+     %result = OpBitFieldInsert %v2uint %arg %newbits %10 %14
+)");
 }
 
 TEST_F(SpirvWriterTest, Builtin_FaceForward_F32) {
@@ -1865,6 +1983,99 @@ TEST_F(SpirvWriterTest, Builtin_ArrayLength_WithStruct) {
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST("%1 = OpVariable %_ptr_StorageBuffer_tint_symbol StorageBuffer");
     EXPECT_INST("%result = OpArrayLength %uint %1 2");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// DP4A builtins
+////////////////////////////////////////////////////////////////////////////////
+
+TEST_F(SpirvWriterTest, Builtin_Dot4I8Packed) {
+    auto* arg1 = b.FunctionParam("arg1", ty.u32());
+    auto* arg2 = b.FunctionParam("arg2", ty.u32());
+    auto* func = b.Function("foo", ty.i32());
+    func->SetParams({arg1, arg2});
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.i32(), core::BuiltinFn::kDot4I8Packed, arg1, arg2);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+               OpCapability DotProduct
+               OpCapability DotProductInput4x8BitPacked
+               OpExtension "SPV_KHR_integer_dot_product"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %unused_entry_point "unused_entry_point"
+               OpExecutionMode %unused_entry_point LocalSize 1 1 1
+
+               ; Debug Information
+               OpName %foo "foo"  ; id %1
+               OpName %arg1 "arg1"  ; id %4
+               OpName %arg2 "arg2"  ; id %5
+               OpName %result "result"  ; id %8
+               OpName %unused_entry_point "unused_entry_point"  ; id %9
+
+               ; Types, variables and constants
+        %int = OpTypeInt 32 1
+       %uint = OpTypeInt 32 0
+          %6 = OpTypeFunction %int %uint %uint
+       %void = OpTypeVoid
+         %11 = OpTypeFunction %void
+
+               ; Function foo
+        %foo = OpFunction %int None %6
+       %arg1 = OpFunctionParameter %uint
+       %arg2 = OpFunctionParameter %uint
+          %7 = OpLabel
+     %result = OpSDot %int %arg1 %arg2 PackedVectorFormat4x8Bit
+               OpReturnValue %result
+               OpFunctionEnd
+)");
+}
+
+TEST_F(SpirvWriterTest, Builtin_Dot4U8Packed) {
+    auto* arg1 = b.FunctionParam("arg1", ty.u32());
+    auto* arg2 = b.FunctionParam("arg2", ty.u32());
+    auto* func = b.Function("foo", ty.u32());
+    func->SetParams({arg1, arg2});
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.u32(), core::BuiltinFn::kDot4U8Packed, arg1, arg2);
+        b.Return(func, result);
+        mod.SetName(result, "result");
+    });
+
+    ASSERT_TRUE(Generate()) << Error() << output_;
+    EXPECT_INST(R"(
+               OpCapability DotProduct
+               OpCapability DotProductInput4x8BitPacked
+               OpExtension "SPV_KHR_integer_dot_product"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %unused_entry_point "unused_entry_point"
+               OpExecutionMode %unused_entry_point LocalSize 1 1 1
+
+               ; Debug Information
+               OpName %foo "foo"  ; id %1
+               OpName %arg1 "arg1"  ; id %3
+               OpName %arg2 "arg2"  ; id %4
+               OpName %result "result"  ; id %7
+               OpName %unused_entry_point "unused_entry_point"  ; id %8
+
+               ; Types, variables and constants
+       %uint = OpTypeInt 32 0
+          %5 = OpTypeFunction %uint %uint %uint
+       %void = OpTypeVoid
+         %10 = OpTypeFunction %void
+
+               ; Function foo
+        %foo = OpFunction %uint None %5
+       %arg1 = OpFunctionParameter %uint
+       %arg2 = OpFunctionParameter %uint
+          %6 = OpLabel
+     %result = OpUDot %uint %arg1 %arg2 PackedVectorFormat4x8Bit
+               OpReturnValue %result
+               OpFunctionEnd
+)");
 }
 
 }  // namespace

@@ -55,6 +55,12 @@ struct State {
             }
             if (auto* builtin = inst->As<ir::CoreBuiltinCall>()) {
                 switch (builtin->Func()) {
+                    case core::BuiltinFn::kClamp:
+                        if (config.clamp_int &&
+                            builtin->Result()->Type()->is_integer_scalar_or_vector()) {
+                            worklist.Push(builtin);
+                        }
+                        break;
                     case core::BuiltinFn::kCountLeadingZeros:
                         if (config.count_leading_zeros) {
                             worklist.Push(builtin);
@@ -65,6 +71,11 @@ struct State {
                             worklist.Push(builtin);
                         }
                         break;
+                    case core::BuiltinFn::kExtractBits:
+                        if (config.extract_bits != BuiltinPolyfillLevel::kNone) {
+                            worklist.Push(builtin);
+                        }
+                        break;
                     case core::BuiltinFn::kFirstLeadingBit:
                         if (config.first_leading_bit) {
                             worklist.Push(builtin);
@@ -72,6 +83,11 @@ struct State {
                         break;
                     case core::BuiltinFn::kFirstTrailingBit:
                         if (config.first_trailing_bit) {
+                            worklist.Push(builtin);
+                        }
+                        break;
+                    case core::BuiltinFn::kInsertBits:
+                        if (config.insert_bits != BuiltinPolyfillLevel::kNone) {
                             worklist.Push(builtin);
                         }
                         break;
@@ -100,17 +116,26 @@ struct State {
         for (auto* builtin : worklist) {
             ir::Value* replacement = nullptr;
             switch (builtin->Func()) {
+                case core::BuiltinFn::kClamp:
+                    replacement = ClampInt(builtin);
+                    break;
                 case core::BuiltinFn::kCountLeadingZeros:
                     replacement = CountLeadingZeros(builtin);
                     break;
                 case core::BuiltinFn::kCountTrailingZeros:
                     replacement = CountTrailingZeros(builtin);
                     break;
+                case core::BuiltinFn::kExtractBits:
+                    replacement = ExtractBits(builtin);
+                    break;
                 case core::BuiltinFn::kFirstLeadingBit:
                     replacement = FirstLeadingBit(builtin);
                     break;
                 case core::BuiltinFn::kFirstTrailingBit:
                     replacement = FirstTrailingBit(builtin);
+                    break;
+                case core::BuiltinFn::kInsertBits:
+                    replacement = InsertBits(builtin);
                     break;
                 case core::BuiltinFn::kSaturate:
                     replacement = Saturate(builtin);
@@ -123,12 +148,14 @@ struct State {
             }
             TINT_ASSERT_OR_RETURN(replacement);
 
-            // Replace the old builtin call result with the new value.
-            if (auto name = ir.NameOf(builtin->Result())) {
-                ir.SetName(replacement, name);
+            if (replacement != builtin->Result()) {
+                // Replace the old builtin call result with the new value.
+                if (auto name = ir.NameOf(builtin->Result())) {
+                    ir.SetName(replacement, name);
+                }
+                builtin->Result()->ReplaceAllUsesWith(replacement);
+                builtin->Destroy();
             }
-            builtin->Result()->ReplaceAllUsesWith(replacement);
-            builtin->Destroy();
         }
     }
 
@@ -155,6 +182,24 @@ struct State {
             return b.Splat(MatchWidth(element->Type(), match), element, vec->Width());
         }
         return element;
+    }
+
+    /// Polyfill a `clamp()` builtin call for integers.
+    /// @param call the builtin call instruction
+    /// @returns the replacement value
+    ir::Value* ClampInt(ir::CoreBuiltinCall* call) {
+        auto* type = call->Result()->Type();
+        auto* e = call->Args()[0];
+        auto* low = call->Args()[1];
+        auto* high = call->Args()[2];
+
+        Value* result = nullptr;
+        b.InsertBefore(call, [&] {
+            auto* max = b.Call(type, core::BuiltinFn::kMax, e, low);
+            auto* min = b.Call(type, core::BuiltinFn::kMin, max, high);
+            result = min->Result();
+        });
+        return result;
     }
 
     /// Polyfill a `countLeadingZeros()` builtin call.
@@ -282,6 +327,36 @@ struct State {
         return result;
     }
 
+    /// Polyfill an `extractBits()` builtin call.
+    /// @param call the builtin call instruction
+    /// @returns the replacement value
+    ir::Value* ExtractBits(ir::CoreBuiltinCall* call) {
+        auto* offset = call->Args()[1];
+        auto* count = call->Args()[2];
+
+        switch (config.extract_bits) {
+            case BuiltinPolyfillLevel::kClampOrRangeCheck: {
+                b.InsertBefore(call, [&] {
+                    // Replace:
+                    //    extractBits(e, offset, count)
+                    // With:
+                    //    let o = min(offset, 32);
+                    //    let c = min(count, w - o);
+                    //    extractBits(e, o, c);
+                    auto* o = b.Call(ty.u32(), core::BuiltinFn::kMin, offset, 32_u);
+                    auto* c = b.Call(ty.u32(), core::BuiltinFn::kMin, count,
+                                     b.Subtract(ty.u32(), 32_u, o));
+                    call->SetOperand(ir::CoreBuiltinCall::kArgsOperandOffset + 1, o->Result());
+                    call->SetOperand(ir::CoreBuiltinCall::kArgsOperandOffset + 2, c->Result());
+                });
+                return call->Result();
+            }
+            default:
+                TINT_UNIMPLEMENTED() << "extractBits polyfill level";
+        }
+        return nullptr;
+    }
+
     /// Polyfill a `firstLeadingBit()` builtin call.
     /// @param call the builtin call instruction
     /// @returns the replacement value
@@ -404,6 +479,36 @@ struct State {
             }
         });
         return result;
+    }
+
+    /// Polyfill an `insertBits()` builtin call.
+    /// @param call the builtin call instruction
+    /// @returns the replacement value
+    ir::Value* InsertBits(ir::CoreBuiltinCall* call) {
+        auto* offset = call->Args()[2];
+        auto* count = call->Args()[3];
+
+        switch (config.insert_bits) {
+            case BuiltinPolyfillLevel::kClampOrRangeCheck: {
+                b.InsertBefore(call, [&] {
+                    // Replace:
+                    //    insertBits(e, offset, count)
+                    // With:
+                    //    let o = min(offset, 32);
+                    //    let c = min(count, w - o);
+                    //    insertBits(e, o, c);
+                    auto* o = b.Call(ty.u32(), core::BuiltinFn::kMin, offset, 32_u);
+                    auto* c = b.Call(ty.u32(), core::BuiltinFn::kMin, count,
+                                     b.Subtract(ty.u32(), 32_u, o));
+                    call->SetOperand(ir::CoreBuiltinCall::kArgsOperandOffset + 2, o->Result());
+                    call->SetOperand(ir::CoreBuiltinCall::kArgsOperandOffset + 3, c->Result());
+                });
+                return call->Result();
+            }
+            default:
+                TINT_UNIMPLEMENTED() << "insertBits polyfill level";
+        }
+        return nullptr;
     }
 
     /// Polyfill a `saturate()` builtin call.

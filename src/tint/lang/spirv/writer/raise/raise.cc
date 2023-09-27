@@ -19,6 +19,7 @@
 #include "src/tint/lang/core/ir/transform/add_empty_entry_point.h"
 #include "src/tint/lang/core/ir/transform/bgra8unorm_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
+#include "src/tint/lang/core/ir/transform/binding_remapper.h"
 #include "src/tint/lang/core/ir/transform/block_decorated_structs.h"
 #include "src/tint/lang/core/ir/transform/builtin_polyfill.h"
 #include "src/tint/lang/core/ir/transform/demote_to_helper.h"
@@ -44,16 +45,21 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         }                                \
     } while (false)
 
+    RUN_TRANSFORM(core::ir::transform::BindingRemapper, module, options.binding_remapper_options);
+
     core::ir::transform::BinaryPolyfillConfig binary_polyfills;
     binary_polyfills.bitshift_modulo = true;
     binary_polyfills.int_div_mod = true;
     RUN_TRANSFORM(core::ir::transform::BinaryPolyfill, module, binary_polyfills);
 
     core::ir::transform::BuiltinPolyfillConfig core_polyfills;
+    core_polyfills.clamp_int = true;
     core_polyfills.count_leading_zeros = true;
     core_polyfills.count_trailing_zeros = true;
+    core_polyfills.extract_bits = core::ir::transform::BuiltinPolyfillLevel::kClampOrRangeCheck;
     core_polyfills.first_leading_bit = true;
     core_polyfills.first_trailing_bit = true;
+    core_polyfills.insert_bits = core::ir::transform::BuiltinPolyfillLevel::kClampOrRangeCheck;
     core_polyfills.saturate = true;
     core_polyfills.texture_sample_base_clamp_to_edge_2d_f32 = true;
     RUN_TRANSFORM(core::ir::transform::BuiltinPolyfill, module, core_polyfills);
