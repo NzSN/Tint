@@ -19,14 +19,15 @@
 
 #include <thread>
 
-#include "src/tint/fuzzers/apply_substitute_overrides.h"
 #include "src/tint/lang/glsl/writer/writer.h"
 #include "src/tint/lang/hlsl/writer/writer.h"
 #include "src/tint/lang/msl/writer/writer.h"
 #include "src/tint/lang/spirv/writer/writer.h"
+#include "src/tint/lang/wgsl/helpers/apply_substitute_overrides.h"
 #include "src/tint/lang/wgsl/helpers/flatten_bindings.h"
 #include "src/tint/lang/wgsl/inspector/inspector.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
+#include "src/tint/lang/wgsl/sem/module.h"
 #include "src/tint/lang/wgsl/writer/writer.h"
 #include "src/tint/utils/math/hash.h"
 
@@ -47,9 +48,16 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         return 0;
     }
 
-    program = tint::fuzzers::ApplySubstituteOverrides(std::move(program));
-    if (!program.IsValid()) {
-        return 0;
+    if (program.Sem().Module()->Extensions().Contains(
+            tint::wgsl::Extension::kChromiumExperimentalPixelLocal)) {
+        return 0;  // Not supported
+    }
+
+    if (auto transformed = tint::wgsl::ApplySubstituteOverrides(program)) {
+        program = std::move(*transformed);
+        if (!program.IsValid()) {
+            return 0;
+        }
     }
 
     tint::inspector::Inspector inspector(program);
@@ -110,7 +118,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 #if TINT_BUILD_MSL_WRITER
                 case Writer::kMSL: {
                     // Remap resource numbers to a flat namespace.
-                    if (auto flattened = tint::writer::FlattenBindings(program)) {
+                    if (auto flattened = tint::wgsl::FlattenBindings(program)) {
                         (void)tint::msl::writer::Generate(flattened.value(), {});
                     }
                     break;

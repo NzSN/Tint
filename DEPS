@@ -38,15 +38,15 @@ deps = {
 
   # Dependencies required to use GN/Clang in standalone
   'build': {
-    'url': '{chromium_git}/chromium/src/build@8cbb95464bb7f05b442f3ece4951efbe0825a131',
+    'url': '{chromium_git}/chromium/src/build@5885d3c24833ad72845a52a1b913a2b8bc651b56',
   },
 
   'buildtools': {
-    'url': '{chromium_git}/chromium/src/buildtools@70e9f44cbc8bc4c3dff18800ba5d962154a4f2a6',
+    'url': '{chromium_git}/chromium/src/buildtools@a9a6f0c49d0e8fa0cda37337430b4736ab3dc944',
   },
 
   'tools/clang': {
-    'url': '{chromium_git}/chromium/src/tools/clang@fff7f04d30a0687029ddc7e174d5548a525ddf0b',
+    'url': '{chromium_git}/chromium/src/tools/clang@8f75392b4aa947fb55c7c206b36804229595e4da',
   },
 
   'buildtools/clang_format/script': {
@@ -78,7 +78,7 @@ deps = {
     'condition': 'host_os == "win"',
   },
 
- 'buildtools/reclient': {
+  'buildtools/reclient': {
     'packages': [
       {
         'package': Var('reclient_package') + '${{platform}}',
@@ -88,12 +88,12 @@ deps = {
     'dep_type': 'cipd',
   },
 
-  'buildtools/third_party/libc++/trunk': {
-    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxx.git@035440c7077237787869cb08ab99bcc8b5ddc97e',
+  'third_party/libc++/src': {
+    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxx.git@84fb809dd6dae36d556dc0bb702c6cc2ce9d4b80',
   },
 
-  'buildtools/third_party/libc++abi/trunk': {
-    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxxabi.git@b74d7716111d7eda5c03cb8f5dfc940e1c2c0030',
+  'third_party/libc++abi/src': {
+    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxxabi.git@d4760c0af99ccc9bce077960d5ddde4d66146c05',
   },
 
   'third_party/ninja': {
@@ -113,14 +113,14 @@ deps = {
 
   # Dependencies required for testing
   'testing': {
-    'url': '{chromium_git}/chromium/src/testing@d5ea1bf4b64781cfe38f207f56f264eb080d06b2',
+    'url': '{chromium_git}/chromium/src/testing@035a9b18047370df7403758b006e6c9696d6b84d',
   },
 
   'third_party/catapult': {
     'url': '{chromium_git}/catapult.git@37e879a7d13cbaa4925e09fc02b0f9276e060f0a',
   },
 
-  'third_party/benchmark': {
+  'third_party/google_benchmark/src': {
     'url': '{chromium_git}/external/github.com/google/benchmark.git@efc89f0b524780b1994d5dddd83a92718e5be492',
   },
 

@@ -46,7 +46,6 @@ Function* Function::Clone(CloneContext& ctx) {
     block_->CloneInto(ctx, new_func->block_);
 
     ctx.ir.SetName(new_func, ctx.ir.NameOf(this).Name());
-    ctx.ir.functions.Push(new_func);
     return new_func;
 }
 
@@ -58,6 +57,11 @@ void Function::SetParams(VectorRef<FunctionParam*> params) {
 void Function::SetParams(std::initializer_list<FunctionParam*> params) {
     params_ = params;
     TINT_ASSERT(!params_.Any(IsNull));
+}
+
+void Function::Destroy() {
+    Base::Destroy();
+    block_->Destroy();
 }
 
 std::string_view ToString(Function::PipelineStage value) {

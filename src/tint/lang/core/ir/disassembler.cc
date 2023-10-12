@@ -74,6 +74,10 @@ class ScopedIndent {
 
 }  // namespace
 
+std::string Disassemble(Module& mod) {
+    return Disassembler{mod}.Disassemble();
+}
+
 Disassembler::Disassembler(Module& mod) : mod_(mod) {}
 
 Disassembler::~Disassembler() = default;
@@ -486,6 +490,9 @@ void Disassembler::EmitInstruction(Instruction* inst) {
             }
             if (v->Attributes().location.has_value()) {
                 out_ << " @location(" << v->Attributes().location.value() << ")";
+            }
+            if (v->Attributes().index.has_value()) {
+                out_ << " @index(" << v->Attributes().index.value() << ")";
             }
             if (v->Attributes().interpolation.has_value()) {
                 auto& interp = v->Attributes().interpolation.value();

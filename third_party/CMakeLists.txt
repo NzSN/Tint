@@ -14,7 +14,7 @@
 
 if (${TINT_BUILD_BENCHMARKS})
   set(BENCHMARK_ENABLE_TESTING FALSE CACHE BOOL FALSE FORCE)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmark EXCLUDE_FROM_ALL)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/google_benchmark/src EXCLUDE_FROM_ALL)
 endif()
 
 if (${TINT_BUILD_TESTS} AND NOT TARGET gmock)
