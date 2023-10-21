@@ -25,23 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_GLSL_WRITER_RAISE_RAISE_H_
-#define SRC_TINT_LANG_GLSL_WRITER_RAISE_RAISE_H_
+#include "src/tint/lang/glsl/writer/printer/helper_test.h"
 
-#include "src/tint/utils/result/result.h"
+namespace tint::glsl::writer {
+namespace {
 
-// Forward declarations
-namespace tint::core::ir {
-class Module;
-}  // namespace tint::core::ir
+TEST_F(GlslPrinterTest, Function_Empty) {
+    auto* func = b.Function("foo", ty.void_());
+    func->Block()->Append(b.Return(func));
 
-namespace tint::glsl::raise {
+    ASSERT_TRUE(Generate()) << err_ << output_;
+    EXPECT_EQ(output_, GlslHeader() + R"(
+void foo() {
+}
+)");
+}
 
-/// Raise a core IR module to the MSL dialect of the IR.
-/// @param mod the core IR module to raise to MSL dialect
-/// @returns success or failure
-Result<SuccessType> Raise(core::ir::Module& mod);
-
-}  // namespace tint::glsl::raise
-
-#endif  // SRC_TINT_LANG_GLSL_WRITER_RAISE_RAISE_H_
+}  // namespace
+}  // namespace tint::glsl::writer
