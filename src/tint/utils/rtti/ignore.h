@@ -1,3 +1,4 @@
+
 // Copyright 2023 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,28 +26,34 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
-#define SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
+#ifndef SRC_TINT_UTILS_RTTI_IGNORE_H_
+#define SRC_TINT_UTILS_RTTI_IGNORE_H_
 
-#include <string>
+namespace tint {
 
-#include "src/tint/utils/result/result.h"
+/// Ignore is used as a special type used for skipping over types for trait helper functions.
+class Ignore {};
 
-// Forward declarations
-namespace tint::core::ir {
-class Module;
-}  // namespace tint::core::ir
-namespace tint::glsl::writer {
-struct Version;
-}  // namespace tint::glsl::writer
+}  // namespace tint
 
-namespace tint::glsl::writer {
+namespace std {
 
-/// @returns the generated GLSL shader on success, or failure
-/// @param module the Tint IR module to generate
-/// @param version the GLSL version information
-Result<std::string> Print(core::ir::Module& module, const Version& version);
+/// A specialization of std::common_type where the first template argument is tint::Ignore.
+/// Used so that std::common_type will ignore template arguments of type tint::Ignore.
+template <typename T>
+struct common_type<tint::Ignore, T> {
+    /// The second template type.
+    using type = T;
+};
 
-}  // namespace tint::glsl::writer
+/// A specialization of std::common_type where the second template argument is tint::Ignore.
+/// Used so that std::common_type will ignore template arguments of type tint::Ignore.
+template <typename T>
+struct common_type<T, tint::Ignore> {
+    /// The first template type.
+    using type = T;
+};
 
-#endif  // SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
+}  // namespace std
+
+#endif  // SRC_TINT_UTILS_RTTI_IGNORE_H_

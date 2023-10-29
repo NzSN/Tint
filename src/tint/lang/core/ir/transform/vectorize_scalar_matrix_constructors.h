@@ -25,28 +25,25 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
-#define SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
-
-#include <string>
+#ifndef SRC_TINT_LANG_CORE_IR_TRANSFORM_VECTORIZE_SCALAR_MATRIX_CONSTRUCTORS_H_
+#define SRC_TINT_LANG_CORE_IR_TRANSFORM_VECTORIZE_SCALAR_MATRIX_CONSTRUCTORS_H_
 
 #include "src/tint/utils/result/result.h"
 
-// Forward declarations
+// Forward declarations.
 namespace tint::core::ir {
 class Module;
-}  // namespace tint::core::ir
-namespace tint::glsl::writer {
-struct Version;
-}  // namespace tint::glsl::writer
+}
 
-namespace tint::glsl::writer {
+namespace tint::core::ir::transform {
 
-/// @returns the generated GLSL shader on success, or failure
-/// @param module the Tint IR module to generate
-/// @param version the GLSL version information
-Result<std::string> Print(core::ir::Module& module, const Version& version);
+/// VectorizeScalarMatrixConstructors is a transform that replaces construct instructions that
+/// produce matrices from scalar operands to construct individual columns first.
+///
+/// @param module the module to transform
+/// @returns success or failure
+Result<SuccessType> VectorizeScalarMatrixConstructors(Module& module);
 
-}  // namespace tint::glsl::writer
+}  // namespace tint::core::ir::transform
 
-#endif  // SRC_TINT_LANG_GLSL_WRITER_PRINTER_PRINTER_H_
+#endif  // SRC_TINT_LANG_CORE_IR_TRANSFORM_VECTORIZE_SCALAR_MATRIX_CONSTRUCTORS_H_
