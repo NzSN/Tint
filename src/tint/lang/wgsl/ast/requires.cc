@@ -1,4 +1,4 @@
-// Copyright 2021 The Dawn & Tint Authors
+// Copyright 2023 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,19 +25,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <string>
+#include "src/tint/lang/wgsl/ast/requires.h"
 
-#include "src/tint/fuzzers/fuzzer_init.h"
-#include "src/tint/fuzzers/tint_reader_writer_fuzzer.h"
+#include "src/tint/lang/wgsl/ast/builder.h"
+#include "src/tint/lang/wgsl/ast/clone_context.h"
 
-namespace tint::fuzzers {
+TINT_INSTANTIATE_TYPEINFO(tint::ast::Requires);
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
-    tint::fuzzers::ReaderWriterFuzzer fuzzer(InputFormat::kWGSL, OutputFormat::kWGSL);
-    fuzzer.SetDumpInput(GetCliParams().dump_input);
-    fuzzer.SetEnforceValidity(GetCliParams().enforce_validity);
+namespace tint::ast {
 
-    return fuzzer.Run(data, size);
+Requires::Requires(GenerationID pid, NodeID nid, const Source& src, wgsl::LanguageFeatures feats)
+    : Base(pid, nid, src), features(std::move(feats)) {}
+
+Requires::~Requires() = default;
+
+const Requires* Requires::Clone(CloneContext& ctx) const {
+    auto src = ctx.Clone(source);
+    return ctx.dst->create<Requires>(src, features);
 }
 
-}  // namespace tint::fuzzers
+}  // namespace tint::ast

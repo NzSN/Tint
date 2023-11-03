@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2021 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,27 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
-#define SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
+// GEN_BUILD:CONDITION(tint_build_wgsl_reader)
 
-#include <unordered_map>
+#include "src/tint/lang/wgsl/writer/ast_printer/ast_printer.h"
 
-#include "src/tint/api/common/binding_point.h"
+#include "src/tint/cmd/fuzz/wgsl/wgsl_fuzz.h"
 
-namespace tint {
+namespace tint::wgsl::writer {
+namespace {
 
-/// Options used to specify mappings of binding points.
-struct BindingRemapperOptions {
-    /// BindingPoints is a map of old binding point to new binding point
-    using BindingPoints = std::unordered_map<BindingPoint, BindingPoint>;
+void ASTPrinterFuzzer(const tint::Program& program) {
+    ASTPrinter{program}.Generate();
+}
 
-    /// A map of old binding point to new binding point
-    BindingPoints binding_points;
+}  // namespace
+}  // namespace tint::wgsl::writer
 
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(binding_points);
-};
-
-}  // namespace tint
-
-#endif  // SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
+TINT_WGSL_PROGRAM_FUZZER(tint::wgsl::writer::ASTPrinterFuzzer);

@@ -25,27 +25,44 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
-#define SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
+#ifndef SRC_TINT_LANG_WGSL_AST_REQUIRES_H_
+#define SRC_TINT_LANG_WGSL_AST_REQUIRES_H_
 
-#include <unordered_map>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "src/tint/api/common/binding_point.h"
+#include "src/tint/lang/wgsl/ast/node.h"
+#include "src/tint/lang/wgsl/language_feature.h"
 
-namespace tint {
+namespace tint::ast {
 
-/// Options used to specify mappings of binding points.
-struct BindingRemapperOptions {
-    /// BindingPoints is a map of old binding point to new binding point
-    using BindingPoints = std::unordered_map<BindingPoint, BindingPoint>;
+/// A "requires" directive. Example:
+/// ```
+///   // Require a language feature named "foo"
+///   requires foo;
+/// ```
+class Requires final : public Castable<Requires, Node> {
+  public:
+    /// Create a requires directive
+    /// @param pid the identifier of the program that owns this node
+    /// @param nid the unique node identifier
+    /// @param src the source of this node
+    /// @param feats the language features being required by this directive
+    Requires(GenerationID pid, NodeID nid, const Source& src, wgsl::LanguageFeatures feats);
 
-    /// A map of old binding point to new binding point
-    BindingPoints binding_points;
+    /// Destructor
+    ~Requires() override;
 
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(binding_points);
+    /// Clones this node and all transitive child nodes using the `CloneContext` `ctx`.
+    /// @param ctx the clone context
+    /// @return the newly cloned node
+    const Requires* Clone(CloneContext& ctx) const override;
+
+    /// The features being required by this directive.
+    const wgsl::LanguageFeatures features;
 };
 
-}  // namespace tint
+}  // namespace tint::ast
 
-#endif  // SRC_TINT_API_OPTIONS_BINDING_REMAPPER_H_
+#endif  // SRC_TINT_LANG_WGSL_AST_REQUIRES_H_
