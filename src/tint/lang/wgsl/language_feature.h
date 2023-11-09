@@ -66,11 +66,16 @@ auto& operator<<(STREAM& out, LanguageFeature value) {
 /// @returns the parsed enum, or LanguageFeature::kUndefined if the string could not be parsed.
 LanguageFeature ParseLanguageFeature(std::string_view str);
 
-constexpr const char* kLanguageFeatureStrings[] = {
+constexpr std::string_view kLanguageFeatureStrings[] = {
     "readonly_and_readwrite_storage_textures",
 };
 
-// A unique vector of language features
+/// All features
+static constexpr LanguageFeature kAllLanguageFeatures[] = {
+    LanguageFeature::kReadonlyAndReadwriteStorageTextures,
+};
+
+/// A unique vector of language features
 using LanguageFeatures = UniqueVector<LanguageFeature, 4>;
 
 }  // namespace tint::wgsl
