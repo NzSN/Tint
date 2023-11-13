@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2023 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,17 +25,44 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/inspector/entry_point.h"
+#ifndef SRC_TINT_LANG_WGSL_AST_COLOR_ATTRIBUTE_H_
+#define SRC_TINT_LANG_WGSL_AST_COLOR_ATTRIBUTE_H_
 
-namespace tint::inspector {
+#include <string>
 
-StageVariable::StageVariable() = default;
-StageVariable::StageVariable(const StageVariable& other) = default;
-StageVariable::~StageVariable() = default;
+#include "src/tint/lang/wgsl/ast/attribute.h"
 
-EntryPoint::EntryPoint() = default;
-EntryPoint::EntryPoint(EntryPoint&) = default;
-EntryPoint::EntryPoint(EntryPoint&&) = default;
-EntryPoint::~EntryPoint() = default;
+// Forward declarations
+namespace tint::ast {
+class Expression;
+}
 
-}  // namespace tint::inspector
+namespace tint::ast {
+
+/// A color attribute (enabled with the frame-buffer fetch extension)
+class ColorAttribute final : public Castable<ColorAttribute, Attribute> {
+  public:
+    /// constructor
+    /// @param pid the identifier of the program that owns this node
+    /// @param nid the unique node identifier
+    /// @param src the source of this node
+    /// @param expr the frame-buffer index value
+    ColorAttribute(GenerationID pid, NodeID nid, const Source& src, const Expression* expr);
+    ~ColorAttribute() override;
+
+    /// @returns the WGSL name for the attribute
+    std::string Name() const override;
+
+    /// Clones this node and all transitive child nodes using the `CloneContext`
+    /// `ctx`.
+    /// @param ctx the clone context
+    /// @return the newly cloned node
+    const ColorAttribute* Clone(CloneContext& ctx) const override;
+
+    /// The index value expression
+    const Expression* const expr;
+};
+
+}  // namespace tint::ast
+
+#endif  // SRC_TINT_LANG_WGSL_AST_COLOR_ATTRIBUTE_H_

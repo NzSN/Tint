@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2023 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,17 +25,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/inspector/entry_point.h"
+#include "src/tint/lang/wgsl/ast/color_attribute.h"
 
-namespace tint::inspector {
+#include <string>
 
-StageVariable::StageVariable() = default;
-StageVariable::StageVariable(const StageVariable& other) = default;
-StageVariable::~StageVariable() = default;
+#include "src/tint/lang/wgsl/ast/builder.h"
+#include "src/tint/lang/wgsl/ast/clone_context.h"
 
-EntryPoint::EntryPoint() = default;
-EntryPoint::EntryPoint(EntryPoint&) = default;
-EntryPoint::EntryPoint(EntryPoint&&) = default;
-EntryPoint::~EntryPoint() = default;
+TINT_INSTANTIATE_TYPEINFO(tint::ast::ColorAttribute);
 
-}  // namespace tint::inspector
+namespace tint::ast {
+
+ColorAttribute::ColorAttribute(GenerationID pid,
+                               NodeID nid,
+                               const Source& src,
+                               const Expression* exp)
+    : Base(pid, nid, src), expr(exp) {
+    TINT_ASSERT_GENERATION_IDS_EQUAL(exp, generation_id);
+}
+
+ColorAttribute::~ColorAttribute() = default;
+
+std::string ColorAttribute::Name() const {
+    return "color";
+}
+
+const ColorAttribute* ColorAttribute::Clone(CloneContext& ctx) const {
+    // Clone arguments outside of create() call to have deterministic ordering
+    auto src = ctx.Clone(source);
+    auto e = ctx.Clone(expr);
+    return ctx.dst->create<ColorAttribute>(src, e);
+}
+
+}  // namespace tint::ast
