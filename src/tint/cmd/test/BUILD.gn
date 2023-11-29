@@ -59,6 +59,7 @@ if (tint_build_unittests) {
       "${tint_src_dir}/lang/spirv/ir:unittests",
       "${tint_src_dir}/lang/wgsl:unittests",
       "${tint_src_dir}/lang/wgsl/ast:unittests",
+      "${tint_src_dir}/lang/wgsl/features:unittests",
       "${tint_src_dir}/lang/wgsl/helpers:unittests",
       "${tint_src_dir}/lang/wgsl/program:unittests",
       "${tint_src_dir}/lang/wgsl/reader/lower:unittests",
@@ -66,6 +67,7 @@ if (tint_build_unittests) {
       "${tint_src_dir}/lang/wgsl/sem:unittests",
       "${tint_src_dir}/lang/wgsl/writer/ir_to_program:unittests",
       "${tint_src_dir}/lang/wgsl/writer/raise:unittests",
+      "${tint_src_dir}/utils/bytes:unittests",
       "${tint_src_dir}/utils/cli:unittests",
       "${tint_src_dir}/utils/command:unittests",
       "${tint_src_dir}/utils/containers:unittests",
@@ -127,6 +129,10 @@ if (tint_build_unittests) {
 
     if (tint_build_spv_reader && tint_build_wgsl_writer) {
       deps += [ "${tint_src_dir}/lang/spirv/reader/ast_parser:unittests" ]
+    }
+
+    if (tint_build_spv_reader || tint_build_spv_writer) {
+      deps += [ "${tint_src_dir}/lang/spirv/validate:unittests" ]
     }
 
     if (tint_build_spv_writer) {

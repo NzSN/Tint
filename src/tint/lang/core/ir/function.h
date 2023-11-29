@@ -36,6 +36,7 @@
 #include "src/tint/lang/core/ir/location.h"
 #include "src/tint/lang/core/ir/value.h"
 #include "src/tint/lang/core/type/type.h"
+#include "src/tint/utils/containers/const_propagating_ptr.h"
 #include "src/tint/utils/ice/ice.h"
 
 // Forward declarations
@@ -88,7 +89,7 @@ class Function : public Castable<Function, Value> {
     void SetStage(PipelineStage stage) { pipeline_stage_ = stage; }
 
     /// @returns the function pipeline stage
-    PipelineStage Stage() { return pipeline_stage_; }
+    PipelineStage Stage() const { return pipeline_stage_; }
 
     /// Sets the workgroup size
     /// @param x the x size
@@ -100,10 +101,10 @@ class Function : public Castable<Function, Value> {
     void ClearWorkgroupSize() { workgroup_size_ = {}; }
 
     /// @returns the workgroup size information
-    std::optional<std::array<uint32_t, 3>> WorkgroupSize() { return workgroup_size_; }
+    std::optional<std::array<uint32_t, 3>> WorkgroupSize() const { return workgroup_size_; }
 
     /// @returns the return type for the function
-    const core::type::Type* ReturnType() { return return_.type; }
+    const core::type::Type* ReturnType() const { return return_.type; }
 
     /// Sets the return attributes
     /// @param builtin the builtin to set
@@ -112,7 +113,7 @@ class Function : public Castable<Function, Value> {
         return_.builtin = builtin;
     }
     /// @returns the return builtin attribute
-    std::optional<enum ReturnBuiltin> ReturnBuiltin() { return return_.builtin; }
+    std::optional<enum ReturnBuiltin> ReturnBuiltin() const { return return_.builtin; }
     /// Clears the return builtin attribute.
     void ClearReturnBuiltin() { return_.builtin = {}; }
 
@@ -123,7 +124,7 @@ class Function : public Castable<Function, Value> {
         return_.location = {loc, interp};
     }
     /// @returns the return location
-    std::optional<Location> ReturnLocation() { return return_.location; }
+    std::optional<Location> ReturnLocation() const { return return_.location; }
     /// Clears the return location attribute.
     void ClearReturnLocation() { return_.location = {}; }
 
@@ -131,7 +132,7 @@ class Function : public Castable<Function, Value> {
     /// @param val the invariant value to set
     void SetReturnInvariant(bool val) { return_.invariant = val; }
     /// @returns the return invariant value
-    bool ReturnInvariant() { return return_.invariant; }
+    bool ReturnInvariant() const { return return_.invariant; }
 
     /// Sets the function parameters
     /// @param params the function parameters
@@ -144,14 +145,21 @@ class Function : public Castable<Function, Value> {
     /// @returns the function parameters
     const VectorRef<FunctionParam*> Params() { return params_; }
 
+    /// @returns the function parameters
+    VectorRef<const FunctionParam*> Params() const { return params_; }
+
     /// Sets the root block for the function
     /// @param target the root block
     void SetBlock(Block* target) {
         TINT_ASSERT(target != nullptr);
         block_ = target;
     }
+
     /// @returns the function root block
     ir::Block* Block() { return block_; }
+
+    /// @returns the function root block
+    const ir::Block* Block() const { return block_; }
 
     /// Destroys the function and all of its instructions.
     void Destroy() override;
@@ -168,7 +176,7 @@ class Function : public Castable<Function, Value> {
     } return_;
 
     Vector<FunctionParam*, 1> params_;
-    ir::Block* block_ = nullptr;
+    ConstPropagatingPtr<ir::Block> block_;
 };
 
 /// @param value the enum value

@@ -25,47 +25,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_CMD_FUZZ_WGSL_WGSL_FUZZ_H_
-#define SRC_TINT_CMD_FUZZ_WGSL_WGSL_FUZZ_H_
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
 
-#include <string>
-
-#include "src/tint/lang/wgsl/program/program.h"
-#include "src/tint/utils/containers/slice.h"
-#include "src/tint/utils/macros/static_init.h"
-
-namespace tint::fuzz::wgsl {
-
-/// ProgramFuzzer describes a fuzzer function that takes a WGSL program as input
-struct ProgramFuzzer {
-    /// The function signature
-    using Fn = void(const Program&);
-
-    /// Name of the fuzzer function
-    std::string_view name;
-    /// The fuzzer function pointer
-    Fn* fn = nullptr;
-};
-
-/// Options for Run()
-struct Options {
-    /// If true, the fuzzers will be run concurrently on separate threads.
-    bool run_concurrently = false;
-};
-
-/// Runs all the registered WGSL fuzzers with the supplied WGSL
-/// @param wgsl the input WGSL
-/// @param options the options for running the fuzzers
-void Run(std::string_view wgsl, const Options& options);
-
-/// Registers the fuzzer function with the WGSL fuzzer executable.
-/// @param fuzzer the fuzzer
-void Register(const ProgramFuzzer& fuzzer);
-
-/// TINT_WGSL_PROGRAM_FUZZER registers the fuzzer function to run as part of `tint_wgsl_fuzzer`
-#define TINT_WGSL_PROGRAM_FUZZER(FUNCTION) \
-    TINT_STATIC_INIT(::tint::fuzz::wgsl::Register({#FUNCTION, FUNCTION}))
-
-}  // namespace tint::fuzz::wgsl
-
-#endif  // SRC_TINT_CMD_FUZZ_WGSL_WGSL_FUZZ_H_
+// A placeholder symbol used to emit a symbol for this lib target.
+int tint_utils_bytes_symbol = 1;

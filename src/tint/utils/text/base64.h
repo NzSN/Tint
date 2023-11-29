@@ -25,28 +25,44 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_WGSL_WRITER_IR_TO_PROGRAM_RENAME_CONFLICTS_H_
-#define SRC_TINT_LANG_WGSL_WRITER_IR_TO_PROGRAM_RENAME_CONFLICTS_H_
+#ifndef SRC_TINT_UTILS_TEXT_BASE64_H_
+#define SRC_TINT_UTILS_TEXT_BASE64_H_
 
-#include <string>
+#include <cstdint>
+#include <optional>
 
-#include "src/tint/utils/diagnostic/diagnostic.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/containers/vector.h"
 
-// Forward declarations.
-namespace tint::core::ir {
-class Module;
+namespace tint {
+
+/// Decodes a byte from a base64 encoded character
+/// @param c the character to decode
+/// @return the decoded value, or std::nullopt if the character is padding ('=') or an invalid
+/// character.
+inline std::optional<uint8_t> DecodeBase64(char c) {
+    if (c >= 'A' && c <= 'Z') {
+        return static_cast<uint8_t>(c - 'A');
+    }
+    if (c >= 'a' && c <= 'z') {
+        return static_cast<uint8_t>(26 + c - 'a');
+    }
+    if (c >= '0' && c <= '9') {
+        return static_cast<uint8_t>(52 + c - '0');
+    }
+    if (c == '+') {
+        return 62;
+    }
+    if (c == '/') {
+        return 63;
+    }
+    return std::nullopt;
 }
+/// DecodeBase64FromComments parses all the comments from the WGSL source string as a base64 byte
+/// stream. Non-base64 characters are skipped
+/// @param wgsl the WGSL source
+/// @return the base64 decoded bytes
+Vector<std::byte, 0> DecodeBase64FromComments(std::string_view wgsl);
 
-namespace tint::wgsl::writer {
+}  // namespace tint
 
-/// RenameConflicts is a transform that renames declarations which prevent identifiers from
-/// resolving to the correct declaration, and those with identical identifiers declared in the same
-/// scope.
-/// @param module the module to transform
-/// @returns success or failure
-Result<SuccessType> RenameConflicts(core::ir::Module* module);
-
-}  // namespace tint::wgsl::writer
-
-#endif  // SRC_TINT_LANG_WGSL_WRITER_IR_TO_PROGRAM_RENAME_CONFLICTS_H_
+#endif  // SRC_TINT_UTILS_TEXT_BASE64_H_

@@ -42,7 +42,7 @@
 #include "src/tint/lang/core/type/scalar.h"
 #include "src/tint/lang/core/type/struct.h"
 #include "src/tint/lang/core/type/vector.h"
-#include "src/tint/lang/wgsl/writer/ir_to_program/rename_conflicts.h"
+#include "src/tint/lang/wgsl/writer/raise/rename_conflicts.h"
 #include "src/tint/utils/containers/hashset.h"
 #include "src/tint/utils/containers/reverse.h"
 #include "src/tint/utils/containers/scope_stack.h"
@@ -74,7 +74,7 @@ struct State {
         }
 
         // Process the functions
-        for (auto* fn : ir->functions) {
+        for (core::ir::Function* fn : ir->functions) {
             scopes.Push(Scope{});
             TINT_DEFER(scopes.Pop());
             for (auto* param : fn->Params()) {
@@ -121,7 +121,7 @@ struct State {
         }
 
         // Declare all the functions
-        for (auto* fn : ir->functions) {
+        for (core::ir::Function* fn : ir->functions) {
             if (auto symbol = ir->NameOf(fn); symbol.IsValid()) {
                 Declare(scopes.Back(), fn, symbol.NameView());
             }
@@ -181,11 +181,11 @@ struct State {
             },
             [&](core::ir::Var*) {
                 // Ensure the var's type is resolvable
-                EnsureResolvable(inst->Result()->Type());
+                EnsureResolvable(inst->Result(0)->Type());
             },
             [&](core::ir::Construct*) {
                 // Ensure the type of a type constructor is resolvable
-                EnsureResolvable(inst->Result()->Type());
+                EnsureResolvable(inst->Result(0)->Type());
             },
             [&](core::ir::CoreBuiltinCall* call) {
                 // Ensure builtin of a builtin call is resolvable
