@@ -365,6 +365,17 @@ class Builder {
     }
 
     /// Creates a new ir::Constant
+    /// @tparam TYPE the splat type
+    /// @param value the splat value
+    /// @param size the number of items
+    /// @returns the new constant
+    template <typename TYPE, typename ARG>
+    ir::Constant* Splat(ARG&& value, size_t size) {
+        auto* type = ir.Types().Get<TYPE>();
+        return Splat(type, std::forward<ARG>(value), size);
+    }
+
+    /// Creates a new ir::Constant
     /// @param ty the constant type
     /// @param values the composite values
     /// @returns the new constant
@@ -372,6 +383,16 @@ class Builder {
     ir::Constant* Composite(const core::type::Type* ty, ARGS&&... values) {
         return Constant(
             ir.constant_values.Composite(ty, Vector{ConstantValue(std::forward<ARGS>(values))...}));
+    }
+
+    /// Creates a new ir::Constant
+    /// @tparam TYPE the constant type
+    /// @param values the composite values
+    /// @returns the new constant
+    template <typename TYPE, typename... ARGS, typename = DisableIfVectorLike<ARGS...>>
+    ir::Constant* Composite(ARGS&&... values) {
+        auto* type = ir.Types().Get<TYPE>();
+        return Composite(type, std::forward<ARGS>(values)...);
     }
 
     /// Creates a new zero-value ir::Constant
@@ -1270,6 +1291,17 @@ class Builder {
                                                          Values(std::forward<ARGS>(indices)...)));
     }
 
+    /// Creates a new `Access`
+    /// @tparam TYPE the return type
+    /// @param object the object being accessed
+    /// @param indices the access indices
+    /// @returns the instruction
+    template <typename TYPE, typename OBJ, typename... ARGS>
+    ir::Access* Access(OBJ&& object, ARGS&&... indices) {
+        auto* type = ir.Types().Get<TYPE>();
+        return Access(type, std::forward<OBJ>(object), std::forward<ARGS>(indices)...);
+    }
+
     /// Creates a new `Swizzle`
     /// @param type the return type
     /// @param object the object being swizzled
@@ -1280,6 +1312,17 @@ class Builder {
         auto* obj_val = Value(std::forward<OBJ>(object));
         return Append(ir.instructions.Create<ir::Swizzle>(InstructionResult(type), obj_val,
                                                           std::move(indices)));
+    }
+
+    /// Creates a new `Swizzle`
+    /// @tparam TYPE the return type
+    /// @param object the object being swizzled
+    /// @param indices the swizzle indices
+    /// @returns the instruction
+    template <typename TYPE, typename OBJ>
+    ir::Swizzle* Swizzle(OBJ&& object, VectorRef<uint32_t> indices) {
+        auto* type = ir.Types().Get<TYPE>();
+        return Swizzle(type, std::forward<OBJ>(object), std::move(indices));
     }
 
     /// Creates a new `Swizzle`

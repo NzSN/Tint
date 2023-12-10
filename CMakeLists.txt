@@ -26,6 +26,8 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+set(DAWN_BUILD_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
+
 # TINT_IS_SUBPROJECT is 1 if added via add_subdirectory() from another project.
 get_directory_property(TINT_IS_SUBPROJECT PARENT_DIRECTORY)
 if(TINT_IS_SUBPROJECT)
@@ -74,6 +76,7 @@ set_if_not_defined(TINT_JINJA2_DIR "${TINT_THIRD_PARTY_DIR}/jinja2" "Directory i
 set_if_not_defined(TINT_MARKUPSAFE_DIR "${TINT_THIRD_PARTY_DIR}/markupsafe" "Directory in which to find MarkupSafe")
 set_if_not_defined(TINT_KHRONOS_DIR "${TINT_THIRD_PARTY_DIR}/khronos" "Directory in which to find Khronos GL headers")
 set_if_not_defined(TINT_SWIFTSHADER_DIR "${TINT_THIRD_PARTY_DIR}/swiftshader" "Directory in which to find swiftshader")
+set_if_not_defined(TINT_PROTOBUF_DIR "${TINT_THIRD_PARTY_DIR}/protobuf" "Directory in which to find protobuf")
 
 set_if_not_defined(TINT_SPIRV_TOOLS_DIR "${TINT_VULKAN_DEPS_DIR}/spirv-tools/src" "Directory in which to find SPIRV-Tools")
 set_if_not_defined(TINT_SPIRV_HEADERS_DIR "${TINT_VULKAN_DEPS_DIR}/spirv-headers/src" "Directory in which to find SPIRV-Headers")
@@ -391,6 +394,11 @@ function(tint_core_compile_options TARGET)
     endif()
   endif(TINT_EMIT_COVERAGE)
 endfunction()
+
+if (EXISTS "${TINT_PROTOBUF_DIR}/cmake")
+  # Needs to come before SPIR-V Tools
+  include("third_party/protobuf.cmake")
+endif()
 
 add_subdirectory(third_party)
 add_subdirectory(src/tint)
