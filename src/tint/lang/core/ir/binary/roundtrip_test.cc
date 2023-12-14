@@ -30,6 +30,7 @@
 #include "src/tint/lang/core/ir/binary/decode.h"
 #include "src/tint/lang/core/ir/binary/encode.h"
 #include "src/tint/lang/core/ir/disassembler.h"
+#include "src/tint/lang/core/type/depth_texture.h"
 
 namespace tint::core::ir::binary {
 namespace {
@@ -192,6 +193,16 @@ TEST_F(IRBinaryRoundtripTest, ptr_workgroup_i32_read) {
     RUN_TEST();
 }
 
+TEST_F(IRBinaryRoundtripTest, array_i32_4) {
+    b.Append(b.ir.root_block, [&] { b.Var<private_, array<i32, 4>>(); });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, array_i32_runtime_sized) {
+    b.Append(b.ir.root_block, [&] { b.Var<storage, array<i32>>(); });
+    RUN_TEST();
+}
+
 TEST_F(IRBinaryRoundtripTest, struct) {
     Vector members{
         ty.Get<core::type::StructMember>(b.ir.symbols.New("a"), ty.i32(), /* index */ 0u,
@@ -234,6 +245,24 @@ TEST_F(IRBinaryRoundtripTest, StructMemberAttributes) {
 
 TEST_F(IRBinaryRoundtripTest, atomic_i32) {
     b.Append(b.ir.root_block, [&] { b.Var<storage, atomic<i32>>(); });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, depth_texture) {
+    auto* tex = ty.Get<core::type::DepthTexture>(core::type::TextureDimension::k2d);
+    b.Append(b.ir.root_block, [&] { b.Var(ty.ptr(handle, tex, read)); });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, sampler) {
+    auto* sampler = ty.Get<core::type::Sampler>(core::type::SamplerKind::kSampler);
+    b.Append(b.ir.root_block, [&] { b.Var(ty.ptr(handle, sampler, read)); });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, comparision_sampler) {
+    auto* sampler = ty.Get<core::type::Sampler>(core::type::SamplerKind::kComparisonSampler);
+    b.Append(b.ir.root_block, [&] { b.Var(ty.ptr(handle, sampler, read)); });
     RUN_TEST();
 }
 
@@ -497,5 +526,103 @@ TEST_F(IRBinaryRoundtripTest, IfResults) {
     RUN_TEST();
 }
 
+TEST_F(IRBinaryRoundtripTest, Switch) {
+    auto* x = b.FunctionParam<i32>("x");
+    auto* fn = b.Function("Function", ty.i32());
+    fn->SetParams({x});
+    b.Append(fn->Block(), [&] {
+        auto* switch_ = b.Switch(x);
+        b.Append(b.Case(switch_, {b.Constant(1_i)}), [&] { b.Return(fn, 1_i); });
+        b.Append(b.Case(switch_, {b.Constant(2_i), b.Constant(3_i)}), [&] { b.Return(fn, 2_i); });
+        b.Append(b.Case(switch_, {nullptr}), [&] { b.Return(fn, 3_i); });
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, SwitchResults) {
+    auto* x = b.FunctionParam<i32>("x");
+    auto* fn = b.Function("Function", ty.i32());
+    fn->SetParams({x});
+    b.Append(fn->Block(), [&] {
+        auto* switch_ = b.Switch(x);
+        auto* res = b.InstructionResult<i32>();
+        switch_->SetResults(Vector{res});
+        b.Append(b.Case(switch_, {b.Constant(1_i)}), [&] { b.ExitSwitch(switch_, 1_i); });
+        b.Append(b.Case(switch_, {b.Constant(2_i), b.Constant(3_i)}),
+                 [&] { b.ExitSwitch(switch_, 2_i); });
+        b.Append(b.Case(switch_, {nullptr}), [&] { b.ExitSwitch(switch_, 3_i); });
+        b.Return(fn, res);
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, LoopBody) {
+    auto* fn = b.Function("Function", ty.i32());
+    b.Append(fn->Block(), [&] {
+        auto* loop = b.Loop();
+        b.Append(loop->Body(), [&] { b.Return(fn, 1_i); });
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, LoopInitBody) {
+    auto* fn = b.Function("Function", ty.i32());
+    b.Append(fn->Block(), [&] {
+        auto* loop = b.Loop();
+        b.Append(loop->Initializer(), [&] {
+            b.Let("L", 1_i);
+            b.NextIteration(loop);
+        });
+        b.Append(loop->Body(), [&] { b.Return(fn, 2_i); });
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, LoopInitBodyCont) {
+    auto* fn = b.Function("Function", ty.i32());
+    b.Append(fn->Block(), [&] {
+        auto* loop = b.Loop();
+        b.Append(loop->Initializer(), [&] {
+            b.Let("L", 1_i);
+            b.NextIteration(loop);
+        });
+        b.Append(loop->Body(), [&] { b.Continue(loop); });
+        b.Append(loop->Continuing(), [&] { b.BreakIf(loop, false); });
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, LoopResults) {
+    auto* fn = b.Function("Function", ty.i32());
+    b.Append(fn->Block(), [&] {
+        auto* loop = b.Loop();
+        auto* res = b.InstructionResult<i32>();
+        loop->SetResults(Vector{res});
+        b.Append(loop->Body(), [&] { b.ExitLoop(loop, 1_i); });
+        b.Return(fn, res);
+    });
+    RUN_TEST();
+}
+
+TEST_F(IRBinaryRoundtripTest, LoopBlockParams) {
+    auto* fn = b.Function("Function", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* loop = b.Loop();
+        b.Append(loop->Initializer(), [&] {
+            b.Let("L", 1_i);
+            b.NextIteration(loop);
+        });
+        auto* x = b.BlockParam<i32>("x");
+        auto* y = b.BlockParam<f32>("y");
+        loop->Body()->SetParams({x, y});
+        b.Append(loop->Body(), [&] { b.Continue(loop, 1_u, true); });
+        auto* z = b.BlockParam<u32>("z");
+        auto* w = b.BlockParam<bool>("w");
+        loop->Continuing()->SetParams({z, w});
+        b.Append(loop->Continuing(), [&] { b.BreakIf(loop, false, 3_i, 4_f); });
+        b.Return(fn);
+    });
+    RUN_TEST();
+}
 }  // namespace
 }  // namespace tint::core::ir::binary
