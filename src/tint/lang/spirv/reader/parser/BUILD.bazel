@@ -37,26 +37,37 @@
 load("//src/tint:flags.bzl", "COPTS")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 cc_library(
-  name = "validate",
+  name = "parser",
   srcs = [
-    "validate.cc",
+    "parser.cc",
   ],
   hdrs = [
-    "validate.h",
+    "parser.h",
   ],
   deps = [
+    "//src/tint/api/common",
+    "//src/tint/lang/core",
+    "//src/tint/lang/core/constant",
+    "//src/tint/lang/core/intrinsic",
+    "//src/tint/lang/core/ir",
+    "//src/tint/lang/core/type",
     "//src/tint/utils/containers",
     "//src/tint/utils/diagnostic",
     "//src/tint/utils/ice",
+    "//src/tint/utils/id",
     "//src/tint/utils/macros",
     "//src/tint/utils/math",
     "//src/tint/utils/memory",
+    "//src/tint/utils/reflection",
     "//src/tint/utils/result",
     "//src/tint/utils/rtti",
+    "//src/tint/utils/symbol",
     "//src/tint/utils/text",
     "//src/tint/utils/traits",
   ] + select({
     ":tint_build_spv_reader_or_tint_build_spv_writer": [
+      "//src/tint/lang/spirv/validate",
+      "@spirv_tools//:spirv_tools_opt",
       "@spirv_tools",
     ],
     "//conditions:default": [],
@@ -68,23 +79,38 @@ cc_library(
   name = "test",
   alwayslink = True,
   srcs = [
-    "validate_test.cc",
+    "constant_test.cc",
+    "function_test.cc",
+    "helper_test.h",
+    "var_test.cc",
   ],
   deps = [
+    "//src/tint/api/common",
+    "//src/tint/lang/core",
+    "//src/tint/lang/core/constant",
+    "//src/tint/lang/core/ir",
+    "//src/tint/lang/core/type",
     "//src/tint/utils/containers",
     "//src/tint/utils/diagnostic",
     "//src/tint/utils/ice",
+    "//src/tint/utils/id",
     "//src/tint/utils/macros",
     "//src/tint/utils/math",
     "//src/tint/utils/memory",
+    "//src/tint/utils/reflection",
     "//src/tint/utils/result",
     "//src/tint/utils/rtti",
+    "//src/tint/utils/symbol",
     "//src/tint/utils/text",
     "//src/tint/utils/traits",
     "@gtest",
   ] + select({
+    ":tint_build_spv_reader": [
+      "//src/tint/lang/spirv/reader/parser",
+    ],
+    "//conditions:default": [],
+  }) + select({
     ":tint_build_spv_reader_or_tint_build_spv_writer": [
-      "//src/tint/lang/spirv/validate",
       "@spirv_tools",
     ],
     "//conditions:default": [],

@@ -51,7 +51,9 @@ message Type {
         TypeStruct struct = 6;
         TypeAtomic atomic = 7;
         TypeDepthTexture depth_texture = 8;
-        TypeSampler sampler = 9;
+        TypeSampledTexture sampled_texture = 9;
+        TypeStorageTexture storage_texture = 10;
+        TypeSampler sampler = 11;
     }
 }
 
@@ -107,6 +109,17 @@ message TypeAtomic {
 
 message TypeDepthTexture {
     TextureDimension dimension = 1;
+}
+
+message TypeSampledTexture {
+    TextureDimension dimension = 1;
+    uint32 sub_type = 2;  // Module.types
+}
+
+message TypeStorageTexture {
+    TextureDimension dimension = 1;
+    TexelFormat texel_format = 2;
+    AccessControl access = 3;
 }
 
 message TypeSampler {
@@ -183,6 +196,7 @@ message Function {
     optional PipelineStage pipeline_stage = 4;
     optional WorkgroupSize workgroup_size = 5;
     repeated uint32 parameters = 6;  // Module.values
+    optional ReturnLocation return_location = 7;
 }
 
 enum PipelineStage {
@@ -195,6 +209,11 @@ message WorkgroupSize {
     uint32 x = 1;
     uint32 y = 2;
     uint32 z = 3;
+}
+
+message ReturnLocation {
+    uint32 value = 1;
+    optional Interpolation interpolation = 2;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -334,11 +353,11 @@ message AttributesStructMember {
     optional uint32 index = 2;
     optional uint32 color = 3;
     optional BuiltinValue builtin = 4;
-    optional AttributesInterpolation interpolation = 5;
+    optional Interpolation interpolation = 5;
     bool invariant = 6;
 }
 
-message AttributesInterpolation {
+message Interpolation {
     InterpolationType type = 1;
     optional InterpolationSampling sampling = 2;
 }
@@ -394,6 +413,26 @@ enum TextureDimension {
     _3d = 3;
     cube = 4;
     cube_array = 5;
+}
+
+enum TexelFormat {
+    bgra8_unorm = 0;
+    r32_float = 1;
+    r32_sint = 2;
+    r32_uint = 3;
+    rg32_float = 4;
+    rg32_sint = 5;
+    rg32_uint = 6;
+    rgba16_float = 7;
+    rgba16_sint = 8;
+    rgba16_uint = 9;
+    rgba32_float = 10;
+    rgba32_sint = 11;
+    rgba32_uint = 12;
+    rgba8_sint = 13;
+    rgba8_snorm = 14;
+    rgba8_uint = 15;
+    rgba8_unorm = 16;
 }
 
 enum SamplerKind {

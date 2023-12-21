@@ -32,6 +32,8 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/type/depth_texture.h"
+#include "src/tint/lang/core/type/sampled_texture.h"
+#include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/utils/containers/transform.h"
 #include "src/tint/utils/macros/compiler.h"
 
@@ -167,6 +169,15 @@ struct Decoder {
         Vector<FunctionParam*, 8> params_out;
         for (auto param_in : fn_in.parameters()) {
             params_out.Push(ValueAs<ir::FunctionParam>(param_in));
+        }
+        if (fn_in.has_return_location()) {
+            auto& ret_loc_in = fn_in.return_location();
+            core::ir::Location ret_loc_out{};
+            ret_loc_out.value = ret_loc_in.value();
+            if (ret_loc_in.has_interpolation()) {
+                ret_loc_out.interpolation = Interpolation(ret_loc_in.interpolation());
+            }
+            fn_out->SetReturnLocation(ret_loc_out.value, std::move(ret_loc_out.interpolation));
         }
         fn_out->SetParams(std::move(params_out));
         fn_out->SetBlock(Block(fn_in.block()));
@@ -510,6 +521,10 @@ struct Decoder {
                 return CreateTypeArray(type_in.array());
             case pb::Type::KindCase::kDepthTexture:
                 return CreateTypeDepthTexture(type_in.depth_texture());
+            case pb::Type::KindCase::kSampledTexture:
+                return CreateTypeSampledTexture(type_in.sampled_texture());
+            case pb::Type::KindCase::kStorageTexture:
+                return CreateTypeStorageTexture(type_in.storage_texture());
             case pb::Type::KindCase::kSampler:
                 return CreateTypeSampler(type_in.sampler());
             default:
@@ -553,7 +568,7 @@ struct Decoder {
     const type::Pointer* CreateTypePointer(const pb::TypePointer& pointer_in) {
         auto address_space = AddressSpace(pointer_in.address_space());
         auto* store_ty = Type(pointer_in.store_type());
-        auto access = Access(pointer_in.access());
+        auto access = AccessControl(pointer_in.access());
         return mod_out_.Types().ptr(address_space, store_ty, access);
     }
 
@@ -583,14 +598,7 @@ struct Decoder {
                 }
                 if (attributes_in.has_interpolation()) {
                     auto& interpolation_in = attributes_in.interpolation();
-                    attributes_out.interpolation = core::Interpolation{
-                        InterpolationType(interpolation_in.type()),
-                        InterpolationSampling::kUndefined,
-                    };
-                    if (interpolation_in.has_sampling()) {
-                        attributes_out.interpolation->sampling =
-                            InterpolationSampling(interpolation_in.sampling());
-                    }
+                    attributes_out.interpolation = Interpolation(interpolation_in);
                 }
                 attributes_out.invariant = attributes_in.invariant();
             }
@@ -619,6 +627,21 @@ struct Decoder {
     const type::DepthTexture* CreateTypeDepthTexture(const pb::TypeDepthTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         return mod_out_.Types().Get<type::DepthTexture>(dimension);
+    }
+
+    const type::SampledTexture* CreateTypeSampledTexture(const pb::TypeSampledTexture& texture_in) {
+        auto dimension = TextureDimension(texture_in.dimension());
+        auto sub_type = Type(texture_in.sub_type());
+        return mod_out_.Types().Get<type::SampledTexture>(dimension, sub_type);
+    }
+
+    const type::StorageTexture* CreateTypeStorageTexture(const pb::TypeStorageTexture& texture_in) {
+        auto dimension = TextureDimension(texture_in.dimension());
+        auto texel_format = TexelFormat(texture_in.texel_format());
+        auto access = AccessControl(texture_in.access());
+        return mod_out_.Types().Get<type::StorageTexture>(
+            dimension, texel_format, access,
+            type::StorageTexture::SubtypeFor(texel_format, b.ir.Types()));
     }
 
     const type::Sampler* CreateTypeSampler(const pb::TypeSampler& sampler_in) {
@@ -745,6 +768,18 @@ struct Decoder {
     }
 
     ////////////////////////////////////////////////////////////////////////////
+    // Attributes
+    ////////////////////////////////////////////////////////////////////////////
+    core::Interpolation Interpolation(const pb::Interpolation& interpolation_in) {
+        core::Interpolation interpolation_out{};
+        interpolation_out.type = InterpolationType(interpolation_in.type());
+        if (interpolation_in.has_sampling()) {
+            interpolation_out.sampling = InterpolationSampling(interpolation_in.sampling());
+        }
+        return interpolation_out;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
     // Enums
     ////////////////////////////////////////////////////////////////////////////
     core::AddressSpace AddressSpace(pb::AddressSpace in) {
@@ -771,7 +806,7 @@ struct Decoder {
         }
     }
 
-    core::Access Access(pb::AccessControl in) {
+    core::Access AccessControl(pb::AccessControl in) {
         switch (in) {
             case pb::AccessControl::read:
                 return core::Access::kRead;
@@ -859,6 +894,50 @@ struct Decoder {
 
         TINT_ICE() << "invalid TextureDimension: " << in;
         return core::type::TextureDimension::k1d;
+    }
+
+    core::TexelFormat TexelFormat(pb::TexelFormat in) {
+        switch (in) {
+            case pb::TexelFormat::bgra8_unorm:
+                return core::TexelFormat::kBgra8Unorm;
+            case pb::TexelFormat::r32_float:
+                return core::TexelFormat::kR32Float;
+            case pb::TexelFormat::r32_sint:
+                return core::TexelFormat::kR32Sint;
+            case pb::TexelFormat::r32_uint:
+                return core::TexelFormat::kR32Uint;
+            case pb::TexelFormat::rg32_float:
+                return core::TexelFormat::kRg32Float;
+            case pb::TexelFormat::rg32_sint:
+                return core::TexelFormat::kRg32Sint;
+            case pb::TexelFormat::rg32_uint:
+                return core::TexelFormat::kRg32Uint;
+            case pb::TexelFormat::rgba16_float:
+                return core::TexelFormat::kRgba16Float;
+            case pb::TexelFormat::rgba16_sint:
+                return core::TexelFormat::kRgba16Sint;
+            case pb::TexelFormat::rgba16_uint:
+                return core::TexelFormat::kRgba16Uint;
+            case pb::TexelFormat::rgba32_float:
+                return core::TexelFormat::kRgba32Float;
+            case pb::TexelFormat::rgba32_sint:
+                return core::TexelFormat::kRgba32Sint;
+            case pb::TexelFormat::rgba32_uint:
+                return core::TexelFormat::kRgba32Uint;
+            case pb::TexelFormat::rgba8_sint:
+                return core::TexelFormat::kRgba8Sint;
+            case pb::TexelFormat::rgba8_snorm:
+                return core::TexelFormat::kRgba8Snorm;
+            case pb::TexelFormat::rgba8_uint:
+                return core::TexelFormat::kRgba8Uint;
+            case pb::TexelFormat::rgba8_unorm:
+                return core::TexelFormat::kRgba8Unorm;
+            default:
+                break;
+        }
+
+        TINT_ICE() << "invalid TexelFormat: " << in;
+        return core::TexelFormat::kBgra8Unorm;
     }
 
     core::type::SamplerKind SamplerKind(pb::SamplerKind in) {
