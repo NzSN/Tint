@@ -31,7 +31,10 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
+#include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
+#include "src/tint/lang/core/type/external_texture.h"
+#include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/utils/containers/transform.h"
@@ -171,13 +174,13 @@ struct Decoder {
             params_out.Push(ValueAs<ir::FunctionParam>(param_in));
         }
         if (fn_in.has_return_location()) {
-            auto& ret_loc_in = fn_in.return_location();
-            core::ir::Location ret_loc_out{};
-            ret_loc_out.value = ret_loc_in.value();
-            if (ret_loc_in.has_interpolation()) {
-                ret_loc_out.interpolation = Interpolation(ret_loc_in.interpolation());
-            }
-            fn_out->SetReturnLocation(ret_loc_out.value, std::move(ret_loc_out.interpolation));
+            fn_out->SetReturnLocation(Location(fn_in.return_location()));
+        }
+        if (fn_in.has_return_builtin()) {
+            fn_out->SetReturnBuiltin(BuiltinValue(fn_in.return_builtin()));
+        }
+        if (fn_in.return_invariant()) {
+            fn_out->SetReturnInvariant(true);
         }
         fn_out->SetParams(std::move(params_out));
         fn_out->SetBlock(Block(fn_in.block()));
@@ -243,6 +246,9 @@ struct Decoder {
                 break;
             case pb::Instruction::KindCase::kBinary:
                 inst_out = CreateInstructionBinary(inst_in.binary());
+                break;
+            case pb::Instruction::KindCase::kBitcast:
+                inst_out = CreateInstructionBitcast(inst_in.bitcast());
                 break;
             case pb::Instruction::KindCase::kBreakIf:
                 inst_out = CreateInstructionBreakIf(inst_in.break_if());
@@ -313,6 +319,9 @@ struct Decoder {
             case pb::Instruction::KindCase::kVar:
                 inst_out = CreateInstructionVar(inst_in.var());
                 break;
+            case pb::Instruction::KindCase::kUnreachable:
+                inst_out = CreateInstructionUnreachable(inst_in.unreachable());
+                break;
             default:
                 TINT_UNIMPLEMENTED() << inst_in.kind_case();
                 break;
@@ -342,6 +351,10 @@ struct Decoder {
         auto* binary_out = mod_out_.instructions.Create<ir::Binary>();
         binary_out->SetOp(BinaryOp(binary_in.op()));
         return binary_out;
+    }
+
+    ir::Bitcast* CreateInstructionBitcast(const pb::InstructionBitcast&) {
+        return mod_out_.instructions.Create<ir::Bitcast>();
     }
 
     ir::BreakIf* CreateInstructionBreakIf(const pb::InstructionBreakIf&) {
@@ -500,6 +513,10 @@ struct Decoder {
         return var_out;
     }
 
+    ir::Unreachable* CreateInstructionUnreachable(const pb::InstructionUnreachable&) {
+        return b.Unreachable();
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Types
     ////////////////////////////////////////////////////////////////////////////
@@ -523,8 +540,14 @@ struct Decoder {
                 return CreateTypeDepthTexture(type_in.depth_texture());
             case pb::Type::KindCase::kSampledTexture:
                 return CreateTypeSampledTexture(type_in.sampled_texture());
+            case pb::Type::KindCase::kMultisampledTexture:
+                return CreateTypeMultisampledTexture(type_in.multisampled_texture());
+            case pb::Type::KindCase::kDepthMultisampledTexture:
+                return CreateTypeDepthMultisampledTexture(type_in.depth_multisampled_texture());
             case pb::Type::KindCase::kStorageTexture:
                 return CreateTypeStorageTexture(type_in.storage_texture());
+            case pb::Type::KindCase::kExternalTexture:
+                return CreateTypeExternalTexture(type_in.external_texture());
             case pb::Type::KindCase::kSampler:
                 return CreateTypeSampler(type_in.sampler());
             default:
@@ -635,6 +658,19 @@ struct Decoder {
         return mod_out_.Types().Get<type::SampledTexture>(dimension, sub_type);
     }
 
+    const type::MultisampledTexture* CreateTypeMultisampledTexture(
+        const pb::TypeMultisampledTexture& texture_in) {
+        auto dimension = TextureDimension(texture_in.dimension());
+        auto sub_type = Type(texture_in.sub_type());
+        return mod_out_.Types().Get<type::MultisampledTexture>(dimension, sub_type);
+    }
+
+    const type::DepthMultisampledTexture* CreateTypeDepthMultisampledTexture(
+        const pb::TypeDepthMultisampledTexture& texture_in) {
+        auto dimension = TextureDimension(texture_in.dimension());
+        return mod_out_.Types().Get<type::DepthMultisampledTexture>(dimension);
+    }
+
     const type::StorageTexture* CreateTypeStorageTexture(const pb::TypeStorageTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         auto texel_format = TexelFormat(texture_in.texel_format());
@@ -642,6 +678,10 @@ struct Decoder {
         return mod_out_.Types().Get<type::StorageTexture>(
             dimension, texel_format, access,
             type::StorageTexture::SubtypeFor(texel_format, b.ir.Types()));
+    }
+
+    const type::ExternalTexture* CreateTypeExternalTexture(const pb::TypeExternalTexture&) {
+        return mod_out_.Types().Get<type::ExternalTexture>();
     }
 
     const type::Sampler* CreateTypeSampler(const pb::TypeSampler& sampler_in) {
@@ -657,46 +697,71 @@ struct Decoder {
     ir::Value* CreateValue(const pb::Value& value_in) {
         ir::Value* value_out = nullptr;
         switch (value_in.kind_case()) {
-            case pb::Value::KindCase::kFunction: {
+            case pb::Value::KindCase::kFunction:
                 value_out = Function(value_in.function());
                 break;
-            }
-            case pb::Value::KindCase::kInstructionResult: {
-                auto& res_in = value_in.instruction_result();
-                auto* type = Type(res_in.type());
-                value_out = b.InstructionResult(type);
-                if (res_in.has_name()) {
-                    mod_out_.SetName(value_out, res_in.name());
-                }
+            case pb::Value::KindCase::kInstructionResult:
+                value_out = InstructionResult(value_in.instruction_result());
                 break;
-            }
-            case pb::Value::KindCase::kFunctionParameter: {
-                auto& param_in = value_in.function_parameter();
-                auto* type = Type(param_in.type());
-                value_out = b.FunctionParam(type);
-                if (param_in.has_name()) {
-                    mod_out_.SetName(value_out, param_in.name());
-                }
+            case pb::Value::KindCase::kFunctionParameter:
+                value_out = FunctionParameter(value_in.function_parameter());
                 break;
-            }
-            case pb::Value::KindCase::kBlockParameter: {
-                auto& param_in = value_in.block_parameter();
-                auto* type = Type(param_in.type());
-                value_out = b.BlockParam(type);
-                if (param_in.has_name()) {
-                    mod_out_.SetName(value_out, param_in.name());
-                }
+            case pb::Value::KindCase::kBlockParameter:
+                value_out = BlockParameter(value_in.block_parameter());
                 break;
-            }
-            case pb::Value::KindCase::kConstant: {
+            case pb::Value::KindCase::kConstant:
                 value_out = b.Constant(ConstantValue(value_in.constant()));
                 break;
-            }
             default:
                 TINT_ICE() << "invalid TypeDecl.kind: " << value_in.kind_case();
                 return nullptr;
         }
         return value_out;
+    }
+
+    ir::InstructionResult* InstructionResult(const pb::InstructionResult& res_in) {
+        auto* type = Type(res_in.type());
+        auto* res_out = b.InstructionResult(type);
+        if (res_in.has_name()) {
+            mod_out_.SetName(res_out, res_in.name());
+        }
+        return res_out;
+    }
+
+    ir::FunctionParam* FunctionParameter(const pb::FunctionParameter& param_in) {
+        auto* type = Type(param_in.type());
+        auto* param_out = b.FunctionParam(type);
+        if (param_in.has_name()) {
+            mod_out_.SetName(param_out, param_in.name());
+        }
+
+        if (param_in.has_attributes()) {
+            auto& attrs_in = param_in.attributes();
+            if (attrs_in.has_binding_point()) {
+                auto& bp_in = attrs_in.binding_point();
+                param_out->SetBindingPoint(bp_in.group(), bp_in.binding());
+            }
+            if (attrs_in.has_location()) {
+                param_out->SetLocation(Location(attrs_in.location()));
+            }
+            if (attrs_in.has_builtin()) {
+                param_out->SetBuiltin(BuiltinValue(attrs_in.builtin()));
+            }
+            if (attrs_in.invariant()) {
+                param_out->SetInvariant(true);
+            }
+        }
+
+        return param_out;
+    }
+
+    ir::BlockParam* BlockParameter(const pb::BlockParameter& param_in) {
+        auto* type = Type(param_in.type());
+        auto* param_out = b.BlockParam(type);
+        if (param_in.has_name()) {
+            mod_out_.SetName(param_out, param_in.name());
+        }
+        return param_out;
     }
 
     ir::Value* Value(uint32_t id) { return id > 0 ? values_[id - 1] : nullptr; }
@@ -770,6 +835,15 @@ struct Decoder {
     ////////////////////////////////////////////////////////////////////////////
     // Attributes
     ////////////////////////////////////////////////////////////////////////////
+    ir::Location Location(const pb::Location& location_in) {
+        core::ir::Location location_out{};
+        location_out.value = location_in.value();
+        if (location_in.has_interpolation()) {
+            location_out.interpolation = Interpolation(location_in.interpolation());
+        }
+        return location_out;
+    }
+
     core::Interpolation Interpolation(const pb::Interpolation& interpolation_in) {
         core::Interpolation interpolation_out{};
         interpolation_out.type = InterpolationType(interpolation_in.type());

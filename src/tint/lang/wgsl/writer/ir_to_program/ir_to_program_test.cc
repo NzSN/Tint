@@ -58,7 +58,7 @@ IRToProgramTest::Result IRToProgramTest::Run() {
     }
 
     auto output = wgsl::writer::Generate(output_program, {});
-    if (!output) {
+    if (output != Success) {
         std::stringstream ss;
         ss << "wgsl::Generate() errored: " << output.Failure();
         result.err = ss.str();
@@ -144,7 +144,7 @@ fn f() {
 
 TEST_F(IRToProgramTest, EntryPoint_Vertex) {
     auto* fn = b.Function("f", ty.vec4<f32>(), core::ir::Function::PipelineStage::kVertex);
-    fn->SetReturnBuiltin(core::ir::Function::ReturnBuiltin::kPosition);
+    fn->SetReturnBuiltin(core::BuiltinValue::kPosition);
 
     fn->Block()->Append(b.Return(fn, b.Splat(ty.vec4<f32>(), 0_f, 4)));
 
@@ -158,7 +158,7 @@ fn f() -> @builtin(position) vec4<f32> {
 
 TEST_F(IRToProgramTest, EntryPoint_ReturnAttribute_FragDepth) {
     auto* fn = b.Function("f", ty.f32(), core::ir::Function::PipelineStage::kFragment);
-    fn->SetReturnBuiltin(core::ir::Function::ReturnBuiltin::kFragDepth);
+    fn->SetReturnBuiltin(core::BuiltinValue::kFragDepth);
 
     fn->Block()->Append(b.Return(fn, b.Constant(0.5_f)));
 
@@ -172,7 +172,7 @@ fn f() -> @builtin(frag_depth) f32 {
 
 TEST_F(IRToProgramTest, EntryPoint_ReturnAttribute_SampleMask) {
     auto* fn = b.Function("f", ty.u32(), core::ir::Function::PipelineStage::kFragment);
-    fn->SetReturnBuiltin(core::ir::Function::ReturnBuiltin::kSampleMask);
+    fn->SetReturnBuiltin(core::BuiltinValue::kSampleMask);
 
     fn->Block()->Append(b.Return(fn, b.Constant(3_u)));
 
@@ -186,7 +186,7 @@ fn f() -> @builtin(sample_mask) u32 {
 
 TEST_F(IRToProgramTest, EntryPoint_ReturnAttribute_Invariant) {
     auto* fn = b.Function("f", ty.vec4<f32>(), core::ir::Function::PipelineStage::kVertex);
-    fn->SetReturnBuiltin(core::ir::Function::ReturnBuiltin::kPosition);
+    fn->SetReturnBuiltin(core::BuiltinValue::kPosition);
     fn->SetReturnInvariant(true);
 
     fn->Block()->Append(b.Return(fn, b.Splat(ty.vec4<f32>(), 0_f, 4)));
@@ -216,7 +216,7 @@ fn f() -> @location(1) vec4<f32> {
 namespace {
 core::ir::FunctionParam* MakeBuiltinParam(core::ir::Builder& b,
                                           const core::type::Type* type,
-                                          enum core::ir::FunctionParam::Builtin builtin) {
+                                          enum core::BuiltinValue builtin) {
     auto* param = b.FunctionParam(type);
     param->SetBuiltin(builtin);
     return param;
@@ -227,13 +227,13 @@ TEST_F(IRToProgramTest, EntryPoint_ParameterAttribute_Compute) {
     auto* fn = b.Function("f", ty.void_(), core::ir::Function::PipelineStage::kCompute,
                           std::array{3u, 4u, 5u});
     fn->SetParams({
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::ir::FunctionParam::Builtin::kLocalInvocationId),
-        MakeBuiltinParam(b, ty.u32(), core::ir::FunctionParam::Builtin::kLocalInvocationIndex),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::ir::FunctionParam::Builtin::kGlobalInvocationId),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::ir::FunctionParam::Builtin::kWorkgroupId),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::ir::FunctionParam::Builtin::kNumWorkgroups),
-        MakeBuiltinParam(b, ty.u32(), core::ir::FunctionParam::Builtin::kSubgroupInvocationId),
-        MakeBuiltinParam(b, ty.u32(), core::ir::FunctionParam::Builtin::kSubgroupSize),
+        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kLocalInvocationId),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kLocalInvocationIndex),
+        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kGlobalInvocationId),
+        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kWorkgroupId),
+        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kNumWorkgroups),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSubgroupInvocationId),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSubgroupSize),
     });
 
     fn->Block()->Append(b.Return(fn));
@@ -250,9 +250,9 @@ fn f(@builtin(local_invocation_id) v : vec3<u32>, @builtin(local_invocation_inde
 TEST_F(IRToProgramTest, EntryPoint_ParameterAttribute_Fragment) {
     auto* fn = b.Function("f", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     fn->SetParams({
-        MakeBuiltinParam(b, ty.bool_(), core::ir::FunctionParam::Builtin::kFrontFacing),
-        MakeBuiltinParam(b, ty.u32(), core::ir::FunctionParam::Builtin::kSampleIndex),
-        MakeBuiltinParam(b, ty.u32(), core::ir::FunctionParam::Builtin::kSampleMask),
+        MakeBuiltinParam(b, ty.bool_(), core::BuiltinValue::kFrontFacing),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSampleIndex),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSampleMask),
     });
 
     fn->Block()->Append(b.Return(fn));

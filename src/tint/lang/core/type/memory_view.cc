@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,29 +25,26 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/spirv/reader/reader.h"
+#include "src/tint/lang/core/type/memory_view.h"
 
-#include <utility>
+#include "src/tint/lang/core/type/manager.h"
+#include "src/tint/utils/diagnostic/diagnostic.h"
 
-#include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/spirv/reader/ast_parser/parse.h"
-#include "src/tint/lang/spirv/reader/parser/parser.h"
+TINT_INSTANTIATE_TYPEINFO(tint::core::type::MemoryView);
 
-namespace tint::spirv::reader {
+namespace tint::core::type {
 
-Result<core::ir::Module> ReadIR(const std::vector<uint32_t>& input) {
-    auto mod = Parse(Slice(input.data(), input.size()));
-    if (mod != Success) {
-        return mod.Failure();
-    }
-
-    // TODO(crbug.com/tint/1907): Lower the module to core dialect.
-
-    return mod;
+MemoryView::MemoryView(size_t hash,
+                       core::AddressSpace address_space,
+                       const Type* store_type,
+                       core::Access access)
+    : Base(hash, core::type::Flags{}),
+      store_type_(store_type),
+      address_space_(address_space),
+      access_(access) {
+    TINT_ASSERT(access != core::Access::kUndefined);
 }
 
-Program Read(const std::vector<uint32_t>& input, const Options& options) {
-    return ast_parser::Parse(input, options);
-}
+MemoryView::~MemoryView() = default;
 
-}  // namespace tint::spirv::reader
+}  // namespace tint::core::type

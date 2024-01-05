@@ -104,7 +104,7 @@ class State {
     explicit State(const core::ir::Module& m) : mod(m) {}
 
     Program Run(const ProgramOptions& options) {
-        if (auto res = core::ir::Validate(mod); !res) {
+        if (auto res = core::ir::Validate(mod); res != Success) {
             // IR module failed validation.
             b.Diagnostics() = res.Failure().reason;
             return Program{resolver::Resolve(b)};
@@ -211,46 +211,49 @@ class State {
             // Emit parameter attributes.
             if (auto builtin = param->Builtin()) {
                 switch (builtin.value()) {
-                    case core::ir::FunctionParam::Builtin::kVertexIndex:
+                    case core::BuiltinValue::kVertexIndex:
                         attrs.Push(b.Builtin(core::BuiltinValue::kVertexIndex));
                         break;
-                    case core::ir::FunctionParam::Builtin::kInstanceIndex:
+                    case core::BuiltinValue::kInstanceIndex:
                         attrs.Push(b.Builtin(core::BuiltinValue::kInstanceIndex));
                         break;
-                    case core::ir::FunctionParam::Builtin::kPosition:
+                    case core::BuiltinValue::kPosition:
                         attrs.Push(b.Builtin(core::BuiltinValue::kPosition));
                         break;
-                    case core::ir::FunctionParam::Builtin::kFrontFacing:
+                    case core::BuiltinValue::kFrontFacing:
                         attrs.Push(b.Builtin(core::BuiltinValue::kFrontFacing));
                         break;
-                    case core::ir::FunctionParam::Builtin::kLocalInvocationId:
+                    case core::BuiltinValue::kLocalInvocationId:
                         attrs.Push(b.Builtin(core::BuiltinValue::kLocalInvocationId));
                         break;
-                    case core::ir::FunctionParam::Builtin::kLocalInvocationIndex:
+                    case core::BuiltinValue::kLocalInvocationIndex:
                         attrs.Push(b.Builtin(core::BuiltinValue::kLocalInvocationIndex));
                         break;
-                    case core::ir::FunctionParam::Builtin::kGlobalInvocationId:
+                    case core::BuiltinValue::kGlobalInvocationId:
                         attrs.Push(b.Builtin(core::BuiltinValue::kGlobalInvocationId));
                         break;
-                    case core::ir::FunctionParam::Builtin::kWorkgroupId:
+                    case core::BuiltinValue::kWorkgroupId:
                         attrs.Push(b.Builtin(core::BuiltinValue::kWorkgroupId));
                         break;
-                    case core::ir::FunctionParam::Builtin::kNumWorkgroups:
+                    case core::BuiltinValue::kNumWorkgroups:
                         attrs.Push(b.Builtin(core::BuiltinValue::kNumWorkgroups));
                         break;
-                    case core::ir::FunctionParam::Builtin::kSampleIndex:
+                    case core::BuiltinValue::kSampleIndex:
                         attrs.Push(b.Builtin(core::BuiltinValue::kSampleIndex));
                         break;
-                    case core::ir::FunctionParam::Builtin::kSampleMask:
+                    case core::BuiltinValue::kSampleMask:
                         attrs.Push(b.Builtin(core::BuiltinValue::kSampleMask));
                         break;
-                    case core::ir::FunctionParam::Builtin::kSubgroupInvocationId:
+                    case core::BuiltinValue::kSubgroupInvocationId:
                         Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
                         attrs.Push(b.Builtin(core::BuiltinValue::kSubgroupInvocationId));
                         break;
-                    case core::ir::FunctionParam::Builtin::kSubgroupSize:
+                    case core::BuiltinValue::kSubgroupSize:
                         Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
                         attrs.Push(b.Builtin(core::BuiltinValue::kSubgroupSize));
+                        break;
+                    default:
+                        TINT_UNIMPLEMENTED() << builtin.value();
                         break;
                 }
             }
@@ -297,14 +300,17 @@ class State {
         // Emit return type attributes.
         if (auto builtin = fn->ReturnBuiltin()) {
             switch (builtin.value()) {
-                case core::ir::Function::ReturnBuiltin::kPosition:
+                case core::BuiltinValue::kPosition:
                     ret_attrs.Push(b.Builtin(core::BuiltinValue::kPosition));
                     break;
-                case core::ir::Function::ReturnBuiltin::kFragDepth:
+                case core::BuiltinValue::kFragDepth:
                     ret_attrs.Push(b.Builtin(core::BuiltinValue::kFragDepth));
                     break;
-                case core::ir::Function::ReturnBuiltin::kSampleMask:
+                case core::BuiltinValue::kSampleMask:
                     ret_attrs.Push(b.Builtin(core::BuiltinValue::kSampleMask));
+                    break;
+                default:
+                    TINT_UNIMPLEMENTED() << builtin.value();
                     break;
             }
         }

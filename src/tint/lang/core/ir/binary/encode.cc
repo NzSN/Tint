@@ -36,6 +36,7 @@
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/binary.h"
+#include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/break_if.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
@@ -60,16 +61,20 @@
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
 #include "src/tint/lang/core/ir/unary.h"
+#include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/bool.h"
+#include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
+#include "src/tint/lang/core/type/external_texture.h"
 #include "src/tint/lang/core/type/f16.h"
 #include "src/tint/lang/core/type/f32.h"
 #include "src/tint/lang/core/type/i32.h"
 #include "src/tint/lang/core/type/matrix.h"
+#include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/sampler.h"
@@ -136,11 +141,13 @@ struct Encoder {
         }
         if (auto ret_loc_in = fn_in->ReturnLocation()) {
             auto& ret_loc_out = *fn_out->mutable_return_location();
-            if (auto interpolation_in = ret_loc_in->interpolation) {
-                auto& interpolation_out = *ret_loc_out.mutable_interpolation();
-                Interpolation(interpolation_out, *interpolation_in);
-            }
-            ret_loc_out.set_value(ret_loc_in->value);
+            Location(ret_loc_out, *ret_loc_in);
+        }
+        if (auto builtin_in = fn_in->ReturnBuiltin()) {
+            fn_out->set_return_builtin(BuiltinValue(*builtin_in));
+        }
+        if (fn_in->ReturnInvariant()) {
+            fn_out->set_return_invariant(true);
         }
         fn_out->set_block(Block(fn_in->Block()));
     }
@@ -192,6 +199,7 @@ struct Encoder {
             inst_in,  //
             [&](const ir::Access* i) { InstructionAccess(*inst_out.mutable_access(), i); },
             [&](const ir::Binary* i) { InstructionBinary(*inst_out.mutable_binary(), i); },
+            [&](const ir::Bitcast* i) { InstructionBitcast(*inst_out.mutable_bitcast(), i); },
             [&](const ir::BreakIf* i) { InstructionBreakIf(*inst_out.mutable_break_if(), i); },
             [&](const ir::CoreBuiltinCall* i) {
                 InstructionBuiltinCall(*inst_out.mutable_builtin_call(), i);
@@ -225,6 +233,9 @@ struct Encoder {
             [&](const ir::Unary* i) { InstructionUnary(*inst_out.mutable_unary(), i); },
             [&](const ir::UserCall* i) { InstructionUserCall(*inst_out.mutable_user_call(), i); },
             [&](const ir::Var* i) { InstructionVar(*inst_out.mutable_var(), i); },
+            [&](const ir::Unreachable* i) {
+                InstructionUnreachable(*inst_out.mutable_unreachable(), i);
+            },
             TINT_ICE_ON_NO_MATCH);
         for (auto* operand : inst_in->Operands()) {
             inst_out.add_operands(Value(operand));
@@ -239,6 +250,8 @@ struct Encoder {
     void InstructionBinary(pb::InstructionBinary& binary_out, const ir::Binary* binary_in) {
         binary_out.set_op(BinaryOp(binary_in->Op()));
     }
+
+    void InstructionBitcast(pb::InstructionBitcast&, const ir::Bitcast*) {}
 
     void InstructionBreakIf(pb::InstructionBreakIf&, const ir::BreakIf*) {}
 
@@ -325,10 +338,11 @@ struct Encoder {
     void InstructionVar(pb::InstructionVar& var_out, const ir::Var* var_in) {
         if (auto bp_in = var_in->BindingPoint()) {
             auto& bp_out = *var_out.mutable_binding_point();
-            bp_out.set_group(bp_in->group);
-            bp_out.set_binding(bp_in->binding);
+            BindingPoint(bp_out, *bp_in);
         }
     }
+
+    void InstructionUnreachable(pb::InstructionUnreachable&, const ir::Unreachable*) {}
 
     ////////////////////////////////////////////////////////////////////////////
     // Types
@@ -359,8 +373,17 @@ struct Encoder {
                 [&](const core::type::SampledTexture* t) {
                     TypeSampledTexture(*type_out.mutable_sampled_texture(), t);
                 },
+                [&](const core::type::MultisampledTexture* t) {
+                    TypeMultisampledTexture(*type_out.mutable_multisampled_texture(), t);
+                },
+                [&](const core::type::DepthMultisampledTexture* t) {
+                    TypeDepthMultisampledTexture(*type_out.mutable_depth_multisampled_texture(), t);
+                },
                 [&](const core::type::StorageTexture* t) {
                     TypeStorageTexture(*type_out.mutable_storage_texture(), t);
+                },
+                [&](const core::type::ExternalTexture* t) {
+                    TypeExternalTexture(*type_out.mutable_external_texture(), t);
                 },
                 [&](const core::type::Sampler* s) { TypeSampler(*type_out.mutable_sampler(), s); },
                 TINT_ICE_ON_NO_MATCH);
@@ -444,12 +467,25 @@ struct Encoder {
         texture_out.set_sub_type(Type(texture_in->type()));
     }
 
+    void TypeMultisampledTexture(pb::TypeMultisampledTexture& texture_out,
+                                 const core::type::MultisampledTexture* texture_in) {
+        texture_out.set_dimension(TextureDimension(texture_in->dim()));
+        texture_out.set_sub_type(Type(texture_in->type()));
+    }
+
+    void TypeDepthMultisampledTexture(pb::TypeDepthMultisampledTexture& texture_out,
+                                      const core::type::DepthMultisampledTexture* texture_in) {
+        texture_out.set_dimension(TextureDimension(texture_in->dim()));
+    }
+
     void TypeStorageTexture(pb::TypeStorageTexture& texture_out,
                             const core::type::StorageTexture* texture_in) {
         texture_out.set_dimension(TextureDimension(texture_in->dim()));
         texture_out.set_texel_format(TexelFormat(texture_in->texel_format()));
         texture_out.set_access(AccessControl(texture_in->access()));
     }
+
+    void TypeExternalTexture(pb::TypeExternalTexture&, const core::type::ExternalTexture*) {}
 
     void TypeSampler(pb::TypeSampler& sampler_out, const core::type::Sampler* sampler_in) {
         sampler_out.set_kind(SamplerKind(sampler_in->kind()));
@@ -496,6 +532,20 @@ struct Encoder {
         param_out.set_type(Type(param_in->Type()));
         if (auto name = mod_in_.NameOf(param_in); name.IsValid()) {
             param_out.set_name(name.Name());
+        }
+        if (auto bp_in = param_in->BindingPoint()) {
+            auto& bp_out = *param_out.mutable_attributes()->mutable_binding_point();
+            BindingPoint(bp_out, *bp_in);
+        }
+        if (auto location_in = param_in->Location()) {
+            auto& location_out = *param_out.mutable_attributes()->mutable_location();
+            Location(location_out, *location_in);
+        }
+        if (auto builtin_in = param_in->Builtin()) {
+            param_out.mutable_attributes()->set_builtin(BuiltinValue(*builtin_in));
+        }
+        if (param_in->Invariant()) {
+            param_out.mutable_attributes()->set_invariant(true);
         }
     }
 
@@ -563,12 +613,25 @@ struct Encoder {
     ////////////////////////////////////////////////////////////////////////////
     // Attributes
     ////////////////////////////////////////////////////////////////////////////
+    void Location(pb::Location& location_out, const ir::Location& location_in) {
+        if (auto interpolation_in = location_in.interpolation) {
+            auto& interpolation_out = *location_out.mutable_interpolation();
+            Interpolation(interpolation_out, *interpolation_in);
+        }
+        location_out.set_value(location_in.value);
+    }
+
     void Interpolation(pb::Interpolation& interpolation_out,
                        const core::Interpolation& interpolation_in) {
         interpolation_out.set_type(InterpolationType(interpolation_in.type));
         if (interpolation_in.sampling != InterpolationSampling::kUndefined) {
             interpolation_out.set_sampling(InterpolationSampling(interpolation_in.sampling));
         }
+    }
+
+    void BindingPoint(pb::BindingPoint& binding_point_out, const BindingPoint& binding_point_in) {
+        binding_point_out.set_group(binding_point_in.group);
+        binding_point_out.set_binding(binding_point_in.binding);
     }
 
     ////////////////////////////////////////////////////////////////////////////

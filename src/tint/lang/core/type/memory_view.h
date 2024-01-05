@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,29 +25,48 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/spirv/reader/reader.h"
+#ifndef SRC_TINT_LANG_CORE_TYPE_MEMORY_VIEW_H_
+#define SRC_TINT_LANG_CORE_TYPE_MEMORY_VIEW_H_
 
-#include <utility>
+#include <string>
 
-#include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/spirv/reader/ast_parser/parse.h"
-#include "src/tint/lang/spirv/reader/parser/parser.h"
+#include "src/tint/lang/core/access.h"
+#include "src/tint/lang/core/address_space.h"
+#include "src/tint/lang/core/type/type.h"
 
-namespace tint::spirv::reader {
+namespace tint::core::type {
 
-Result<core::ir::Module> ReadIR(const std::vector<uint32_t>& input) {
-    auto mod = Parse(Slice(input.data(), input.size()));
-    if (mod != Success) {
-        return mod.Failure();
-    }
+/// Base class for memory view types: pointers and references
+class MemoryView : public Castable<MemoryView, Type> {
+  public:
+    /// Constructor
+    /// @param hash the unique hash of the node
+    /// @param address_space the address space of the memory view
+    /// @param store_type the store type
+    /// @param access the resolved access control of the reference
+    MemoryView(size_t hash,
+               core::AddressSpace address_space,
+               const Type* store_type,
+               core::Access access);
 
-    // TODO(crbug.com/tint/1907): Lower the module to core dialect.
+    /// Destructor
+    ~MemoryView() override;
 
-    return mod;
-}
+    /// @returns the store type of the memory view
+    const Type* StoreType() const { return store_type_; }
 
-Program Read(const std::vector<uint32_t>& input, const Options& options) {
-    return ast_parser::Parse(input, options);
-}
+    /// @returns the address space of the memory view
+    core::AddressSpace AddressSpace() const { return address_space_; }
 
-}  // namespace tint::spirv::reader
+    /// @returns the access control of the memory view
+    core::Access Access() const { return access_; }
+
+  private:
+    Type const* const store_type_;
+    core::AddressSpace const address_space_;
+    core::Access const access_;
+};
+
+}  // namespace tint::core::type
+
+#endif  // SRC_TINT_LANG_CORE_TYPE_MEMORY_VIEW_H_
