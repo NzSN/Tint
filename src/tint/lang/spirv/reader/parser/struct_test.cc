@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -27,156 +27,206 @@
 
 #include "src/tint/lang/spirv/reader/parser/helper_test.h"
 
+#include "gtest/gtest-spi.h"
+
 namespace tint::spirv::reader {
-namespace {
 
-TEST_F(SpirvParserTest, FunctionVar) {
+TEST_F(SpirvParserTest, Struct_Empty) {
+    EXPECT_FATAL_FAILURE(  //
+        {
+            auto assembly = Assemble(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %void = OpTypeVoid
+        %str = OpTypeStruct
+    %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %void %str
+
+        %foo = OpFunction %void None %fn_type
+      %param = OpFunctionParameter %str
+  %foo_start = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+       %main = OpFunction %void None %ep_type
+ %main_start = OpLabel
+               OpReturn
+               OpFunctionEnd
+)");
+            auto parsed = Parse(Slice(assembly.Get().data(), assembly.Get().size()));
+            EXPECT_EQ(parsed, Success);
+        },
+        "empty structures are not supported");
+}
+
+TEST_F(SpirvParserTest, Struct_BasicDecl) {
     EXPECT_IR(R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
        %void = OpTypeVoid
-        %u32 = OpTypeInt 32 0
-    %u32_ptr = OpTypePointer Function %u32
+        %i32 = OpTypeInt 32 1
+        %str = OpTypeStruct %i32 %i32
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %void %str
+
+        %foo = OpFunction %void None %fn_type
+      %param = OpFunctionParameter %str
+  %foo_start = OpLabel
+               OpReturn
+               OpFunctionEnd
+
        %main = OpFunction %void None %ep_type
  %main_start = OpLabel
-        %var = OpVariable %u32_ptr Function
                OpReturn
                OpFunctionEnd
 )",
               R"(
-%main = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
+tint_symbol_2 = struct @align(4) {
+  tint_symbol:i32 @offset(0)
+  tint_symbol_1:i32 @offset(4)
+}
+
+%1 = func(%2:tint_symbol_2):void -> %b1 {
   %b1 = block {
-    %2:ptr<function, u32, read_write> = var
     ret
   }
 }
 )");
 }
 
-TEST_F(SpirvParserTest, FunctionVar_Initializer) {
+TEST_F(SpirvParserTest, Struct_MultipleUses) {
     EXPECT_IR(R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
        %void = OpTypeVoid
-        %u32 = OpTypeInt 32 0
-     %u32_42 = OpConstant %u32 42
-    %u32_ptr = OpTypePointer Function %u32
+        %i32 = OpTypeInt 32 1
+        %str = OpTypeStruct %i32 %i32
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %str %str %str
+
+        %foo = OpFunction %str None %fn_type
+    %param_1 = OpFunctionParameter %str
+    %param_2 = OpFunctionParameter %str
+  %foo_start = OpLabel
+               OpReturnValue %param_1
+               OpFunctionEnd
+
        %main = OpFunction %void None %ep_type
  %main_start = OpLabel
-        %var = OpVariable %u32_ptr Function %u32_42
                OpReturn
                OpFunctionEnd
 )",
               R"(
-%main = @compute @workgroup_size(1, 1, 1) func():void -> %b1 {
+tint_symbol_2 = struct @align(4) {
+  tint_symbol:i32 @offset(0)
+  tint_symbol_1:i32 @offset(4)
+}
+
+%1 = func(%2:tint_symbol_2, %3:tint_symbol_2):tint_symbol_2 -> %b1 {
   %b1 = block {
-    %2:ptr<function, u32, read_write> = var, 42u
-    ret
+    ret %2
   }
 }
 )");
 }
 
-TEST_F(SpirvParserTest, PrivateVar) {
+TEST_F(SpirvParserTest, Struct_Nested) {
     EXPECT_IR(R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
        %void = OpTypeVoid
-        %u32 = OpTypeInt 32 0
-    %u32_ptr = OpTypePointer Private %u32
+        %i32 = OpTypeInt 32 1
+      %inner = OpTypeStruct %i32 %i32
+     %middle = OpTypeStruct %inner %inner
+      %outer = OpTypeStruct %inner %middle %inner
     %ep_type = OpTypeFunction %void
-        %var = OpVariable %u32_ptr Private
+    %fn_type = OpTypeFunction %void %outer
+
+        %foo = OpFunction %void None %fn_type
+      %param = OpFunctionParameter %outer
+  %foo_start = OpLabel
+               OpReturn
+               OpFunctionEnd
+
        %main = OpFunction %void None %ep_type
  %main_start = OpLabel
                OpReturn
                OpFunctionEnd
 )",
               R"(
-%b1 = block {  # root
-  %1:ptr<private, u32, read_write> = var
+tint_symbol_2 = struct @align(4) {
+  tint_symbol:i32 @offset(0)
+  tint_symbol_1:i32 @offset(4)
 }
 
-%main = @compute @workgroup_size(1, 1, 1) func():void -> %b2 {
-  %b2 = block {
+tint_symbol_6 = struct @align(4) {
+  tint_symbol_4:tint_symbol_2 @offset(0)
+  tint_symbol_5:tint_symbol_2 @offset(8)
+}
+
+tint_symbol_9 = struct @align(4) {
+  tint_symbol_3:tint_symbol_2 @offset(0)
+  tint_symbol_7:tint_symbol_6 @offset(8)
+  tint_symbol_8:tint_symbol_2 @offset(24)
+}
+
+%1 = func(%2:tint_symbol_9):void -> %b1 {
+  %b1 = block {
     ret
   }
 }
 )");
 }
 
-TEST_F(SpirvParserTest, PrivateVar_Initializer) {
+TEST_F(SpirvParserTest, Struct_Offset) {
     EXPECT_IR(R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
-       %void = OpTypeVoid
-        %u32 = OpTypeInt 32 0
-     %u32_42 = OpConstant %u32 42
-    %u32_ptr = OpTypePointer Private %u32
-    %ep_type = OpTypeFunction %void
-        %var = OpVariable %u32_ptr Private %u32_42
-       %main = OpFunction %void None %ep_type
- %main_start = OpLabel
-               OpReturn
-               OpFunctionEnd
-)",
-              R"(
-%b1 = block {  # root
-  %1:ptr<private, u32, read_write> = var, 42u
-}
-
-%main = @compute @workgroup_size(1, 1, 1) func():void -> %b2 {
-  %b2 = block {
-    ret
-  }
-}
-)");
-}
-
-TEST_F(SpirvParserTest, UniformVar) {
-    EXPECT_IR(R"(
-               OpCapability Shader
-               OpMemoryModel Logical GLSL450
-               OpEntryPoint GLCompute %1 "main"
-               OpExecutionMode %1 LocalSize 1 1 1
-               OpDecorate %str Block
                OpMemberDecorate %str 0 Offset 0
+               OpMemberDecorate %str 1 Offset 4
+               OpMemberDecorate %str 2 Offset 32
+               OpMemberDecorate %str 3 Offset 64
        %void = OpTypeVoid
-       %uint = OpTypeInt 32 0
-        %str = OpTypeStruct %uint
-%_ptr_Uniform_str = OpTypePointer Uniform %str
-          %5 = OpTypeFunction %void
-          %6 = OpVariable %_ptr_Uniform_str Uniform
-          %1 = OpFunction %void None %5
-          %7 = OpLabel
+        %i32 = OpTypeInt 32 1
+        %str = OpTypeStruct %i32 %i32 %i32 %i32
+    %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %void %str
+
+        %foo = OpFunction %void None %fn_type
+      %param = OpFunctionParameter %str
+  %foo_start = OpLabel
+               OpReturn
+               OpFunctionEnd
+
+       %main = OpFunction %void None %ep_type
+ %main_start = OpLabel
                OpReturn
                OpFunctionEnd
 )",
               R"(
-tint_symbol_1 = struct @align(4) {
-  tint_symbol:u32 @offset(0)
+tint_symbol_4 = struct @align(4) {
+  tint_symbol:i32 @offset(0)
+  tint_symbol_1:i32 @offset(4)
+  tint_symbol_2:i32 @offset(32)
+  tint_symbol_3:i32 @offset(64)
 }
 
-%b1 = block {  # root
-  %1:ptr<uniform, tint_symbol_1, read_write> = var
-}
-
-%main = @compute @workgroup_size(1, 1, 1) func():void -> %b2 {
-  %b2 = block {
+%1 = func(%2:tint_symbol_4):void -> %b1 {
+  %b1 = block {
     ret
   }
 }
 )");
 }
 
-}  // namespace
 }  // namespace tint::spirv::reader
