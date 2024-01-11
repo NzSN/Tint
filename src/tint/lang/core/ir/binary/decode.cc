@@ -347,8 +347,8 @@ struct Decoder {
         return mod_out_.instructions.Create<ir::Access>();
     }
 
-    ir::Binary* CreateInstructionBinary(const pb::InstructionBinary& binary_in) {
-        auto* binary_out = mod_out_.instructions.Create<ir::Binary>();
+    ir::CoreBinary* CreateInstructionBinary(const pb::InstructionBinary& binary_in) {
+        auto* binary_out = mod_out_.instructions.Create<ir::CoreBinary>();
         binary_out->SetOp(BinaryOp(binary_in.op()));
         return binary_out;
     }
@@ -494,8 +494,8 @@ struct Decoder {
         return switch_out;
     }
 
-    ir::Unary* CreateInstructionUnary(const pb::InstructionUnary& unary_in) {
-        auto* unary_out = mod_out_.instructions.Create<ir::Unary>();
+    ir::CoreUnary* CreateInstructionUnary(const pb::InstructionUnary& unary_in) {
+        auto* unary_out = mod_out_.instructions.Create<ir::CoreUnary>();
         unary_out->SetOp(UnaryOp(unary_in.op()));
         return unary_out;
     }
@@ -894,57 +894,63 @@ struct Decoder {
         }
     }
 
-    core::ir::UnaryOp UnaryOp(pb::UnaryOp in) {
+    core::UnaryOp UnaryOp(pb::UnaryOp in) {
         switch (in) {
             case pb::UnaryOp::complement:
-                return core::ir::UnaryOp::kComplement;
+                return core::UnaryOp::kComplement;
             case pb::UnaryOp::negation:
-                return core::ir::UnaryOp::kNegation;
+                return core::UnaryOp::kNegation;
+            case pb::UnaryOp::address_of:
+                return core::UnaryOp::kAddressOf;
+            case pb::UnaryOp::indirection:
+                return core::UnaryOp::kIndirection;
+            case pb::UnaryOp::not_:
+                return core::UnaryOp::kNot;
 
             default:
                 TINT_ICE() << "invalid UnaryOp: " << in;
-                return core::ir::UnaryOp::kComplement;
+                return core::UnaryOp::kComplement;
         }
     }
 
-    core::ir::BinaryOp BinaryOp(pb::BinaryOp in) {
+    core::BinaryOp BinaryOp(pb::BinaryOp in) {
         switch (in) {
             case pb::BinaryOp::add_:
-                return core::ir::BinaryOp::kAdd;
+                return core::BinaryOp::kAdd;
             case pb::BinaryOp::subtract:
-                return core::ir::BinaryOp::kSubtract;
+                return core::BinaryOp::kSubtract;
             case pb::BinaryOp::multiply:
-                return core::ir::BinaryOp::kMultiply;
+                return core::BinaryOp::kMultiply;
             case pb::BinaryOp::divide:
-                return core::ir::BinaryOp::kDivide;
+                return core::BinaryOp::kDivide;
             case pb::BinaryOp::modulo:
-                return core::ir::BinaryOp::kModulo;
+                return core::BinaryOp::kModulo;
             case pb::BinaryOp::and_:
-                return core::ir::BinaryOp::kAnd;
+                return core::BinaryOp::kAnd;
             case pb::BinaryOp::or_:
-                return core::ir::BinaryOp::kOr;
+                return core::BinaryOp::kOr;
             case pb::BinaryOp::xor_:
-                return core::ir::BinaryOp::kXor;
+                return core::BinaryOp::kXor;
             case pb::BinaryOp::equal:
-                return core::ir::BinaryOp::kEqual;
+                return core::BinaryOp::kEqual;
             case pb::BinaryOp::not_equal:
-                return core::ir::BinaryOp::kNotEqual;
+                return core::BinaryOp::kNotEqual;
             case pb::BinaryOp::less_than:
-                return core::ir::BinaryOp::kLessThan;
+                return core::BinaryOp::kLessThan;
             case pb::BinaryOp::greater_than:
-                return core::ir::BinaryOp::kGreaterThan;
+                return core::BinaryOp::kGreaterThan;
             case pb::BinaryOp::less_than_equal:
-                return core::ir::BinaryOp::kLessThanEqual;
+                return core::BinaryOp::kLessThanEqual;
             case pb::BinaryOp::greater_than_equal:
-                return core::ir::BinaryOp::kGreaterThanEqual;
+                return core::BinaryOp::kGreaterThanEqual;
             case pb::BinaryOp::shift_left:
-                return core::ir::BinaryOp::kShiftLeft;
+                return core::BinaryOp::kShiftLeft;
             case pb::BinaryOp::shift_right:
-                return core::ir::BinaryOp::kShiftRight;
+                return core::BinaryOp::kShiftRight;
 
             default:
                 TINT_ICE() << "invalid BinaryOp: " << in;
-                return core::ir::BinaryOp::kAdd;
+                return core::BinaryOp::kAdd;
         }
     }
 

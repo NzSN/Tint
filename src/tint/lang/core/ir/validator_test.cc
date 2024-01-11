@@ -179,6 +179,117 @@ note: # Disassembly
 )");
 }
 
+TEST_F(IR_ValidatorTest, CallToFunctionTooFewArguments) {
+    auto* g = b.Function("g", ty.void_());
+    g->SetParams({b.FunctionParam<i32>(), b.FunctionParam<i32>()});
+    b.Append(g->Block(), [&] { b.Return(g); });
+
+    auto* f = b.Function("f", ty.void_());
+    b.Append(f->Block(), [&] {
+        b.Call(g, 42_i);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason.str(),
+              R"(:8:20 error: call: function has 2 parameters, but call provides 1 arguments
+    %5:void = call %g, 42i
+                   ^^
+
+:7:3 note: In block
+  %b2 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%g = func(%2:i32, %3:i32):void -> %b1 {
+  %b1 = block {
+    ret
+  }
+}
+%f = func():void -> %b2 {
+  %b2 = block {
+    %5:void = call %g, 42i
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidatorTest, CallToFunctionTooManyArguments) {
+    auto* g = b.Function("g", ty.void_());
+    g->SetParams({b.FunctionParam<i32>(), b.FunctionParam<i32>()});
+    b.Append(g->Block(), [&] { b.Return(g); });
+
+    auto* f = b.Function("f", ty.void_());
+    b.Append(f->Block(), [&] {
+        b.Call(g, 1_i, 2_i, 3_i);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason.str(),
+              R"(:8:20 error: call: function has 2 parameters, but call provides 3 arguments
+    %5:void = call %g, 1i, 2i, 3i
+                   ^^
+
+:7:3 note: In block
+  %b2 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%g = func(%2:i32, %3:i32):void -> %b1 {
+  %b1 = block {
+    ret
+  }
+}
+%f = func():void -> %b2 {
+  %b2 = block {
+    %5:void = call %g, 1i, 2i, 3i
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidatorTest, CallToFunctionWrongArgType) {
+    auto* g = b.Function("g", ty.void_());
+    g->SetParams({b.FunctionParam<i32>(), b.FunctionParam<i32>(), b.FunctionParam<i32>()});
+    b.Append(g->Block(), [&] { b.Return(g); });
+
+    auto* f = b.Function("f", ty.void_());
+    b.Append(f->Block(), [&] {
+        b.Call(g, 1_i, 2_f, 3_i);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason.str(),
+              R"(:8:28 error: call: function parameter 1 is of type i32, but argument is of type f32
+    %6:void = call %g, 1i, 2.0f, 3i
+                           ^^^^
+
+:7:3 note: In block
+  %b2 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%g = func(%2:i32, %3:i32, %4:i32):void -> %b1 {
+  %b1 = block {
+    ret
+  }
+}
+%f = func():void -> %b2 {
+  %b2 = block {
+    %6:void = call %g, 1i, 2.0f, 3i
+    ret
+  }
+}
+)");
+}
+
 TEST_F(IR_ValidatorTest, Block_NoTerminator) {
     b.Function("my_func", ty.void_());
 
@@ -1271,8 +1382,8 @@ note: # Disassembly
 }
 
 TEST_F(IR_ValidatorTest, Binary_Result_Nullptr) {
-    auto* bin = mod.instructions.Create<ir::Binary>(nullptr, BinaryOp::kAdd, b.Constant(3_i),
-                                                    b.Constant(2_i));
+    auto* bin = mod.instructions.Create<ir::CoreBinary>(nullptr, BinaryOp::kAdd, b.Constant(3_i),
+                                                        b.Constant(2_i));
 
     auto* f = b.Function("my_func", ty.void_());
 
@@ -1329,7 +1440,7 @@ note: # Disassembly
 
 TEST_F(IR_ValidatorTest, Unary_Result_Nullptr) {
     auto* bin =
-        mod.instructions.Create<ir::Unary>(nullptr, ir::UnaryOp::kNegation, b.Constant(2_i));
+        mod.instructions.Create<ir::CoreUnary>(nullptr, UnaryOp::kNegation, b.Constant(2_i));
 
     auto* f = b.Function("my_func", ty.void_());
 
@@ -1368,7 +1479,9 @@ TEST_F(IR_ValidatorTest, Unary_ResultTypeNotMatchValueType) {
 
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
-    EXPECT_EQ(res.Failure().reason.str(), R"(:3:5 error: unary: result type must match value type
+    EXPECT_EQ(
+        res.Failure().reason.str(),
+        R"(:3:5 error: unary: unary instruction result type (f32) does not match overload result type (i32)
     %2:f32 = complement 2i
     ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -2931,6 +3044,37 @@ note: # Disassembly
 )");
 }
 
+TEST_F(IR_ValidatorTest, Store_TargetNotMemoryView) {
+    auto* f = b.Function("my_func", ty.void_());
+
+    b.Append(f->Block(), [&] {
+        auto* let = b.Let("l", 1_i);
+        b.Append(mod.instructions.Create<ir::Store>(let->Result(0), b.Constant(42_u)));
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason.str(),
+              R"(:4:15 error: store target operand is not a memory view
+    store %l, 42u
+              ^^^
+
+:2:3 note: In block
+  %b1 = block {
+  ^^^^^^^^^^^
+
+note: # Disassembly
+%my_func = func():void -> %b1 {
+  %b1 = block {
+    %l:i32 = let 1i
+    store %l, 42u
+    ret
+  }
+}
+)");
+}
+
 TEST_F(IR_ValidatorTest, Store_TypeMismatch) {
     auto* f = b.Function("my_func", ty.void_());
 
@@ -2943,7 +3087,7 @@ TEST_F(IR_ValidatorTest, Store_TypeMismatch) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.str(),
-              R"(:4:15 error: value type does not match pointer element type
+              R"(:4:15 error: value type does not match store type
     store %2, 42u
               ^^^
 

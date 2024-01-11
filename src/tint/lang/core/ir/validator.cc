@@ -594,6 +594,24 @@ void Validator::CheckUserCall(const UserCall* call) {
         AddError(call, UserCall::kFunctionOperandOffset,
                  InstError(call, "call target is not part of the module"));
     }
+    auto args = call->Args();
+    auto params = call->Target()->Params();
+    if (args.Length() != params.Length()) {
+        StringStream err;
+        err << "function has " << params.Length() << " parameters, but call provides "
+            << args.Length() << " arguments";
+        AddError(call, UserCall::kFunctionOperandOffset, InstError(call, err.str()));
+        return;
+    }
+
+    for (size_t i = 0; i < args.Length(); i++) {
+        if (args[i]->Type() != params[i]->Type()) {
+            StringStream err;
+            err << "function parameter " << i << " is of type " << params[i]->Type()->FriendlyName()
+                << ", but argument is of type " << args[i]->Type()->FriendlyName();
+            AddError(call, UserCall::kArgsOperandOffset + i, InstError(call, err.str()));
+        }
+    }
 }
 
 void Validator::CheckAccess(const Access* a) {
@@ -667,14 +685,61 @@ void Validator::CheckAccess(const Access* a) {
 
 void Validator::CheckBinary(const Binary* b) {
     CheckOperandsNotNull(b, Binary::kLhsOperandOffset, Binary::kRhsOperandOffset);
+    if (b->LHS() && b->RHS()) {
+        auto symbols = SymbolTable::Wrap(mod_.symbols);
+        auto type_mgr = type::Manager::Wrap(mod_.Types());
+        intrinsic::Context context{
+            b->TableData(),
+            type_mgr,
+            symbols,
+        };
+
+        auto overload =
+            core::intrinsic::LookupBinary(context, b->Op(), b->LHS()->Type(), b->RHS()->Type(),
+                                          core::EvaluationStage::kRuntime, /* is_compound */ false);
+        if (overload != Success) {
+            AddError(b, InstError(b, overload.Failure()));
+            return;
+        }
+
+        if (auto* result = b->Result(0)) {
+            if (overload->return_type != result->Type()) {
+                StringStream err;
+                err << "binary instruction result type (" << result->Type()->FriendlyName()
+                    << ") does not match overload result type ("
+                    << overload->return_type->FriendlyName() << ")";
+                AddError(b, InstError(b, err.str()));
+            }
+        }
+    }
 }
 
 void Validator::CheckUnary(const Unary* u) {
     CheckOperandNotNull(u, u->Val(), Unary::kValueOperandOffset);
+    if (u->Val()) {
+        auto symbols = SymbolTable::Wrap(mod_.symbols);
+        auto type_mgr = type::Manager::Wrap(mod_.Types());
+        intrinsic::Context context{
+            u->TableData(),
+            type_mgr,
+            symbols,
+        };
 
-    if (u->Result(0) && u->Val()) {
-        if (u->Result(0)->Type() != u->Val()->Type()) {
-            AddError(u, InstError(u, "result type must match value type"));
+        auto overload = core::intrinsic::LookupUnary(context, u->Op(), u->Val()->Type(),
+                                                     core::EvaluationStage::kRuntime);
+        if (overload != Success) {
+            AddError(u, InstError(u, overload.Failure()));
+            return;
+        }
+
+        if (auto* result = u->Result(0)) {
+            if (overload->return_type != result->Type()) {
+                StringStream err;
+                err << "unary instruction result type (" << result->Type()->FriendlyName()
+                    << ") does not match overload result type ("
+                    << overload->return_type->FriendlyName() << ")";
+                AddError(u, InstError(u, err.str()));
+            }
         }
     }
 }
@@ -856,9 +921,13 @@ void Validator::CheckStore(const Store* s) {
 
     if (auto* from = s->From()) {
         if (auto* to = s->To()) {
-            if (from->Type() != to->Type()->UnwrapPtr()) {
-                AddError(s, Store::kFromOperandOffset,
-                         "value type does not match pointer element type");
+            auto* mv = to->Type()->As<core::type::MemoryView>();
+            if (!mv) {
+                AddError(s, Store::kFromOperandOffset, "store target operand is not a memory view");
+                return;
+            }
+            if (from->Type() != mv->StoreType()) {
+                AddError(s, Store::kFromOperandOffset, "value type does not match store type");
             }
         }
     }

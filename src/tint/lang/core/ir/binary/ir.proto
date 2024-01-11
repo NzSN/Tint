@@ -413,6 +413,9 @@ enum AccessControl {
 enum UnaryOp {
     complement = 0;
     negation = 1;
+    address_of = 2;
+    indirection = 3;
+    not = 4;
 }
 
 enum BinaryOp {
@@ -432,6 +435,8 @@ enum BinaryOp {
     greater_than_equal = 13;
     shift_left = 14;
     shift_right = 15;
+    logical_and = 16;
+    logical_or = 17;
 }
 
 enum TextureDimension {

@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,30 +25,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/spirv/writer/writer.h"
+#ifndef SRC_TINT_LANG_CORE_IR_CORE_UNARY_H_
+#define SRC_TINT_LANG_CORE_IR_CORE_UNARY_H_
 
-#include "src/tint/cmd/fuzz/ir/fuzz.h"
-#include "src/tint/lang/spirv/validate/validate.h"
-#include "src/tint/lang/spirv/writer/helpers/generate_bindings.h"
+#include "src/tint/lang/core/ir/unary.h"
 
-namespace tint::spirv::writer {
-namespace {
+namespace tint::core::ir {
 
-void IRPrinterFuzzer(core::ir::Module& module, Options options) {
-    options.bindings = GenerateBindings(module);
-    auto output = Generate(module, options);
-    if (output != Success) {
-        return;
-    }
-    auto& spirv = output->spirv;
-    if (auto res = validate::Validate(Slice(spirv.data(), spirv.size()), SPV_ENV_VULKAN_1_1);
-        res != Success) {
-        TINT_ICE() << "Output of SPIR-V writer failed to validate with SPIR-V Tools\n"
-                   << res.Failure();
-    }
-}
+/// A core-dialect unary instruction in the IR.
+class CoreUnary final : public Castable<CoreUnary, Unary> {
+  public:
+    /// The offset in Operands() for the value
+    static constexpr size_t kValueOperandOffset = 0;
 
-}  // namespace
-}  // namespace tint::spirv::writer
+    /// Constructor (no results, no operands)
+    CoreUnary();
 
-TINT_IR_MODULE_FUZZER(tint::spirv::writer::IRPrinterFuzzer);
+    /// Constructor
+    /// @param result the result value
+    /// @param op the unary operator
+    /// @param val the input value for the instruction
+    CoreUnary(InstructionResult* result, UnaryOp op, Value* val);
+    ~CoreUnary() override;
+
+    /// @copydoc Instruction::Clone()
+    CoreUnary* Clone(CloneContext& ctx) override;
+
+    /// @returns the table data to validate this builtin
+    const core::intrinsic::TableData& TableData() const override;
+};
+
+}  // namespace tint::core::ir
+
+#endif  // SRC_TINT_LANG_CORE_IR_CORE_UNARY_H_

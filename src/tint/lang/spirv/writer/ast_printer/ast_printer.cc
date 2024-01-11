@@ -28,8 +28,6 @@
 #include "src/tint/lang/spirv/writer/ast_printer/ast_printer.h"
 
 #include <unordered_map>
-#include <utility>
-#include <vector>
 
 #include "src/tint/lang/spirv/writer/ast_raise/clamp_frag_depth.h"
 #include "src/tint/lang/spirv/writer/ast_raise/for_loop_to_loop.h"
@@ -140,7 +138,7 @@ SanitizedResult Sanitize(const Program& in, const Options& options) {
         polyfills.first_leading_bit = true;
         polyfills.first_trailing_bit = true;
         polyfills.insert_bits = ast::transform::BuiltinPolyfill::Level::kClampParameters;
-        polyfills.int_div_mod = true;
+        polyfills.int_div_mod = !options.disable_polyfill_integer_div_mod;
         polyfills.saturate = true;
         polyfills.texture_sample_base_clamp_to_edge_2d_f32 = true;
         polyfills.quantize_to_vec_f16 = true;  // crbug.com/tint/1741

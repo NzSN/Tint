@@ -28,6 +28,7 @@
 #ifndef SRC_TINT_API_OPTIONS_PIXEL_LOCAL_H_
 #define SRC_TINT_API_OPTIONS_PIXEL_LOCAL_H_
 
+#include <cstdint>
 #include <unordered_map>
 
 #include "src/tint/utils/reflection/reflection.h"
