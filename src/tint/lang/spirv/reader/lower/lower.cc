@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,35 +25,30 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/features/status.h"
+#include "src/tint/lang/spirv/reader/lower/lower.h"
 
-#include "src/tint/lang/wgsl/features/language_feature.h"
+#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/spirv/reader/lower/vector_element_pointer.h"
 
-namespace tint::wgsl {
+namespace tint::spirv::reader {
 
-FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
-    switch (f) {
-        case LanguageFeature::kPacked4X8IntegerDotProduct:
-        case LanguageFeature::kPointerCompositeAccess:
-        case LanguageFeature::kReadonlyAndReadwriteStorageTextures:
-        case LanguageFeature::kUnrestrictedPointerParameters:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kUndefined:
-            return FeatureStatus::kUnknown;
+Result<SuccessType> Lower(core::ir::Module& mod) {
+#define RUN_TRANSFORM(name, ...)         \
+    do {                                 \
+        auto result = name(__VA_ARGS__); \
+        if (result != Success) {         \
+            return result;               \
+        }                                \
+    } while (false)
 
-        case LanguageFeature::kChromiumTestingUnimplemented:
-            return FeatureStatus::kUnimplemented;
-        case LanguageFeature::kChromiumTestingUnsafeExperimental:
-            return FeatureStatus::kUnsafeExperimental;
-        case LanguageFeature::kChromiumTestingExperimental:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kChromiumTestingShippedWithKillswitch:
-            return FeatureStatus::kShippedWithKillswitch;
-        case LanguageFeature::kChromiumTestingShipped:
-            return FeatureStatus::kShipped;
+    RUN_TRANSFORM(lower::VectorElementPointer, mod);
+
+    if (auto res = core::ir::ValidateAndDumpIfNeeded(mod, "end of lowering from SPIR-V");
+        res != Success) {
+        return res.Failure();
     }
 
-    return FeatureStatus::kUnknown;
+    return Success;
 }
 
-}  // namespace tint::wgsl
+}  // namespace tint::spirv::reader

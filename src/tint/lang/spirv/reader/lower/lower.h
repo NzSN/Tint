@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,35 +25,19 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/features/status.h"
+#ifndef SRC_TINT_LANG_SPIRV_READER_LOWER_LOWER_H_
+#define SRC_TINT_LANG_SPIRV_READER_LOWER_LOWER_H_
 
-#include "src/tint/lang/wgsl/features/language_feature.h"
+#include "src/tint/lang/core/ir/module.h"
+#include "src/tint/utils/result/result.h"
 
-namespace tint::wgsl {
+namespace tint::spirv::reader {
 
-FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
-    switch (f) {
-        case LanguageFeature::kPacked4X8IntegerDotProduct:
-        case LanguageFeature::kPointerCompositeAccess:
-        case LanguageFeature::kReadonlyAndReadwriteStorageTextures:
-        case LanguageFeature::kUnrestrictedPointerParameters:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kUndefined:
-            return FeatureStatus::kUnknown;
+/// Lower converts a SPIR-V-dialect IR module to a core-dialect IR module
+/// @param  mod the IR module
+/// @return the result of the operation
+Result<SuccessType> Lower(core::ir::Module& mod);
 
-        case LanguageFeature::kChromiumTestingUnimplemented:
-            return FeatureStatus::kUnimplemented;
-        case LanguageFeature::kChromiumTestingUnsafeExperimental:
-            return FeatureStatus::kUnsafeExperimental;
-        case LanguageFeature::kChromiumTestingExperimental:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kChromiumTestingShippedWithKillswitch:
-            return FeatureStatus::kShippedWithKillswitch;
-        case LanguageFeature::kChromiumTestingShipped:
-            return FeatureStatus::kShipped;
-    }
+}  // namespace tint::spirv::reader
 
-    return FeatureStatus::kUnknown;
-}
-
-}  // namespace tint::wgsl
+#endif  // SRC_TINT_LANG_SPIRV_READER_LOWER_LOWER_H_

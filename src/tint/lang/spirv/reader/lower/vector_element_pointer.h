@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,35 +25,24 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/features/status.h"
+#ifndef SRC_TINT_LANG_SPIRV_READER_LOWER_VECTOR_ELEMENT_POINTER_H_
+#define SRC_TINT_LANG_SPIRV_READER_LOWER_VECTOR_ELEMENT_POINTER_H_
 
-#include "src/tint/lang/wgsl/features/language_feature.h"
+#include "src/tint/utils/result/result.h"
 
-namespace tint::wgsl {
-
-FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
-    switch (f) {
-        case LanguageFeature::kPacked4X8IntegerDotProduct:
-        case LanguageFeature::kPointerCompositeAccess:
-        case LanguageFeature::kReadonlyAndReadwriteStorageTextures:
-        case LanguageFeature::kUnrestrictedPointerParameters:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kUndefined:
-            return FeatureStatus::kUnknown;
-
-        case LanguageFeature::kChromiumTestingUnimplemented:
-            return FeatureStatus::kUnimplemented;
-        case LanguageFeature::kChromiumTestingUnsafeExperimental:
-            return FeatureStatus::kUnsafeExperimental;
-        case LanguageFeature::kChromiumTestingExperimental:
-            return FeatureStatus::kExperimental;
-        case LanguageFeature::kChromiumTestingShippedWithKillswitch:
-            return FeatureStatus::kShippedWithKillswitch;
-        case LanguageFeature::kChromiumTestingShipped:
-            return FeatureStatus::kShipped;
-    }
-
-    return FeatureStatus::kUnknown;
+// Forward declarations.
+namespace tint::core::ir {
+class Module;
 }
 
-}  // namespace tint::wgsl
+namespace tint::spirv::reader::lower {
+
+/// VectorElementPointer is a transform that removes pointers to vector elements by replacing access
+/// instructions and their uses.
+/// @param module the module to transform
+/// @returns success or failure
+Result<SuccessType> VectorElementPointer(core::ir::Module& module);
+
+}  // namespace tint::spirv::reader::lower
+
+#endif  // SRC_TINT_LANG_SPIRV_READER_LOWER_VECTOR_ELEMENT_POINTER_H_
