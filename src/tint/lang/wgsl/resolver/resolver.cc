@@ -634,11 +634,11 @@ sem::Variable* Resolver::Var(const ast::Var* var, bool is_global) {
                     global->Attributes().location = value.Get();
                     return kSuccess;
                 },
-                [&](const ast::IndexAttribute* attr) {
+                [&](const ast::BlendSrcAttribute* attr) {
                     if (!has_io_address_space) {
                         return kInvalid;
                     }
-                    auto value = IndexAttribute(attr);
+                    auto value = BlendSrcAttribute(attr);
                     if (value != Success) {
                         return kErrored;
                     }
@@ -1080,8 +1080,8 @@ sem::Function* Resolver::Function(const ast::Function* decl) {
                     func->SetReturnLocation(value.Get());
                     return kSuccess;
                 },
-                [&](const ast::IndexAttribute* attr) {
-                    auto value = IndexAttribute(attr);
+                [&](const ast::BlendSrcAttribute* attr) {
+                    auto value = BlendSrcAttribute(attr);
                     if (value != Success) {
                         return kErrored;
                     }
@@ -1666,13 +1666,25 @@ sem::BuiltinEnumExpression<core::InterpolationType>* Resolver::InterpolationType
 }
 
 void Resolver::RegisterStore(const sem::ValueExpression* expr) {
-    auto& info = alias_analysis_infos_[current_function_];
     Switch(
         expr->RootIdentifier(),
         [&](const sem::GlobalVariable* global) {
-            info.module_scope_writes.insert({global, expr});
+            alias_analysis_infos_[current_function_].module_scope_writes.Add(global, expr);
         },
-        [&](const sem::Parameter* param) { info.parameter_writes.insert(param); });
+        [&](const sem::Parameter* param) {
+            alias_analysis_infos_[current_function_].parameter_writes.Add(param);
+        });
+}
+
+void Resolver::RegisterLoad(const sem::ValueExpression* expr) {
+    Switch(
+        expr->RootIdentifier(),
+        [&](const sem::GlobalVariable* global) {
+            alias_analysis_infos_[current_function_].module_scope_reads.Add(global, expr);
+        },
+        [&](const sem::Parameter* param) {
+            alias_analysis_infos_[current_function_].parameter_reads.Add(param);
+        });
 }
 
 bool Resolver::AliasAnalysis(const sem::Call* call) {
@@ -1716,8 +1728,8 @@ bool Resolver::AliasAnalysis(const sem::Call* call) {
 
     // Track the set of root identifiers that are read and written by arguments passed in this
     // call.
-    std::unordered_map<const sem::Variable*, const sem::ValueExpression*> arg_reads;
-    std::unordered_map<const sem::Variable*, const sem::ValueExpression*> arg_writes;
+    Hashmap<const sem::Variable*, const sem::ValueExpression*, 4> arg_reads;
+    Hashmap<const sem::Variable*, const sem::ValueExpression*, 4> arg_writes;
     for (size_t i = 0; i < args.Length(); i++) {
         auto* arg = args[i];
         if (!arg->Type()->Is<core::type::Pointer>()) {
@@ -1725,60 +1737,57 @@ bool Resolver::AliasAnalysis(const sem::Call* call) {
         }
 
         auto* root = arg->RootIdentifier();
-        if (target_info.parameter_writes.count(target->Parameters()[i])) {
+        if (target_info.parameter_writes.Contains(target->Parameters()[i])) {
             // Arguments that are written to can alias with any other argument or module-scope
             // variable access.
-            if (arg_writes.count(root)) {
-                return make_error(arg, {arg_writes.at(root), Alias::Argument, "write"});
+            if (auto write = arg_writes.Get(root)) {
+                return make_error(arg, {*write, Alias::Argument, "write"});
             }
-            if (arg_reads.count(root)) {
-                return make_error(arg, {arg_reads.at(root), Alias::Argument, "read"});
+            if (auto read = arg_reads.Get(root)) {
+                return make_error(arg, {*read, Alias::Argument, "read"});
             }
-            if (target_info.module_scope_reads.count(root)) {
-                return make_error(
-                    arg, {target_info.module_scope_reads.at(root), Alias::ModuleScope, "read"});
+            if (auto read = target_info.module_scope_reads.Get(root)) {
+                return make_error(arg, {*read, Alias::ModuleScope, "read"});
             }
-            if (target_info.module_scope_writes.count(root)) {
-                return make_error(
-                    arg, {target_info.module_scope_writes.at(root), Alias::ModuleScope, "write"});
+            if (auto write = target_info.module_scope_writes.Get(root)) {
+                return make_error(arg, {*write, Alias::ModuleScope, "write"});
             }
-            arg_writes.insert({root, arg});
+            arg_writes.Add(root, arg);
 
             // Propagate the write access to the caller.
             Switch(
                 root,
                 [&](const sem::GlobalVariable* global) {
-                    caller_info.module_scope_writes.insert({global, arg});
+                    caller_info.module_scope_writes.Add(global, arg);
                 },
-                [&](const sem::Parameter* param) { caller_info.parameter_writes.insert(param); });
-        } else if (target_info.parameter_reads.count(target->Parameters()[i])) {
+                [&](const sem::Parameter* param) { caller_info.parameter_writes.Add(param); });
+        } else if (target_info.parameter_reads.Contains(target->Parameters()[i])) {
             // Arguments that are read from can alias with arguments or module-scope variables
             // that are written to.
-            if (arg_writes.count(root)) {
-                return make_error(arg, {arg_writes.at(root), Alias::Argument, "write"});
+            if (auto write = arg_writes.Get(root)) {
+                return make_error(arg, {*write, Alias::Argument, "write"});
             }
-            if (target_info.module_scope_writes.count(root)) {
-                return make_error(
-                    arg, {target_info.module_scope_writes.at(root), Alias::ModuleScope, "write"});
+            if (auto write = target_info.module_scope_writes.Get(root)) {
+                return make_error(arg, {*write, Alias::ModuleScope, "write"});
             }
-            arg_reads.insert({root, arg});
+            arg_reads.Add(root, arg);
 
             // Propagate the read access to the caller.
             Switch(
                 root,
                 [&](const sem::GlobalVariable* global) {
-                    caller_info.module_scope_reads.insert({global, arg});
+                    caller_info.module_scope_reads.Add(global, arg);
                 },
-                [&](const sem::Parameter* param) { caller_info.parameter_reads.insert(param); });
+                [&](const sem::Parameter* param) { caller_info.parameter_reads.Add(param); });
         }
     }
 
     // Propagate module-scope variable uses to the caller.
     for (auto read : target_info.module_scope_reads) {
-        caller_info.module_scope_reads.insert({read.first, read.second});
+        caller_info.module_scope_reads.Add(read.key, read.value);
     }
     for (auto write : target_info.module_scope_writes) {
-        caller_info.module_scope_writes.insert({write.first, write.second});
+        caller_info.module_scope_writes.Add(write.key, write.value);
     }
 
     return true;
@@ -1848,14 +1857,8 @@ const sem::ValueExpression* Resolver::Load(const sem::ValueExpression* expr) {
     load->Behaviors() = expr->Behaviors();
     b.Sem().Replace(expr->Declaration(), load);
 
-    // Track the load for the alias analysis.
-    auto& alias_info = alias_analysis_infos_[current_function_];
-    Switch(
-        expr->RootIdentifier(),
-        [&](const sem::GlobalVariable* global) {
-            alias_info.module_scope_reads.insert({global, expr});
-        },
-        [&](const sem::Parameter* param) { alias_info.parameter_reads.insert(param); });
+    // Register the load for the alias analysis.
+    RegisterLoad(expr);
 
     return load;
 }
@@ -2128,10 +2131,11 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
         // Is this overload a constructor or conversion?
         if (match->info->flags.Contains(OverloadFlag::kIsConstructor)) {
             // Type constructor
-            auto params = Transform(match->parameters, [&](auto& p, size_t i) {
-                return b.create<sem::Parameter>(nullptr, static_cast<uint32_t>(i), p.type, p.usage);
-            });
             target_sem = constructors_.GetOrCreate(match.Get(), [&] {
+                auto params = Transform(match->parameters, [&](auto& p, size_t i) {
+                    return b.create<sem::Parameter>(nullptr, static_cast<uint32_t>(i), p.type,
+                                                    p.usage);
+                });
                 return b.create<sem::ValueConstructor>(match->return_type, std::move(params),
                                                        overload_stage);
             });
@@ -2474,16 +2478,43 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         CollectTextureSamplerPairs(target, call->Arguments());
     }
 
-    if (fn == wgsl::BuiltinFn::kWorkgroupUniformLoad) {
-        if (!validator_.WorkgroupUniformLoad(call)) {
-            return nullptr;
-        }
-    }
+    switch (fn) {
+        case wgsl::BuiltinFn::kWorkgroupUniformLoad:
+            if (!validator_.WorkgroupUniformLoad(call)) {
+                return nullptr;
+            }
+            RegisterLoad(args[0]);
+            break;
 
-    if (fn == wgsl::BuiltinFn::kSubgroupBroadcast) {
-        if (!validator_.SubgroupBroadcast(call)) {
-            return nullptr;
-        }
+        case wgsl::BuiltinFn::kSubgroupBroadcast:
+            if (!validator_.SubgroupBroadcast(call)) {
+                return nullptr;
+            }
+            break;
+
+        case wgsl::BuiltinFn::kAtomicLoad:
+            RegisterLoad(args[0]);
+            break;
+
+        case wgsl::BuiltinFn::kAtomicStore:
+            RegisterStore(args[0]);
+            break;
+
+        case wgsl::BuiltinFn::kAtomicAdd:
+        case wgsl::BuiltinFn::kAtomicSub:
+        case wgsl::BuiltinFn::kAtomicMax:
+        case wgsl::BuiltinFn::kAtomicMin:
+        case wgsl::BuiltinFn::kAtomicAnd:
+        case wgsl::BuiltinFn::kAtomicOr:
+        case wgsl::BuiltinFn::kAtomicXor:
+        case wgsl::BuiltinFn::kAtomicExchange:
+        case wgsl::BuiltinFn::kAtomicCompareExchangeWeak:
+            RegisterLoad(args[0]);
+            RegisterStore(args[0]);
+            break;
+
+        default:
+            break;
     }
 
     if (!validator_.BuiltinCall(call)) {
@@ -3496,8 +3527,9 @@ sem::ValueExpression* Resolver::MemberAccessor(const ast::MemberAccessorExpressi
                         swizzle.Push(3u);
                         break;
                     default:
-                        AddError("invalid vector swizzle character",
-                                 expr->member->source.Begin() + swizzle.Length());
+                        AddError(
+                            "invalid vector swizzle character",
+                            expr->member->source.Begin() + static_cast<uint32_t>(swizzle.Length()));
                         return nullptr;
                 }
 
@@ -3790,8 +3822,8 @@ tint::Result<uint32_t> Resolver::ColorAttribute(const ast::ColorAttribute* attr)
 
     return static_cast<uint32_t>(value);
 }
-tint::Result<uint32_t> Resolver::IndexAttribute(const ast::IndexAttribute* attr) {
-    ExprEvalStageConstraint constraint{core::EvaluationStage::kConstant, "@index value"};
+tint::Result<uint32_t> Resolver::BlendSrcAttribute(const ast::BlendSrcAttribute* attr) {
+    ExprEvalStageConstraint constraint{core::EvaluationStage::kConstant, "@blend_src value"};
     TINT_SCOPED_ASSIGNMENT(expr_eval_stage_constraint_, constraint);
 
     auto* materialized = Materialize(ValueExpression(attr->expr));
@@ -3807,7 +3839,7 @@ tint::Result<uint32_t> Resolver::IndexAttribute(const ast::IndexAttribute* attr)
     auto const_value = materialized->ConstantValue();
     auto value = const_value->ValueAs<AInt>();
     if (value != 0 && value != 1) {
-        AddError("@index value must be zero or one", attr->source);
+        AddError("@blend_src value must be zero or one", attr->source);
         return Failure{};
     }
 
@@ -4416,12 +4448,12 @@ sem::Struct* Resolver::Structure(const ast::Struct* str) {
                     attributes.location = value.Get();
                     return true;
                 },
-                [&](const ast::IndexAttribute* attr) {
-                    auto value = IndexAttribute(attr);
+                [&](const ast::BlendSrcAttribute* attr) {
+                    auto value = BlendSrcAttribute(attr);
                     if (value != Success) {
                         return false;
                     }
-                    attributes.index = value.Get();
+                    attributes.blend_src = value.Get();
                     return true;
                 },
                 [&](const ast::ColorAttribute* attr) {
@@ -4848,7 +4880,7 @@ bool Resolver::ApplyAddressSpaceUsageToType(core::AddressSpace address_space,
     ty = const_cast<core::type::Type*>(ty->UnwrapRef());
 
     if (auto* str = ty->As<sem::Struct>()) {
-        if (str->AddressSpaceUsage().count(address_space)) {
+        if (str->AddressSpaceUsage().Contains(address_space)) {
             return true;  // Already applied
         }
 

@@ -35,7 +35,6 @@
 #include "src/tint/api/options/binding_remapper.h"
 #include "src/tint/api/options/external_texture.h"
 #include "src/tint/api/options/texture_builtins_from_uniform.h"
-#include "src/tint/lang/core/access.h"
 #include "src/tint/lang/glsl/writer/common/version.h"
 #include "src/tint/lang/wgsl/sem/sampler_texture_pair.h"
 
@@ -80,10 +79,13 @@ struct Options {
     /// Options used in the binding mappings for external textures
     ExternalTextureOptions external_texture_options = {};
 
+    /// Offset of the firstInstance push constant.
+    std::optional<int32_t> first_instance_offset;
+
     /// Options used to map WGSL textureNumLevels/textureNumSamples builtins to internal uniform
     /// buffer values. If not specified, emits corresponding GLSL builtins
     /// textureQueryLevels/textureSamples directly.
-    std::optional<TextureBuiltinsFromUniformOptions> texture_builtins_from_uniform = std::nullopt;
+    TextureBuiltinsFromUniformOptions texture_builtins_from_uniform = {};
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(disable_robustness,

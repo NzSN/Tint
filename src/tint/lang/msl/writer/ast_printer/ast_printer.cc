@@ -2798,22 +2798,24 @@ bool ASTPrinter::EmitStructType(TextBuffer* b, const core::type::Struct* str) {
 
         if (auto location = attributes.location) {
             auto& pipeline_stage_uses = str->PipelineStageUses();
-            if (TINT_UNLIKELY(pipeline_stage_uses.size() != 1)) {
+            if (TINT_UNLIKELY(pipeline_stage_uses.Count() != 1)) {
                 TINT_ICE() << "invalid entry point IO struct uses for " << str->Name().NameView();
                 return false;
             }
 
-            if (pipeline_stage_uses.count(core::type::PipelineStageUsage::kVertexInput)) {
+            if (pipeline_stage_uses.Contains(core::type::PipelineStageUsage::kVertexInput)) {
                 out << " [[attribute(" + std::to_string(location.value()) + ")]]";
-            } else if (pipeline_stage_uses.count(core::type::PipelineStageUsage::kVertexOutput)) {
+            } else if (pipeline_stage_uses.Contains(
+                           core::type::PipelineStageUsage::kVertexOutput)) {
                 out << " [[user(locn" + std::to_string(location.value()) + ")]]";
-            } else if (pipeline_stage_uses.count(core::type::PipelineStageUsage::kFragmentInput)) {
+            } else if (pipeline_stage_uses.Contains(
+                           core::type::PipelineStageUsage::kFragmentInput)) {
                 out << " [[user(locn" + std::to_string(location.value()) + ")]]";
-            } else if (TINT_LIKELY(pipeline_stage_uses.count(
+            } else if (TINT_LIKELY(pipeline_stage_uses.Contains(
                            core::type::PipelineStageUsage::kFragmentOutput))) {
-                if (auto index = attributes.index) {
+                if (auto blend_src = attributes.blend_src) {
                     out << " [[color(" + std::to_string(location.value()) + ") index(" +
-                               std::to_string(index.value()) + ")]]";
+                               std::to_string(blend_src.value()) + ")]]";
                 } else {
                     out << " [[color(" + std::to_string(location.value()) + ")]]";
                 }
@@ -3018,16 +3020,17 @@ bool ASTPrinter::EmitLet(const ast::Let* let) {
     return true;
 }
 
-std::string_view ASTPrinter::IsolateUB() {
+std::string ASTPrinter::IsolateUB() {
     if (isolate_ub_macro_name_.empty()) {
         isolate_ub_macro_name_ = UniqueIdentifier("TINT_ISOLATE_UB");
-        auto volatile_true = UniqueIdentifier("tint_volatile_true");
-        Line(&helpers_) << "#define " << isolate_ub_macro_name_ << " \\";
-        Line(&helpers_) << "  if (volatile bool " << volatile_true << " = true; " << volatile_true
-                        << ")";
+        Line(&helpers_) << "#define " << isolate_ub_macro_name_ << "(VOLATILE_NAME) \\";
+        Line(&helpers_) << "  volatile bool VOLATILE_NAME = true; \\";
+        Line(&helpers_) << "  if (VOLATILE_NAME)";
         Line(&helpers_);
     }
-    return isolate_ub_macro_name_;
+    StringStream ss;
+    ss << isolate_ub_macro_name_ << "(" << UniqueIdentifier("tint_volatile_true") << ")";
+    return ss.str();
 }
 
 template <typename F>

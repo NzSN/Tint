@@ -425,9 +425,9 @@ bool ASTPrinter::Generate() {
             [&](const ast::Struct* str) {
                 auto* ty = builder_.Sem().Get(str);
                 auto address_space_uses = ty->AddressSpaceUsage();
-                if (address_space_uses.size() !=
-                    (address_space_uses.count(core::AddressSpace::kStorage) +
-                     address_space_uses.count(core::AddressSpace::kUniform))) {
+                if (address_space_uses.Count() !=
+                    ((address_space_uses.Contains(core::AddressSpace::kStorage) ? 1u : 0u) +
+                     (address_space_uses.Contains(core::AddressSpace::kUniform) ? 1u : 0u))) {
                     // The structure is used as something other than a storage buffer or
                     // uniform buffer, so it needs to be emitted.
                     // Storage buffer are read and written to via a ByteAddressBuffer
@@ -461,15 +461,7 @@ bool ASTPrinter::Generate() {
 bool ASTPrinter::EmitDynamicVectorAssignment(const ast::AssignmentStatement* stmt,
                                              const core::type::Vector* vec) {
     auto name = tint::GetOrCreate(dynamic_vector_write_, vec, [&]() -> std::string {
-        std::string fn;
-        {
-            StringStream ss;
-            if (!EmitType(ss, vec, tint::core::AddressSpace::kUndefined, core::Access::kUndefined,
-                          "")) {
-                return "";
-            }
-            fn = UniqueIdentifier("set_" + ss.str());
-        }
+        std::string fn = UniqueIdentifier("set_vector_element");
         {
             auto out = Line(&helpers_);
             out << "void " << fn << "(inout ";
@@ -534,15 +526,7 @@ bool ASTPrinter::EmitDynamicVectorAssignment(const ast::AssignmentStatement* stm
 bool ASTPrinter::EmitDynamicMatrixVectorAssignment(const ast::AssignmentStatement* stmt,
                                                    const core::type::Matrix* mat) {
     auto name = tint::GetOrCreate(dynamic_matrix_vector_write_, mat, [&]() -> std::string {
-        std::string fn;
-        {
-            StringStream ss;
-            if (!EmitType(ss, mat, tint::core::AddressSpace::kUndefined, core::Access::kUndefined,
-                          "")) {
-                return "";
-            }
-            fn = UniqueIdentifier("set_vector_" + ss.str());
-        }
+        std::string fn = UniqueIdentifier("set_matrix_column");
         {
             auto out = Line(&helpers_);
             out << "void " << fn << "(inout ";
@@ -603,15 +587,7 @@ bool ASTPrinter::EmitDynamicMatrixScalarAssignment(const ast::AssignmentStatemen
     auto* lhs_col_access = lhs_row_access->object->As<ast::IndexAccessorExpression>();
 
     auto name = tint::GetOrCreate(dynamic_matrix_scalar_write_, mat, [&]() -> std::string {
-        std::string fn;
-        {
-            StringStream ss;
-            if (!EmitType(ss, mat, tint::core::AddressSpace::kUndefined, core::Access::kUndefined,
-                          "")) {
-                return "";
-            }
-            fn = UniqueIdentifier("set_scalar_" + ss.str());
-        }
+        std::string fn = UniqueIdentifier("set_matrix_scalar");
         {
             auto out = Line(&helpers_);
             out << "void " << fn << "(inout ";
@@ -4578,21 +4554,22 @@ bool ASTPrinter::EmitStructType(TextBuffer* b, const core::type::Struct* str) {
 
             if (auto location = attributes.location) {
                 auto& pipeline_stage_uses = str->PipelineStageUses();
-                if (TINT_UNLIKELY(pipeline_stage_uses.size() != 1)) {
+                if (TINT_UNLIKELY(pipeline_stage_uses.Count() != 1)) {
                     TINT_ICE() << "invalid entry point IO struct uses";
                 }
-                if (pipeline_stage_uses.count(core::type::PipelineStageUsage::kVertexInput)) {
+                if (pipeline_stage_uses.Contains(core::type::PipelineStageUsage::kVertexInput)) {
                     post += " : TEXCOORD" + std::to_string(location.value());
-                } else if (pipeline_stage_uses.count(
+                } else if (pipeline_stage_uses.Contains(
                                core::type::PipelineStageUsage::kVertexOutput)) {
                     post += " : TEXCOORD" + std::to_string(location.value());
-                } else if (pipeline_stage_uses.count(
+                } else if (pipeline_stage_uses.Contains(
                                core::type::PipelineStageUsage::kFragmentInput)) {
                     post += " : TEXCOORD" + std::to_string(location.value());
-                } else if (TINT_LIKELY(pipeline_stage_uses.count(
+                } else if (TINT_LIKELY(pipeline_stage_uses.Contains(
                                core::type::PipelineStageUsage::kFragmentOutput))) {
-                    if (auto index = attributes.index) {
-                        post += " : SV_Target" + std::to_string(location.value() + index.value());
+                    if (auto blend_src = attributes.blend_src) {
+                        post +=
+                            " : SV_Target" + std::to_string(location.value() + blend_src.value());
                     } else {
                         post += " : SV_Target" + std::to_string(location.value());
                     }
@@ -4688,41 +4665,11 @@ bool ASTPrinter::EmitVar(const ast::Var* var) {
     return true;
 }
 
-bool ASTPrinter::IsStructOrArrayOfMatrix(const core::type::Type* ty) {
-    if (!ty->IsAnyOf<core::type::Struct, core::type::Array>()) {
-        return false;
-    }
-    return GetOrCreate(is_struct_or_array_of_matrix_, ty, [&]() {
-        Vector<const core::type::Type*, 4> to_visit({ty});
-        while (!to_visit.IsEmpty()) {
-            auto* curr = to_visit.Pop();
-            if (curr->Is<core::type::Matrix>()) {
-                return true;
-            }
-            auto [child_ty, child_count] = curr->Elements();
-            if (child_ty) {
-                to_visit.Push(child_ty);
-            } else {
-                for (uint32_t i = 0; i < child_count; ++i) {
-                    to_visit.Push(curr->Element(i));
-                }
-            }
-        }
-        return false;
-    });
-}
-
 bool ASTPrinter::EmitLet(const ast::Let* let) {
     auto* sem = builder_.Sem().Get(let);
     auto* type = sem->Type()->UnwrapRef();
 
     auto out = Line();
-
-    // TODO(crbug.com/tint/2059): Workaround DXC bug with const instances of struct/array-of-matrix.
-    if (!IsStructOrArrayOfMatrix(type)) {
-        out << "const ";
-    }
-
     if (!EmitTypeAndName(out, type, core::AddressSpace::kUndefined, core::Access::kUndefined,
                          let->name->symbol.Name())) {
         return false;
