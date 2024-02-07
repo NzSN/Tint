@@ -75,7 +75,6 @@ CLONE_SRC_DIR="$(pwd)"
 . /bin/using.sh # Declare the bash `using` function for configuring toolchains.
 
 using depot_tools
-using doxygen-1.9.5
 
 status "Creating source directory '${SRC_DIR}' and build directory '${BUILD_DIR}'"
 mkdir -p ${SRC_DIR}
@@ -116,17 +115,6 @@ if [ "$BUILD_SYSTEM" == "cmake" ]; then
     fi
 
     cd ${BUILD_DIR}
-
-    status "Running Doxygen"
-    echo "NOTE: This will fail on first warning. Run with -DTINT_DOCS_WARN_AS_ERROR=OFF to see all warnings".
-    echo ""
-    show_cmds
-        # NOTE: If we upgrade Doxygen to a more recent version, we can set DOXYGEN_WARN_AS_ERROR to
-        # "FAIL_ON_WARNINGS" instead of "YES" in our CMakeLists.txt so see all warnings, and then
-        # fail. See https://www.doxygen.nl/manual/config.html#cfg_warn_as_error
-        cmake ${SRC_DIR} ${CMAKE_FLAGS} ${COMMON_CMAKE_FLAGS}
-        cmake --build . --target tint-docs
-    hide_cmds
 
     status "Building tint in '${BUILD_DIR}'"
     show_cmds

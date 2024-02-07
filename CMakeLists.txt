@@ -33,13 +33,10 @@ get_directory_property(TINT_IS_SUBPROJECT PARENT_DIRECTORY)
 if(TINT_IS_SUBPROJECT)
   set(TINT_IS_SUBPROJECT 1)
 
-  # If tint is used as a subproject, default to disabling the building of
-  # documentation and tests. These are unlikely to be desirable, but can be
-  # enabled.
-  set(TINT_BUILD_DOCS_DEFAULT OFF)
+  # If tint is used as a subproject, default to disabling the building tests.
+  # These are unlikely to be desirable, but can be enabled.
   set(TINT_BUILD_TESTS_DEFAULT OFF)
 else()
-  set(TINT_BUILD_DOCS_DEFAULT ON)
   set(TINT_BUILD_TESTS_DEFAULT ON)
 endif()
 
@@ -84,7 +81,6 @@ set_if_not_defined(TINT_VULKAN_HEADERS_DIR "${TINT_VULKAN_DEPS_DIR}/vulkan-heade
 set_if_not_defined(TINT_VULKAN_TOOLS_DIR "${TINT_VULKAN_DEPS_DIR}/vulkan-tools/src" "Directory in which to find Vulkan-Tools")
 
 option_if_not_defined(TINT_BUILD_CMD_TOOLS "Build the Tint command line tools" ON)
-option_if_not_defined(TINT_BUILD_DOCS "Build documentation" ${TINT_BUILD_DOCS_DEFAULT})
 option_if_not_defined(TINT_DOCS_WARN_AS_ERROR "When building documentation, treat warnings as errors" OFF)
 option_if_not_defined(TINT_BUILD_SPV_READER "Build the SPIR-V input reader" ON)
 option_if_not_defined(TINT_BUILD_WGSL_READER "Build the WGSL input reader" ON)
@@ -121,7 +117,6 @@ option_if_not_defined(TINT_CHECK_CHROMIUM_STYLE "Check for [chromium-style] issu
 option_if_not_defined(TINT_SYMBOL_STORE_DEBUG_NAME "Enable storing of name in tint::ast::Symbol to help debugging the AST" OFF)
 
 message(STATUS "Tint build command line executable tools: ${TINT_BUILD_CMD_TOOLS}")
-message(STATUS "Tint build docs: ${TINT_BUILD_DOCS}")
 message(STATUS "Tint build docs with warn as error: ${TINT_DOCS_WARN_AS_ERROR}")
 message(STATUS "Tint build SPIR-V reader: ${TINT_BUILD_SPV_READER}")
 message(STATUS "Tint build WGSL reader: ${TINT_BUILD_WGSL_READER}")
@@ -310,34 +305,6 @@ if (NOT TINT_BUILD_AS_OTHER_OS)
     set(TINT_OS_CC_SUFFIX "windows")
     set(TINT_OS_CC_SUFFIX "windows")
   endif()
-endif()
-
-if(${TINT_BUILD_DOCS})
-  find_package(Doxygen)
-  if(DOXYGEN_FOUND)
-    set(DOXYGEN_WARN_AS_ERROR NO)
-    if(TINT_DOCS_WARN_AS_ERROR)
-      set(DOXYGEN_WARN_AS_ERROR YES)
-    endif()
-
-    set(DOXYGEN_WARN_FORMAT "$file:$line: $text")
-    if (MSVC)
-      set(DOXYGEN_WARN_FORMAT "$file($line): $text")
-    endif()
-
-    add_custom_target(tint-docs ALL
-        COMMAND ${CMAKE_COMMAND}
-          -E env
-          "DOXYGEN_OUTPUT_DIRECTORY=${CMAKE_BINARY_DIR}/docs"
-          "DOXYGEN_WARN_AS_ERROR=${DOXYGEN_WARN_AS_ERROR}"
-          "DOXYGEN_WARN_FORMAT=${DOXYGEN_WARN_FORMAT}"
-          ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating API documentation"
-        VERBATIM)
-  else()
-    message("Doxygen not found. Skipping documentation")
-  endif(DOXYGEN_FOUND)
 endif()
 
 function(tint_core_compile_options TARGET)
