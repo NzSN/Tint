@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,38 +25,29 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_SPIRV_WRITER_RAISE_SHADER_IO_H_
-#define SRC_TINT_LANG_SPIRV_WRITER_RAISE_SHADER_IO_H_
+#ifndef SRC_TINT_UTILS_MEMORY_ALIGNED_STORAGE_H_
+#define SRC_TINT_UTILS_MEMORY_ALIGNED_STORAGE_H_
 
-#include <string>
+#include <cstddef>
 
-#include "src/tint/utils/diagnostic/diagnostic.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/memory/bitcast.h"
 
-// Forward declarations.
-namespace tint::core::ir {
-class Module;
-}
+namespace tint {
 
-namespace tint::spirv::writer::raise {
+/// A structure that has the same size and alignment as Entry.
+/// Replacement for std::aligned_storage as this is broken on earlier versions of MSVC.
+template <typename T>
+struct alignas(alignof(T)) AlignedStorage {
+    /// Byte array of length sizeof(T)
+    std::byte data[sizeof(T)];
 
-/// ShaderIOConfig describes the set of configuration options for the ShaderIO transform.
-struct ShaderIOConfig {
-    /// true if frag_depth builtin outputs should be clamped
-    bool clamp_frag_depth = false;
-    /// true if a vertex point size builtin output should be added
-    bool emit_vertex_point_size = false;
-    /// true if f16 IO types should be replaced with f32 types and converted
-    bool polyfill_f16_io = false;
+    /// @returns a pointer to aligned storage, reinterpreted as T&
+    T& Get() { return *Bitcast<T*>(&data[0]); }
+
+    /// @returns a pointer to aligned storage, reinterpreted as T&
+    const T& Get() const { return *Bitcast<const T*>(&data[0]); }
 };
 
-/// ShaderIO is a transform that moves each entry point function's parameters and return value to
-/// global variables to prepare them for SPIR-V codegen.
-/// @param module the module to transform
-/// @param config the configuration
-/// @returns success or failure
-Result<SuccessType> ShaderIO(core::ir::Module& module, const ShaderIOConfig& config);
+}  // namespace tint
 
-}  // namespace tint::spirv::writer::raise
-
-#endif  // SRC_TINT_LANG_SPIRV_WRITER_RAISE_SHADER_IO_H_
+#endif  // SRC_TINT_UTILS_MEMORY_ALIGNED_STORAGE_H_
