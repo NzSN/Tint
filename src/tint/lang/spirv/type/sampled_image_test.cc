@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,45 +25,32 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/utils/diagnostic/formatter.h"
+#include "src/tint/lang/spirv/type/sampled_image.h"
 
-#include "gtest/gtest.h"
-#include "src/tint/utils/diagnostic/diagnostic.h"
+#include <gtest/gtest.h>
 
-namespace tint::diag {
+#include "src/tint/lang/core/type/i32.h"
+#include "src/tint/lang/core/type/u32.h"
+
+namespace tint::spirv::type {
 namespace {
 
-TEST(DiagListTest, CtorInitializerList) {
-    Diagnostic err_a, err_b;
-    err_a.severity = Severity::Error;
-    err_b.severity = Severity::Fatal;
-    List list{err_a, err_b};
-    EXPECT_EQ(list.Count(), 2u);
+TEST(SampledImageTest, Equals) {
+    core::type::I32 i32;
+    core::type::U32 u32;
+    SampledImage a{&i32};
+    SampledImage b{&i32};
+    SampledImage c{&u32};
+
+    EXPECT_TRUE(a.Equals(b));
+    EXPECT_FALSE(a.Equals(c));
 }
 
-TEST(DiagListTest, CtorVectorRef) {
-    Diagnostic err_a, err_b;
-    err_a.severity = Severity::Error;
-    err_b.severity = Severity::Fatal;
-    List list{Vector{err_a, err_b}};
-    EXPECT_EQ(list.Count(), 2u);
-}
-
-TEST(DiagListTest, OwnedFilesShared) {
-    auto file = std::make_shared<Source::File>("path", "content");
-
-    List list_a, list_b;
-    {
-        Diagnostic diag{};
-        diag.source = Source{Source::Range{{0, 0}}, file.get()};
-        list_a.Add(std::move(diag));
-    }
-
-    list_b = list_a;
-
-    ASSERT_EQ(list_b.Count(), list_a.Count());
-    EXPECT_EQ(list_b.begin()->source.file, file.get());
+TEST(SampledImageTest, FriendlyName) {
+    core::type::I32 i32;
+    SampledImage s{&i32};
+    EXPECT_EQ(s.FriendlyName(), "spirv.sampled_image<i32>");
 }
 
 }  // namespace
-}  // namespace tint::diag
+}  // namespace tint::spirv::type
