@@ -27,7 +27,6 @@
 
 #include "src/tint/lang/msl/writer/ast_printer/ast_printer.h"
 
-#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -48,7 +47,6 @@
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
-#include "src/tint/lang/core/type/reference.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
@@ -64,11 +62,8 @@
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/bool_literal_expression.h"
 #include "src/tint/lang/wgsl/ast/call_statement.h"
-#include "src/tint/lang/wgsl/ast/disable_validation_attribute.h"
 #include "src/tint/lang/wgsl/ast/float_literal_expression.h"
-#include "src/tint/lang/wgsl/ast/id_attribute.h"
 #include "src/tint/lang/wgsl/ast/interpolate_attribute.h"
-#include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/ast/transform/array_length_from_uniform.h"
 #include "src/tint/lang/wgsl/ast/transform/binding_remapper.h"
 #include "src/tint/lang/wgsl/ast/transform/builtin_polyfill.h"
@@ -155,11 +150,6 @@ SanitizedResult Sanitize(const Program& in, const Options& options) {
     // ExpandCompoundAssignment must come before BuiltinPolyfill
     manager.Add<ast::transform::ExpandCompoundAssignment>();
 
-    // Build the configs for the internal CanonicalizeEntryPointIO transform.
-    auto entry_point_io_cfg = ast::transform::CanonicalizeEntryPointIO::Config(
-        ast::transform::CanonicalizeEntryPointIO::ShaderStyle::kMsl, options.fixed_sample_mask,
-        options.emit_vertex_point_size);
-
     manager.Add<ast::transform::PreservePadding>();
 
     manager.Add<ast::transform::Unshadow>();
@@ -224,6 +214,10 @@ SanitizedResult Sanitize(const Program& in, const Options& options) {
         manager.Add<PixelLocal>();
     }
 
+    // Build the configs for the internal CanonicalizeEntryPointIO transform.
+    auto entry_point_io_cfg = ast::transform::CanonicalizeEntryPointIO::Config(
+        ast::transform::CanonicalizeEntryPointIO::ShaderStyle::kMsl, options.fixed_sample_mask,
+        options.emit_vertex_point_size);
     // CanonicalizeEntryPointIO must come after Robustness
     manager.Add<ast::transform::CanonicalizeEntryPointIO>();
     data.Add<ast::transform::CanonicalizeEntryPointIO::Config>(std::move(entry_point_io_cfg));
@@ -400,14 +394,17 @@ bool ASTPrinter::EmitIndexAccessor(StringStream& out, const ast::IndexAccessorEx
     return true;
 }
 
-bool ASTPrinter::EmitBitcast(StringStream& out, const ast::BitcastExpression* expr) {
+bool ASTPrinter::EmitBitcastCall(StringStream& out, const ast::CallExpression* call) {
+    auto* arg = call->args[0];
+    auto* dst_type = TypeOf(call);
+
     out << "as_type<";
-    if (!EmitType(out, TypeOf(expr)->UnwrapRef())) {
+    if (!EmitType(out, dst_type)) {
         return false;
     }
 
     out << ">(";
-    if (!EmitExpression(out, expr->expr)) {
+    if (!EmitExpression(out, arg)) {
         return false;
     }
 
@@ -694,6 +691,8 @@ bool ASTPrinter::EmitBuiltinCall(StringStream& out,
     auto name = generate_builtin_name(builtin);
 
     switch (builtin->Fn()) {
+        case wgsl::BuiltinFn::kBitcast:
+            return EmitBitcastCall(out, expr);
         case wgsl::BuiltinFn::kDot:
             return EmitDotCall(out, expr, builtin);
         case wgsl::BuiltinFn::kModf:
@@ -1889,7 +1888,6 @@ bool ASTPrinter::EmitExpression(StringStream& out, const ast::Expression* expr) 
         expr,  //
         [&](const ast::IndexAccessorExpression* a) { return EmitIndexAccessor(out, a); },
         [&](const ast::BinaryExpression* b) { return EmitBinary(out, b); },
-        [&](const ast::BitcastExpression* b) { return EmitBitcast(out, b); },
         [&](const ast::CallExpression* c) { return EmitCall(out, c); },
         [&](const ast::IdentifierExpression* i) { return EmitIdentifier(out, i); },
         [&](const ast::LiteralExpression* l) { return EmitLiteral(out, l); },
@@ -2578,6 +2576,13 @@ bool ASTPrinter::EmitType(StringStream& out, const core::type::Type* type) {
             return true;
         },
         [&](const core::type::Struct* str) {
+            // Make sure the struct type gets emitted. There are some cases where the types are
+            // defined internal (like modf) which can end up in structures. The usage may be
+            // removed by phonies, but the declaration still needs to exist.
+            if (!EmitStructType(&helpers_, str)) {
+                return false;
+            }
+
             // The struct type emits as just the name. The declaration would be
             // emitted as part of emitting the declared types.
             out << StructName(str);

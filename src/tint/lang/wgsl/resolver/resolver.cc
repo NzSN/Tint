@@ -54,7 +54,6 @@
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/assignment_statement.h"
 #include "src/tint/lang/wgsl/ast/attribute.h"
-#include "src/tint/lang/wgsl/ast/bitcast_expression.h"
 #include "src/tint/lang/wgsl/ast/break_statement.h"
 #include "src/tint/lang/wgsl/ast/call_statement.h"
 #include "src/tint/lang/wgsl/ast/continue_statement.h"
@@ -1523,7 +1522,6 @@ sem::Expression* Resolver::Expression(const ast::Expression* root) {
             expr,  //
             [&](const ast::IndexAccessorExpression* array) { return IndexAccessor(array); },
             [&](const ast::BinaryExpression* bin_op) { return Binary(bin_op); },
-            [&](const ast::BitcastExpression* bitcast) { return Bitcast(bitcast); },
             [&](const ast::CallExpression* call) { return Call(call); },
             [&](const ast::IdentifierExpression* ident) { return Identifier(ident); },
             [&](const ast::LiteralExpression* literal) { return Literal(literal); },
@@ -2048,39 +2046,6 @@ sem::ValueExpression* Resolver::IndexAccessor(const ast::IndexAccessorExpression
     return sem;
 }
 
-sem::ValueExpression* Resolver::Bitcast(const ast::BitcastExpression* expr) {
-    auto* inner = Load(Materialize(sem_.GetVal(expr->expr)));
-    if (!inner) {
-        return nullptr;
-    }
-    auto* ty = Type(expr->type);
-    if (!ty) {
-        return nullptr;
-    }
-    if (!validator_.Bitcast(expr, ty)) {
-        return nullptr;
-    }
-
-    auto stage = inner->Stage();
-    if (stage == core::EvaluationStage::kConstant && skip_const_eval_.Contains(expr)) {
-        stage = core::EvaluationStage::kNotEvaluated;
-    }
-
-    const core::constant::Value* value = nullptr;
-    if (stage == core::EvaluationStage::kConstant) {
-        auto r = const_eval_.Bitcast(ty, inner->ConstantValue(), expr->source);
-        if (r != Success) {
-            return nullptr;
-        }
-        value = r.Get();
-    }
-
-    auto* sem = b.create<sem::ValueExpression>(expr, ty, stage, current_statement_,
-                                               std::move(value), inner->HasSideEffects());
-    sem->Behaviors() = inner->Behaviors();
-    return sem;
-}
-
 sem::Call* Resolver::Call(const ast::CallExpression* expr) {
     // A CallExpression can resolve to one of:
     // * A function call.
@@ -2115,9 +2080,9 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
     // ctor_or_conv is a helper for building either a sem::ValueConstructor or
     // sem::ValueConversion call for a CtorConvIntrinsic with an optional template argument type.
     auto ctor_or_conv = [&](CtorConvIntrinsic ty,
-                            const core::type::Type* template_arg) -> sem::Call* {
+                            VectorRef<const core::type::Type*> template_args) -> sem::Call* {
         auto arg_tys = tint::Transform(args, [](auto* arg) { return arg->Type()->UnwrapRef(); });
-        auto match = intrinsic_table_.Lookup(ty, template_arg, arg_tys, args_stage);
+        auto match = intrinsic_table_.Lookup(ty, template_args, arg_tys, args_stage);
         if (match != Success) {
             AddError(match.Failure(), expr->source);
             return nullptr;
@@ -2210,27 +2175,25 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
     auto ty_init_or_conv = [&](const core::type::Type* type) {
         return Switch(
             type,  //
-            [&](const core::type::I32*) { return ctor_or_conv(CtorConvIntrinsic::kI32, nullptr); },
-            [&](const core::type::U32*) { return ctor_or_conv(CtorConvIntrinsic::kU32, nullptr); },
+            [&](const core::type::I32*) { return ctor_or_conv(CtorConvIntrinsic::kI32, Empty); },
+            [&](const core::type::U32*) { return ctor_or_conv(CtorConvIntrinsic::kU32, Empty); },
             [&](const core::type::F16*) {
                 return validator_.CheckF16Enabled(expr->source)
-                           ? ctor_or_conv(CtorConvIntrinsic::kF16, nullptr)
+                           ? ctor_or_conv(CtorConvIntrinsic::kF16, Empty)
                            : nullptr;
             },
-            [&](const core::type::F32*) { return ctor_or_conv(CtorConvIntrinsic::kF32, nullptr); },
-            [&](const core::type::Bool*) {
-                return ctor_or_conv(CtorConvIntrinsic::kBool, nullptr);
-            },
+            [&](const core::type::F32*) { return ctor_or_conv(CtorConvIntrinsic::kF32, Empty); },
+            [&](const core::type::Bool*) { return ctor_or_conv(CtorConvIntrinsic::kBool, Empty); },
             [&](const core::type::Vector* v) {
                 if (v->Packed()) {
                     TINT_ASSERT(v->Width() == 3u);
-                    return ctor_or_conv(CtorConvIntrinsic::kPackedVec3, v->type());
+                    return ctor_or_conv(CtorConvIntrinsic::kPackedVec3, Vector{v->type()});
                 }
-                return ctor_or_conv(wgsl::intrinsic::VectorCtorConv(v->Width()), v->type());
+                return ctor_or_conv(wgsl::intrinsic::VectorCtorConv(v->Width()), Vector{v->type()});
             },
             [&](const core::type::Matrix* m) {
                 return ctor_or_conv(wgsl::intrinsic::MatrixCtorConv(m->columns(), m->rows()),
-                                    m->type());
+                                    Vector{m->type()});
             },
             [&](const sem::Array* arr) -> sem::Call* {
                 auto* call_target = array_ctors_.GetOrAdd(
@@ -2290,29 +2253,29 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
         // Examples: vec3(...), array(...)
         switch (t->builtin) {
             case core::BuiltinType::kVec2:
-                return ctor_or_conv(CtorConvIntrinsic::kVec2, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kVec2, Empty);
             case core::BuiltinType::kVec3:
-                return ctor_or_conv(CtorConvIntrinsic::kVec3, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kVec3, Empty);
             case core::BuiltinType::kVec4:
-                return ctor_or_conv(CtorConvIntrinsic::kVec4, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kVec4, Empty);
             case core::BuiltinType::kMat2X2:
-                return ctor_or_conv(CtorConvIntrinsic::kMat2x2, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat2x2, Empty);
             case core::BuiltinType::kMat2X3:
-                return ctor_or_conv(CtorConvIntrinsic::kMat2x3, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat2x3, Empty);
             case core::BuiltinType::kMat2X4:
-                return ctor_or_conv(CtorConvIntrinsic::kMat2x4, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat2x4, Empty);
             case core::BuiltinType::kMat3X2:
-                return ctor_or_conv(CtorConvIntrinsic::kMat3x2, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat3x2, Empty);
             case core::BuiltinType::kMat3X3:
-                return ctor_or_conv(CtorConvIntrinsic::kMat3x3, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat3x3, Empty);
             case core::BuiltinType::kMat3X4:
-                return ctor_or_conv(CtorConvIntrinsic::kMat3x4, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat3x4, Empty);
             case core::BuiltinType::kMat4X2:
-                return ctor_or_conv(CtorConvIntrinsic::kMat4x2, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat4x2, Empty);
             case core::BuiltinType::kMat4X3:
-                return ctor_or_conv(CtorConvIntrinsic::kMat4x3, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat4x3, Empty);
             case core::BuiltinType::kMat4X4:
-                return ctor_or_conv(CtorConvIntrinsic::kMat4x4, nullptr);
+                return ctor_or_conv(CtorConvIntrinsic::kMat4x4, Empty);
             case core::BuiltinType::kArray: {
                 auto el_count =
                     b.create<core::type::ConstantArrayCount>(static_cast<uint32_t>(args.Length()));
@@ -2390,8 +2353,19 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         arg_stage = core::EarliestStage(arg_stage, arg->Stage());
     }
 
+    Vector<const core::type::Type*, 1> tmpl_args;
+    if (auto* tmpl = expr->target->identifier->As<ast::TemplatedIdentifier>()) {
+        for (auto* arg : tmpl->arguments) {
+            auto* arg_ty = sem_.AsTypeExpression(sem_.Get(arg));
+            if (TINT_UNLIKELY(!arg_ty)) {
+                return nullptr;
+            }
+            tmpl_args.Push(arg_ty->Type());
+        }
+    }
+
     auto arg_tys = tint::Transform(args, [](auto* arg) { return arg->Type()->UnwrapRef(); });
-    auto overload = intrinsic_table_.Lookup(fn, arg_tys, arg_stage);
+    auto overload = intrinsic_table_.Lookup(fn, tmpl_args, arg_tys, arg_stage);
     if (overload != Success) {
         AddError(overload.Failure(), expr->source);
         return nullptr;
@@ -3378,10 +3352,7 @@ sem::Expression* Resolver::Identifier(const ast::IdentifierExpression* expr) {
     }
 
     if (auto fn = resolved->BuiltinFn(); fn != wgsl::BuiltinFn::kNone) {
-        return CheckNotTemplated("builtin function", ident)
-                   ? b.create<sem::BuiltinEnumExpression<wgsl::BuiltinFn>>(expr, current_statement_,
-                                                                           fn)
-                   : nullptr;
+        return b.create<sem::BuiltinEnumExpression<wgsl::BuiltinFn>>(expr, current_statement_, fn);
     }
 
     if (auto access = resolved->Access(); access != core::Access::kUndefined) {
