@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,31 +25,40 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// GEN_BUILD:CONDITION((!tint_build_is_linux) && (!tint_build_is_mac) && (!tint_build_is_win))
+#include "src/tint/utils/text/styled_text_printer.h"
+#include "src/tint/utils/text/text_style.h"
 
-#include <cstring>
+#include "gtest/gtest.h"
 
-#include "src/tint/utils/diagnostic/printer.h"
-
-namespace tint::diag {
+namespace tint {
 namespace {
 
-class PrinterOther : public Printer {
-  public:
-    explicit PrinterOther(FILE* f) : file(f) {}
+#define ENABLE_PRINTER_TESTS 0  // Print styled text as part of the unit tests
+#if ENABLE_PRINTER_TESTS
 
-    void Write(const std::string& str, const Style&) override {
-        fwrite(str.data(), 1, str.size(), file);
-    }
+using StyledTextPrinterTest = testing::Test;
 
-  private:
-    FILE* file;
-};
-
-}  // namespace
-
-std::unique_ptr<Printer> Printer::Create(FILE* out, bool) {
-    return std::make_unique<PrinterOther>(out);
+TEST_F(StyledTextPrinterTest, Themed) {
+    auto printer = StyledTextPrinter::Create(stdout);
+    printer->Print(StyledText{} << style::Plain << "Plain\n"
+                                << style::Bold << "Bold\n"
+                                << style::Underlined << "Underlined\n"
+                                << style::Success << "Success\n"
+                                << style::Warning << "Warning\n"
+                                << style::Error << "Error\n"
+                                << style::Fatal << "Fatal\n"
+                                << style::Code << "Code\n"
+                                << style::Keyword << "Keyword\n"
+                                << style::Variable << "Variable\n"
+                                << style::Type << "Type\n"
+                                << style::Function << "Function\n"
+                                << style::Enum << "Enum\n"
+                                << style::Literal << "Literal\n"
+                                << style::Attribute << "Attribute\n"
+                                << style::Squiggle << "Squiggle\n");
 }
 
-}  // namespace tint::diag
+#endif  // ENABLE_PRINTER_TESTS
+
+}  // namespace
+}  // namespace tint

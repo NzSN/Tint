@@ -1,4 +1,4 @@
-// Copyright 2020 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,23 +25,35 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/utils/diagnostic/printer.h"
+#include <cstring>
 
-#include <string>
+#include "src/tint/utils/text/styled_text_printer.h"
 
-namespace tint::diag {
+namespace tint {
+namespace {
 
-Printer::~Printer() = default;
+class Plain : public StyledTextPrinter {
+  public:
+    explicit Plain(FILE* f) : file_(f) {}
 
-StringPrinter::StringPrinter() = default;
-StringPrinter::~StringPrinter() = default;
+    void Print(const StyledText& text) override {
+        auto plain = text.Plain();
+        fwrite(plain.data(), 1, plain.size(), file_);
+    }
 
-std::string StringPrinter::str() const {
-    return stream.str();
+  private:
+    FILE* const file_;
+};
+
+}  // namespace
+
+std::unique_ptr<StyledTextPrinter> StyledTextPrinter::CreatePlain(FILE* out) {
+    return std::make_unique<Plain>(out);
+}
+std::unique_ptr<StyledTextPrinter> StyledTextPrinter::Create(FILE* out) {
+    return Create(out, StyledTextTheme::kDefault);
 }
 
-void StringPrinter::Write(const std::string& str, const Style&) {
-    stream << str;
-}
+StyledTextPrinter::~StyledTextPrinter() = default;
 
-}  // namespace tint::diag
+}  // namespace tint
