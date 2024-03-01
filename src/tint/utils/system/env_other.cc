@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/msl/writer/common/options.h"
+// GEN_BUILD:CONDITION(!tint_build_is_win)
 
-#include <gtest/gtest.h>
+#include "src/tint/utils/system/env.h"
 
-namespace tint::msl::writer {
-namespace {
+#include <cstdlib>
+#include <string_view>
 
-TEST(TintCheckAllFieldsReflected, MslWriterCommonOptionsTest) {
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(ArrayLengthFromUniformOptions);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::BindingInfo);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::ExternalTexture);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Bindings);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Options);
+namespace tint {
+
+std::string GetEnvVar(std::string_view name) {
+    if (auto* val = std::getenv(name.data())) {
+        return val;
+    }
+    return "";
 }
 
-}  // namespace
-}  // namespace tint::msl::writer
+}  // namespace tint

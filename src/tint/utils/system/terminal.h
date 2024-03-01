@@ -1,4 +1,4 @@
-// Copyright 2021 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,29 +25,25 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_API_OPTIONS_ARRAY_LENGTH_FROM_UNIFORM_H_
-#define SRC_TINT_API_OPTIONS_ARRAY_LENGTH_FROM_UNIFORM_H_
+#ifndef SRC_TINT_UTILS_SYSTEM_TERMINAL_H_
+#define SRC_TINT_UTILS_SYSTEM_TERMINAL_H_
 
-#include <unordered_map>
-
-#include "src/tint/api/common/binding_point.h"
+#include <cstdio>
+#include <optional>
 
 namespace tint {
 
-/// Options used to specify a mapping of binding points to indices into a UBO
-/// from which to load buffer sizes.
-struct ArrayLengthFromUniformOptions {
-    /// The binding point to use to generate a uniform buffer from which to read
-    /// buffer sizes.
-    BindingPoint ubo_binding;
-    /// The mapping from storage buffer binding points to the index into the
-    /// uniform buffer where the length of the buffer is stored.
-    std::unordered_map<BindingPoint, uint32_t> bindpoint_to_size_index;
+/// Detects whether the terminal at @p out supports color output.
+/// @param out the file to print to.
+/// @return true if the terminal supports colors.
+bool TerminalSupportsColors(FILE* out);
 
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(ArrayLengthFromUniformOptions, ubo_binding, bindpoint_to_size_index);
-};
+/// Attempts to detect whether the terminal at @p out is dark.
+/// @param out the file to print to.
+/// @returns true if the terminal is dark, false if the terminal is light, or nullopt if
+/// unknown.
+std::optional<bool> TerminalIsDark(FILE* out);
 
 }  // namespace tint
 
-#endif  // SRC_TINT_API_OPTIONS_ARRAY_LENGTH_FROM_UNIFORM_H_
+#endif  // SRC_TINT_UTILS_SYSTEM_TERMINAL_H_

@@ -25,16 +25,43 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/api/options/array_length_from_uniform.h"
+#ifndef SRC_TINT_LANG_CORE_TYPE_INVALID_H_
+#define SRC_TINT_LANG_CORE_TYPE_INVALID_H_
 
-#include <gtest/gtest.h>
+#include <string>
 
-namespace tint {
-namespace {
+#include "src/tint/lang/core/type/type.h"
 
-TEST(TintCheckAllFieldsReflected, ApiOptionsArrayLengthFromUniformTest) {
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(ArrayLengthFromUniformOptions);
-}
+namespace tint::core::type {
 
-}  // namespace
-}  // namespace tint
+/// An invalid type.
+class Invalid final : public Castable<Invalid, Type> {
+  public:
+    /// Constructor
+    Invalid();
+
+    /// Destructor
+    ~Invalid() override;
+
+    /// @returns the name for this type that closely resembles how it would be
+    /// declared in WGSL.
+    std::string FriendlyName() const override;
+
+    /// @param other the other node to compare against
+    /// @returns true if the this type is equal to @p other
+    bool Equals(const UniqueNode& other) const override;
+
+    /// @returns the size in bytes of the type.
+    uint32_t Size() const override;
+
+    /// @returns the alignment in bytes of the type.
+    uint32_t Align() const override;
+
+    /// @param ctx the clone context
+    /// @returns a clone of this type
+    Invalid* Clone(CloneContext& ctx) const override;
+};
+
+}  // namespace tint::core::type
+
+#endif  // SRC_TINT_LANG_CORE_TYPE_INVALID_H_

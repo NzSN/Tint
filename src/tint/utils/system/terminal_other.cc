@@ -25,20 +25,18 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/msl/writer/common/options.h"
+// GEN_BUILD:CONDITION((!tint_build_is_linux) && (!tint_build_is_mac) && (!tint_build_is_win))
 
-#include <gtest/gtest.h>
+#include "src/tint/utils/system/terminal.h"
 
-namespace tint::msl::writer {
-namespace {
+namespace tint {
 
-TEST(TintCheckAllFieldsReflected, MslWriterCommonOptionsTest) {
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(ArrayLengthFromUniformOptions);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::BindingInfo);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::ExternalTexture);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Bindings);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Options);
+bool TerminalSupportsColors(FILE*) {
+    return false;
 }
 
-}  // namespace
-}  // namespace tint::msl::writer
+std::optional<bool> TerminalIsDark(FILE*) {
+    return std::nullopt;
+}
+
+}  // namespace tint

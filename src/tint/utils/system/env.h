@@ -25,20 +25,18 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/msl/writer/common/options.h"
+#ifndef SRC_TINT_UTILS_SYSTEM_ENV_H_
+#define SRC_TINT_UTILS_SYSTEM_ENV_H_
 
-#include <gtest/gtest.h>
+#include <string>
 
-namespace tint::msl::writer {
-namespace {
+namespace tint {
 
-TEST(TintCheckAllFieldsReflected, MslWriterCommonOptionsTest) {
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(ArrayLengthFromUniformOptions);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::BindingInfo);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::ExternalTexture);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Bindings);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Options);
-}
+/// @param name the name of the environment variable
+/// @returns the environment variable value with the given name, or an empty string if the variable
+/// was not found.
+std::string GetEnvVar(std::string_view name);
 
-}  // namespace
-}  // namespace tint::msl::writer
+}  // namespace tint
+
+#endif  // SRC_TINT_UTILS_SYSTEM_ENV_H_

@@ -25,20 +25,37 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/msl/writer/common/options.h"
+#include "src/tint/lang/core/type/invalid.h"
 
-#include <gtest/gtest.h>
+#include "src/tint/lang/core/type/manager.h"
 
-namespace tint::msl::writer {
-namespace {
+TINT_INSTANTIATE_TYPEINFO(tint::core::type::Invalid);
 
-TEST(TintCheckAllFieldsReflected, MslWriterCommonOptionsTest) {
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(ArrayLengthFromUniformOptions);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::BindingInfo);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(binding::ExternalTexture);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Bindings);
-    TINT_ASSERT_ALL_FIELDS_REFLECTED(Options);
+namespace tint::core::type {
+
+Invalid::Invalid()
+    : Base(static_cast<size_t>(tint::TypeCode::Of<Invalid>().bits), core::type::Flags{}) {}
+
+Invalid::~Invalid() = default;
+
+std::string Invalid::FriendlyName() const {
+    return "<invalid-type>";
 }
 
-}  // namespace
-}  // namespace tint::msl::writer
+bool Invalid::Equals(const UniqueNode& other) const {
+    return other.Is<Invalid>();
+}
+
+uint32_t Invalid::Size() const {
+    return 0;
+}
+
+uint32_t Invalid::Align() const {
+    return 0;
+}
+
+Invalid* Invalid::Clone(CloneContext& ctx) const {
+    return ctx.dst.mgr->Get<Invalid>();
+}
+
+}  // namespace tint::core::type
