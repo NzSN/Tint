@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,40 +25,24 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/resolver/incomplete_type.h"
+#ifndef SRC_TINT_LANG_WGSL_WRITER_RAISE_PTR_TO_REF_H_
+#define SRC_TINT_LANG_WGSL_WRITER_RAISE_PTR_TO_REF_H_
 
-TINT_INSTANTIATE_TYPEINFO(tint::resolver::IncompleteType);
+#include "src/tint/utils/result/result.h"
 
-namespace tint::resolver {
-
-IncompleteType::IncompleteType(core::BuiltinType b)
-    : Base(static_cast<size_t>(tint::TypeCode::Of<IncompleteType>().bits), core::type::Flags{}),
-      builtin(b) {}
-
-IncompleteType::~IncompleteType() = default;
-
-std::string IncompleteType::FriendlyName() const {
-    return "<incomplete-type>";
+// Forward declarations.
+namespace tint::core::ir {
+class Module;
 }
 
-uint32_t IncompleteType::Size() const {
-    return 0;
-}
+namespace tint::wgsl::writer::raise {
 
-uint32_t IncompleteType::Align() const {
-    return 0;
-}
+/// PtrToRef is a transform that modifies values and instructions to convert from pointer types to
+/// reference types.
+/// @param module the module to transform
+/// @returns success or failure
+Result<SuccessType> PtrToRef(core::ir::Module& module);
 
-core::type::Type* IncompleteType::Clone(core::type::CloneContext&) const {
-    TINT_ICE() << "IncompleteType does not support cloning";
-    return nullptr;
-}
+}  // namespace tint::wgsl::writer::raise
 
-bool IncompleteType::Equals(const core::type::UniqueNode& other) const {
-    if (auto* o = other.As<IncompleteType>()) {
-        return o->builtin == builtin;
-    }
-    return false;
-}
-
-}  // namespace tint::resolver
+#endif  // SRC_TINT_LANG_WGSL_WRITER_RAISE_PTR_TO_REF_H_

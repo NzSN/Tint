@@ -27,6 +27,7 @@
 
 #include "src/tint/lang/core/ir/validator.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -65,7 +66,10 @@
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/bool.h"
+#include "src/tint/lang/core/type/memory_view.h"
 #include "src/tint/lang/core/type/pointer.h"
+#include "src/tint/lang/core/type/reference.h"
+#include "src/tint/lang/core/type/type.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/core/type/void.h"
 #include "src/tint/utils/containers/reverse.h"
@@ -86,13 +90,47 @@ namespace tint::core::ir {
 
 namespace {
 
+/// @returns true if the type @p type is of, or indirectly references a type of type `T`.
+template <typename T>
+bool HoldsType(const type::Type* type) {
+    if (!type) {
+        return false;
+    }
+    Vector<const type::Type*, 8> stack{type};
+    Hashset<const type::Type*, 8> seen{type};
+    while (!stack.IsEmpty()) {
+        auto* ty = stack.Pop();
+        if (ty->Is<T>()) {
+            return true;
+        }
+
+        if (auto* view = ty->As<type::MemoryView>(); view && seen.Add(view)) {
+            stack.Push(view);
+            continue;
+        }
+
+        auto type_count = ty->Elements();
+        if (type_count.type && seen.Add(type_count.type)) {
+            stack.Push(type_count.type);
+            continue;
+        }
+
+        for (uint32_t i = 0; i < type_count.count; i++) {
+            if (auto* subtype = ty->Element(i); subtype && seen.Add(subtype)) {
+                stack.Push(subtype);
+            }
+        }
+    }
+    return false;
+}
+
 /// The core IR validator.
 class Validator {
   public:
     /// Create a core validator
     /// @param mod the module to be validated
     /// @param capabilities the optional capabilities that are allowed
-    explicit Validator(const Module& mod, EnumSet<Capability> capabilities);
+    explicit Validator(const Module& mod, Capabilities capabilities);
 
     /// Destructor
     ~Validator();
@@ -279,7 +317,7 @@ class Validator {
 
   private:
     const Module& mod_;
-    EnumSet<Capability> capabilities_;
+    Capabilities capabilities_;
     std::shared_ptr<Source::File> disassembly_file;
     diag::List diagnostics_;
     Disassembler dis_{mod_};
@@ -291,7 +329,7 @@ class Validator {
     void DisassembleIfNeeded();
 };
 
-Validator::Validator(const Module& mod, EnumSet<Capability> capabilities)
+Validator::Validator(const Module& mod, Capabilities capabilities)
     : mod_(mod), capabilities_(capabilities) {}
 
 Validator::~Validator() = default;
@@ -449,6 +487,18 @@ void Validator::CheckRootBlock(const Block* blk) {
 
 void Validator::CheckFunction(const Function* func) {
     CheckBlock(func->Block());
+
+    // References not allowed on function signatures even with Capability::kAllowRefTypes
+    for (auto* param : func->Params()) {
+        if (HoldsType<type::Reference>(param->Type())) {
+            // TODO(dsinclair): Parameters need a source mapping.
+            AddError(Source{}) << "references are not permitted as parameter types";
+        }
+    }
+    if (HoldsType<type::Reference>(func->ReturnType())) {
+        // TODO(dsinclair): Function need a source mapping.
+        AddError(Source{}) << "references are not permitted as return types";
+    }
 }
 
 void Validator::CheckBlock(const Block* blk) {
@@ -492,6 +542,12 @@ void Validator::CheckInstruction(const Instruction* inst) {
         } else if (res->Instruction() != inst) {
             AddResultError(inst, i) << "instruction of result is a different instruction";
         }
+
+        if (!capabilities_.Contains(Capability::kAllowRefTypes)) {
+            if (HoldsType<type::Reference>(res->Type())) {
+                AddResultError(inst, i) << "reference type is not permitted";
+            }
+        }
     }
 
     auto ops = inst->Operands();
@@ -509,6 +565,12 @@ void Validator::CheckInstruction(const Instruction* inst) {
 
         if (!op->HasUsage(inst, i)) {
             AddError(inst, i) << "operand missing usage";
+        }
+
+        if (!capabilities_.Contains(Capability::kAllowRefTypes)) {
+            if (HoldsType<type::Reference>(op->Type())) {
+                AddError(inst, i) << "reference type is not permitted";
+            }
         }
     }
 
@@ -534,7 +596,7 @@ void Validator::CheckInstruction(const Instruction* inst) {
 
 void Validator::CheckVar(const Var* var) {
     if (var->Result(0) && var->Initializer()) {
-        if (var->Initializer()->Type() != var->Result(0)->Type()->UnwrapPtr()) {
+        if (var->Initializer()->Type() != var->Result(0)->Type()->UnwrapPtrOrRef()) {
             AddError(var) << "initializer has incorrect type";
         }
     }
@@ -616,33 +678,47 @@ void Validator::CheckUserCall(const UserCall* call) {
 }
 
 void Validator::CheckAccess(const Access* a) {
-    auto* obj_ptr = a->Object()->Type()->As<core::type::Pointer>();
-    auto* el_ty = a->Object()->Type()->UnwrapPtr();
-
-    auto current = [&] {
-        if (obj_ptr) {
-            StringStream ss;
-            ss << "ptr<" << obj_ptr->AddressSpace() << ", " << el_ty->FriendlyName() << ", "
-               << obj_ptr->Access() << ">";
-            return ss.str();
-        } else {
-            return el_ty->FriendlyName();
+    auto* obj_view = a->Object()->Type()->As<core::type::MemoryView>();
+    auto* ty = obj_view ? obj_view->StoreType() : a->Object()->Type();
+    enum Kind { kPtr, kRef, kValue };
+    auto kind_of = [&](const core::type::Type* type) {
+        return tint::Switch(
+            type,                                                //
+            [&](const core::type::Pointer*) { return kPtr; },    //
+            [&](const core::type::Reference*) { return kRef; },  //
+            [&](Default) { return kValue; });
+    };
+    const Kind in_kind = kind_of(a->Object()->Type());
+    auto desc_of = [&](Kind kind, const core::type::Type* type) {
+        switch (kind) {
+            case kPtr:
+                return StyledText{} << "ptr<" << obj_view->AddressSpace() << ", "
+                                    << type->FriendlyName() << ", " << obj_view->Access() << ">";
+            case kRef:
+                return StyledText{} << "ref<" << obj_view->AddressSpace() << ", "
+                                    << type->FriendlyName() << ", " << obj_view->Access() << ">";
+            default:
+                return StyledText{} << type->FriendlyName();
         }
     };
 
     for (size_t i = 0; i < a->Indices().Length(); i++) {
-        auto err = [&](std::string msg) { AddError(a, i + Access::kIndicesOperandOffset) << msg; };
-        auto note = [&](std::string msg) { AddNote(a, i + Access::kIndicesOperandOffset) << msg; };
+        auto err = [&]() -> diag::Diagnostic& {
+            return AddError(a, i + Access::kIndicesOperandOffset);
+        };
+        auto note = [&]() -> diag::Diagnostic& {
+            return AddNote(a, i + Access::kIndicesOperandOffset);
+        };
 
         auto* index = a->Indices()[i];
         if (TINT_UNLIKELY(!index->Type()->is_integer_scalar())) {
-            err("index must be integer, got " + index->Type()->FriendlyName());
+            err() << "index must be integer, got " << index->Type()->FriendlyName();
             return;
         }
 
         if (!capabilities_.Contains(Capability::kAllowVectorElementPointer)) {
-            if (obj_ptr && el_ty->Is<core::type::Vector>()) {
-                err("cannot obtain address of vector element");
+            if (in_kind != kValue && ty->Is<core::type::Vector>()) {
+                err() << "cannot obtain address of vector element";
                 return;
             }
         }
@@ -654,45 +730,46 @@ void Validator::CheckAccess(const Access* a) {
                 // If the index is unsigned, we can skip this.
                 auto idx = value->ValueAs<AInt>();
                 if (TINT_UNLIKELY(idx < 0)) {
-                    err("constant index must be positive, got " + std::to_string(idx));
+                    err() << "constant index must be positive, got " << idx;
                     return;
                 }
             }
 
             auto idx = value->ValueAs<uint32_t>();
-            auto* el = el_ty->Element(idx);
+            auto* el = ty->Element(idx);
             if (TINT_UNLIKELY(!el)) {
                 // Is index in bounds?
-                if (auto el_count = el_ty->Elements().count; el_count != 0 && idx >= el_count) {
-                    err("index out of bounds for type " + current());
-                    note("acceptable range: [0.." + std::to_string(el_count - 1) + "]");
+                if (auto el_count = ty->Elements().count; el_count != 0 && idx >= el_count) {
+                    err() << "index out of bounds for type " << desc_of(in_kind, ty);
+                    note() << "acceptable range: [0.." << (el_count - 1) << "]";
                     return;
                 }
-                err("type " + current() + " cannot be indexed");
+                err() << "type " << desc_of(in_kind, ty) << " cannot be indexed";
                 return;
             }
-            el_ty = el;
+            ty = el;
         } else {
-            auto* el = el_ty->Elements().type;
+            auto* el = ty->Elements().type;
             if (TINT_UNLIKELY(!el)) {
-                err("type " + current() + " cannot be dynamically indexed");
+                err() << "type " << desc_of(in_kind, ty) << " cannot be dynamically indexed";
                 return;
             }
-            el_ty = el;
+            ty = el;
         }
     }
 
     auto* want = a->Result(0)->Type();
-    auto* want_ptr = want->As<type::Pointer>();
-    bool ok = el_ty == want->UnwrapPtr() && (obj_ptr == nullptr) == (want_ptr == nullptr);
-    if (ok && obj_ptr) {
-        ok = obj_ptr->AddressSpace() == want_ptr->AddressSpace() &&
-             obj_ptr->Access() == want_ptr->Access();
+    auto* want_view = want->As<type::MemoryView>();
+    bool ok = ty == want->UnwrapPtrOrRef() && (obj_view == nullptr) == (want_view == nullptr);
+    if (ok && obj_view) {
+        ok = obj_view->Is<type::Pointer>() == want_view->Is<type::Pointer>() &&
+             obj_view->AddressSpace() == want_view->AddressSpace() &&
+             obj_view->Access() == want_view->Access();
     }
 
     if (TINT_UNLIKELY(!ok)) {
-        AddError(a) << "result of access chain is type " << current() << " but instruction type is "
-                    << want->FriendlyName();
+        AddError(a) << "result of access chain is type " << desc_of(in_kind, ty)
+                    << " but instruction type is " << want->FriendlyName();
     }
 }
 
@@ -998,9 +1075,9 @@ const core::type::Type* Validator::GetVectorPtrElementType(const Instruction* in
         return nullptr;
     }
 
-    auto* vec_ptr_ty = type->As<core::type::Pointer>();
-    if (TINT_LIKELY(vec_ptr_ty)) {
-        auto* vec_ty = vec_ptr_ty->StoreType()->As<core::type::Vector>();
+    auto* memory_view_ty = type->As<core::type::MemoryView>();
+    if (TINT_LIKELY(memory_view_ty)) {
+        auto* vec_ty = memory_view_ty->StoreType()->As<core::type::Vector>();
         if (TINT_LIKELY(vec_ty)) {
             return vec_ty->type();
         }
@@ -1012,14 +1089,14 @@ const core::type::Type* Validator::GetVectorPtrElementType(const Instruction* in
 
 }  // namespace
 
-Result<SuccessType> Validate(const Module& mod, EnumSet<Capability> capabilities) {
+Result<SuccessType> Validate(const Module& mod, Capabilities capabilities) {
     Validator v(mod, capabilities);
     return v.Run();
 }
 
 Result<SuccessType> ValidateAndDumpIfNeeded([[maybe_unused]] const Module& ir,
                                             [[maybe_unused]] const char* msg,
-                                            [[maybe_unused]] EnumSet<Capability> capabilities) {
+                                            [[maybe_unused]] Capabilities capabilities) {
 #if TINT_DUMP_IR_WHEN_VALIDATING
     std::cout << "=========================================================" << std::endl;
     std::cout << "== IR dump before " << msg << ":" << std::endl;
