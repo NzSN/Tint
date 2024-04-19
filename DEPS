@@ -108,7 +108,7 @@ deps = {
   },
 
   'third_party/abseil-cpp': {
-    'url': '{chromium_git}/chromium/src/third_party/abseil-cpp@4ef9b33175828ea46d091e7e5ec28259d39a8ba5',
+    'url': '{chromium_git}/chromium/src/third_party/abseil-cpp@a64dd87cec79c80c88190265cfea0cbd4027677f',
   },
 
   # Dependencies required for testing
