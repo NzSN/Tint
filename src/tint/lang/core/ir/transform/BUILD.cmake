@@ -179,3 +179,33 @@ if(TINT_BUILD_WGSL_WRITER)
     tint_lang_wgsl_writer
   )
 endif(TINT_BUILD_WGSL_WRITER)
+
+################################################################################
+# Target:    tint_lang_core_ir_transform_fuzz
+# Kind:      fuzz
+################################################################################
+tint_add_target(tint_lang_core_ir_transform_fuzz fuzz
+  lang/core/ir/transform/add_empty_entry_point_fuzz.cc
+  lang/core/ir/transform/bgra8unorm_polyfill_fuzz.cc
+  lang/core/ir/transform/binary_polyfill_fuzz.cc
+  lang/core/ir/transform/binding_remapper_fuzz.cc
+)
+
+tint_target_add_dependencies(tint_lang_core_ir_transform_fuzz fuzz
+  tint_api_common
+  tint_cmd_fuzz_ir_fuzz
+  tint_lang_core_ir
+  tint_lang_core_ir_transform
+  tint_utils_bytes
+  tint_utils_containers
+  tint_utils_diagnostic
+  tint_utils_ice
+  tint_utils_macros
+  tint_utils_math
+  tint_utils_memory
+  tint_utils_reflection
+  tint_utils_result
+  tint_utils_rtti
+  tint_utils_text
+  tint_utils_traits
+)
