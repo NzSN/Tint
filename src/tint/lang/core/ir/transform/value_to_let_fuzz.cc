@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -19,30 +19,47 @@
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 // FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT\ OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/utils/bytes/reader.h"
+#include "src/tint/lang/core/ir/transform/value_to_let.h"
 
-namespace tint::bytes {
+#include "src/tint/cmd/fuzz/ir/fuzz.h"
+#include "src/tint/lang/core/ir/module.h"
+#include "src/tint/lang/core/ir/validator.h"
 
-Reader::~Reader() = default;
+namespace tint::core::ir::transform {
+namespace {
 
-BufferReader::~BufferReader() = default;
-
-size_t BufferReader::Read(std::byte* out, size_t count) {
-    size_t n = std::min(count, bytes_remaining_);
-    memcpy(out, data_, n);
-    data_ += n;
-    bytes_remaining_ -= n;
-    return n;
+bool CanRun(Module& module) {
+    for (auto* inst : module.Instructions()) {
+        if (inst->Results().Length() > 1) {
+            // ValueToLet assumes that all multi-result instructions have been replaced
+            return false;
+        }
+    }
+    return true;
 }
 
-bool BufferReader::IsEOF() const {
-    return bytes_remaining_ == 0;
+void ValueToLetFuzzer(Module& module) {
+    if (!CanRun(module)) {
+        return;
+    }
+
+    if (auto res = ValueToLet(module); res != Success) {
+        return;
+    }
+
+    Capabilities capabilities;
+    if (auto res = Validate(module, capabilities); res != Success) {
+        TINT_ICE() << "result of ValueToLet failed IR validation\n" << res.Failure();
+    }
 }
 
-}  // namespace tint::bytes
+}  // namespace
+}  // namespace tint::core::ir::transform
+
+TINT_IR_MODULE_FUZZER(tint::core::ir::transform::ValueToLetFuzzer);
