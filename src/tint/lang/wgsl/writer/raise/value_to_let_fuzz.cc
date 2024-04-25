@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -19,48 +19,32 @@
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 // FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT\ OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// GEN_BUILD:CONDITION(tint_build_wgsl_reader && tint_build_wgsl_writer)
-
-#include <iostream>
+#include "src/tint/lang/wgsl/writer/raise/value_to_let.h"
 
 #include "src/tint/cmd/fuzz/ir/fuzz.h"
-#include "src/tint/lang/core/ir/disassembler.h"
-#include "src/tint/lang/wgsl/reader/lower/lower.h"
-#include "src/tint/lang/wgsl/reader/parser/parser.h"
-#include "src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.h"
-#include "src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.h"
-#include "src/tint/lang/wgsl/writer/raise/raise.h"
-#include "src/tint/lang/wgsl/writer/writer.h"
+#include "src/tint/lang/core/ir/validator.h"
 
-namespace tint::wgsl {
+namespace tint::wgsl::writer::raise {
+namespace {
 
-void IRRoundtripFuzzer(core::ir::Module& ir) {
-    if (auto res = tint::wgsl::writer::Raise(ir); res != Success) {
-        TINT_ICE() << res.Failure();
+void ValueToLetFuzzer(core::ir::Module& module) {
+    if (auto res = ValueToLet(module); res != Success) {
         return;
     }
 
-    writer::ProgramOptions program_options;
-    program_options.allowed_features = AllowedFeatures::Everything();
-    auto dst = tint::wgsl::writer::IRToProgram(ir, program_options);
-    if (!dst.IsValid()) {
-        std::cerr << "IR:\n" << core::ir::Disassemble(ir) << std::endl;
-        if (auto result = tint::wgsl::writer::Generate(dst, {}); result == Success) {
-            std::cerr << "WGSL:\n" << result->wgsl << std::endl << std::endl;
-        }
-        TINT_ICE() << dst.Diagnostics();
-        return;
+    core::ir::Capabilities capabilities;
+    if (auto res = Validate(module, capabilities); res != Success) {
+        TINT_ICE() << "result of ValueToLet failed IR validation\n" << res.Failure();
     }
-
-    return;
 }
 
-}  // namespace tint::wgsl
+}  // namespace
+}  // namespace tint::wgsl::writer::raise
 
-TINT_IR_MODULE_FUZZER(tint::wgsl::IRRoundtripFuzzer);
+TINT_IR_MODULE_FUZZER(tint::wgsl::writer::raise::ValueToLetFuzzer);

@@ -32,6 +32,7 @@
 
 #include "src/tint/lang/core/ir/binary.h"
 #include "src/tint/lang/core/ir/block.h"
+#include "src/tint/lang/core/ir/block_param.h"
 #include "src/tint/lang/core/ir/call.h"
 #include "src/tint/lang/core/ir/if.h"
 #include "src/tint/lang/core/ir/loop.h"
@@ -100,9 +101,25 @@ class Disassembler {
     /// @returns the source for the result
     Source ResultSource(IndexedValue result) { return result_to_src_.GetOr(result, Source{}); }
 
-    /// @param blk teh block to retrieve
+    /// @param blk the block to retrieve
     /// @returns the source for the block
     Source BlockSource(const Block* blk) { return block_to_src_.GetOr(blk, Source{}); }
+
+    /// @param param the block parameter to retrieve
+    /// @returns the source for the parameter
+    Source BlockParamSource(const BlockParam* param) {
+        return block_param_to_src_.GetOr(param, Source{});
+    }
+
+    /// @param func the function to retrieve
+    /// @returns the source for the function
+    Source FunctionSource(const Function* func) { return function_to_src_.GetOr(func, Source{}); }
+
+    /// @param param the function parameter to retrieve
+    /// @returns the source for the parameter
+    Source FunctionParamSource(const FunctionParam* param) {
+        return function_param_to_src_.GetOr(param, Source{});
+    }
 
     /// Stores the given @p src location for @p inst instruction
     /// @param inst the instruction to store
@@ -113,6 +130,23 @@ class Disassembler {
     /// @param blk the block to store
     /// @param src the source location
     void SetSource(const Block* blk, Source src) { block_to_src_.Add(blk, src); }
+
+    /// Stores the given @p src location for @p param block parameter
+    /// @param param the block parameter to store
+    /// @param src the source location
+    void SetSource(const BlockParam* param, Source src) { block_param_to_src_.Add(param, src); }
+
+    /// Stores the given @p src location for @p func function
+    /// @param func the function to store
+    /// @param src the source location
+    void SetSource(const Function* func, Source src) { function_to_src_.Add(func, src); }
+
+    /// Stores the given @p src location for @p param function parameter
+    /// @param param the function parameter to store
+    /// @param src the source location
+    void SetSource(const FunctionParam* param, Source src) {
+        function_param_to_src_.Add(param, src);
+    }
 
     /// Stores the given @p src location for @p op operand
     /// @param op the operand to store
@@ -136,6 +170,12 @@ class Disassembler {
         void Store(const Instruction* inst) { dis_->SetSource(inst, MakeSource()); }
 
         void Store(const Block* blk) { dis_->SetSource(blk, MakeSource()); }
+
+        void Store(const BlockParam* param) { dis_->SetSource(param, MakeSource()); }
+
+        void Store(const Function* func) { dis_->SetSource(func, MakeSource()); }
+
+        void Store(const FunctionParam* param) { dis_->SetSource(param, MakeSource()); }
 
         void Store(IndexedValue operand) { dis_->SetSource(operand, MakeSource()); }
 
@@ -168,7 +208,6 @@ class Disassembler {
     void EmitValueWithType(const Instruction* val);
     void EmitValueWithType(const Value* val);
     void EmitValue(const Value* val);
-    void EmitValueList(tint::Slice<const ir::Value* const> values);
     void EmitBinary(const Binary* b);
     void EmitUnary(const Unary* b);
     void EmitTerminator(const Terminator* b);
@@ -193,9 +232,12 @@ class Disassembler {
     uint32_t current_output_start_pos_ = 0;
 
     Hashmap<const Block*, Source, 8> block_to_src_;
+    Hashmap<const BlockParam*, Source, 8> block_param_to_src_;
     Hashmap<const Instruction*, Source, 8> instruction_to_src_;
     Hashmap<IndexedValue, Source, 8> operand_to_src_;
     Hashmap<IndexedValue, Source, 8> result_to_src_;
+    Hashmap<const Function*, Source, 8> function_to_src_;
+    Hashmap<const FunctionParam*, Source, 8> function_param_to_src_;
     Hashmap<const If*, std::string, 8> if_names_;
     Hashmap<const Loop*, std::string, 8> loop_names_;
     Hashmap<const Switch*, std::string, 8> switch_names_;

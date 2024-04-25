@@ -158,10 +158,25 @@ class Validator {
     /// @returns the diagnostic
     diag::Diagnostic& AddResultError(const Instruction* inst, size_t idx);
 
-    /// Adds an error the @p block and highlights the block header in the disassembly
+    /// Adds an error for the @p block and highlights the block header in the disassembly
     /// @param blk the block
     /// @returns the diagnostic
     diag::Diagnostic& AddError(const Block* blk);
+
+    /// Adds an error for the @p param and highlights the parameter in the disassembly
+    /// @param param the parameter
+    /// @returns the diagnostic
+    diag::Diagnostic& AddError(const BlockParam* param);
+
+    /// Adds an error for the @p func and highlights the function in the disassembly
+    /// @param func the function
+    /// @returns the diagnostic
+    diag::Diagnostic& AddError(const Function* func);
+
+    /// Adds an error for the @p param and highlights the parameter in the disassembly
+    /// @param param the parameter
+    /// @returns the diagnostic
+    diag::Diagnostic& AddError(const FunctionParam* param);
 
     /// Adds an error the @p block and highlights the block header in the disassembly
     /// @param src the source lines to highlight
@@ -171,6 +186,10 @@ class Validator {
     /// Adds a note to @p inst and highlights the instruction in the disassembly
     /// @param inst the instruction
     diag::Diagnostic& AddNote(const Instruction* inst);
+
+    /// Adds a note to @p func and highlights the function in the disassembly
+    /// @param func the function
+    diag::Diagnostic& AddNote(const Function* func);
 
     /// Adds a note to @p inst for operand @p idx and highlights the operand in the
     /// disassembly
@@ -346,8 +365,8 @@ Result<SuccessType> Validator::Run() {
 
     for (auto& func : mod_.functions) {
         if (!all_functions_.Add(func.Get())) {
-            AddError(Source{}) << "function " << style::Function(Name(func.Get()))
-                               << " added to module multiple times";
+            AddError(func) << "function " << style::Function(Name(func.Get()))
+                           << " added to module multiple times";
         }
     }
 
@@ -413,9 +432,33 @@ diag::Diagnostic& Validator::AddError(const Block* blk) {
     return AddError(src);
 }
 
+diag::Diagnostic& Validator::AddError(const BlockParam* param) {
+    DisassembleIfNeeded();
+    auto src = dis_.BlockParamSource(param);
+    return AddError(src);
+}
+
+diag::Diagnostic& Validator::AddError(const Function* func) {
+    DisassembleIfNeeded();
+    auto src = dis_.FunctionSource(func);
+    return AddError(src);
+}
+
+diag::Diagnostic& Validator::AddError(const FunctionParam* param) {
+    DisassembleIfNeeded();
+    auto src = dis_.FunctionParamSource(param);
+    return AddError(src);
+}
+
 diag::Diagnostic& Validator::AddNote(const Instruction* inst) {
     DisassembleIfNeeded();
     auto src = dis_.InstructionSource(inst);
+    return AddNote(src);
+}
+
+diag::Diagnostic& Validator::AddNote(const Function* func) {
+    DisassembleIfNeeded();
+    auto src = dis_.FunctionSource(func);
     return AddNote(src);
 }
 
@@ -488,21 +531,49 @@ void Validator::CheckRootBlock(const Block* blk) {
 void Validator::CheckFunction(const Function* func) {
     CheckBlock(func->Block());
 
-    // References not allowed on function signatures even with Capability::kAllowRefTypes
     for (auto* param : func->Params()) {
+        if (!param->Alive()) {
+            AddError(param) << "destroyed parameter found in function parameter list";
+            return;
+        }
+        if (!param->Function()) {
+            AddError(param) << "function parameter has nullptr parent function";
+            return;
+        } else if (param->Function() != func) {
+            AddError(param) << "function parameter has incorrect parent function";
+            AddNote(param->Function()) << "parent function declared here";
+            return;
+        }
+
+        // References not allowed on function signatures even with Capability::kAllowRefTypes
         if (HoldsType<type::Reference>(param->Type())) {
-            // TODO(dsinclair): Parameters need a source mapping.
-            AddError(Source{}) << "references are not permitted as parameter types";
+            AddError(param) << "references are not permitted as parameter types";
         }
     }
     if (HoldsType<type::Reference>(func->ReturnType())) {
-        // TODO(dsinclair): Function need a source mapping.
-        AddError(Source{}) << "references are not permitted as return types";
+        AddError(func) << "references are not permitted as return types";
     }
 }
 
 void Validator::CheckBlock(const Block* blk) {
     TINT_SCOPED_ASSIGNMENT(current_block_, blk);
+
+    if (auto* mb = blk->As<MultiInBlock>()) {
+        for (auto* param : mb->Params()) {
+            if (!param->Alive()) {
+                AddError(param) << "destroyed parameter found in block parameter list";
+                return;
+            }
+            if (!param->Block()) {
+                AddError(param) << "block parameter has nullptr parent block";
+                return;
+            } else if (param->Block() != mb) {
+                AddError(param) << "block parameter has incorrect parent block";
+                AddNote(param->Block()) << "parent block declared here";
+                return;
+            }
+        }
+    }
 
     if (!blk->Terminator()) {
         AddError(blk) << "block: does not end in a terminator instruction";

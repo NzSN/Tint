@@ -188,7 +188,14 @@ void Disassembler::EmitBlock(const Block* blk, std::string_view comment /* = "" 
     if (auto* merge = blk->As<MultiInBlock>()) {
         if (!merge->Params().IsEmpty()) {
             out_ << " (";
-            EmitValueList(merge->Params().Slice());
+            for (auto* p : merge->Params()) {
+                if (p != merge->Params().Front()) {
+                    out_ << ", ";
+                }
+                SourceMarker psm(this);
+                EmitValue(p);
+                psm.Store(p);
+            }
             out_ << ")";
         }
     }
@@ -302,7 +309,12 @@ void Disassembler::EmitFunction(const Function* func) {
     in_function_ = true;
 
     std::string fn_id = IdOf(func);
-    Indent() << "%" << fn_id << " =";
+    {
+        SourceMarker sm(this);
+        Indent() << "%" << fn_id;
+        sm.Store(func);
+    }
+    out_ << " =";
 
     if (func->Stage() != Function::PipelineStage::kUndefined) {
         out_ << " @" << func->Stage();
@@ -318,7 +330,9 @@ void Disassembler::EmitFunction(const Function* func) {
         if (p != func->Params().Front()) {
             out_ << ", ";
         }
+        SourceMarker sm(this);
         out_ << "%" << IdOf(p) << ":" << p->Type()->FriendlyName();
+        sm.Store(p);
 
         EmitParamAttributes(p);
     }
@@ -788,15 +802,6 @@ void Disassembler::EmitTerminator(const Terminator* b) {
         [&](const ir::ExitSwitch* e) { out_ << "  # " << NameOf(e->Switch()); },  //
         [&](const ir::ExitLoop* e) { out_ << "  # " << NameOf(e->Loop()); }       //
     );
-}
-
-void Disassembler::EmitValueList(tint::Slice<const Value* const> values) {
-    for (size_t i = 0, n = values.Length(); i < n; i++) {
-        if (i > 0) {
-            out_ << ", ";
-        }
-        EmitValue(values[i]);
-    }
 }
 
 void Disassembler::EmitBinary(const Binary* b) {

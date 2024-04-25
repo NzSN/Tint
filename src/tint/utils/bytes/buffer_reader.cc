@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,50 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_IR_BLOCK_PARAM_H_
-#define SRC_TINT_LANG_CORE_IR_BLOCK_PARAM_H_
+#include "src/tint/utils/bytes/buffer_reader.h"
 
-#include "src/tint/lang/core/ir/value.h"
-#include "src/tint/utils/rtti/castable.h"
+namespace tint::bytes {
 
-// Forward declarations
-namespace tint::core::ir {
-class MultiInBlock;
-}  // namespace tint::core::ir
+BufferReader::~BufferReader() = default;
 
-namespace tint::core::ir {
+size_t BufferReader::Read(std::byte* out, size_t count) {
+    size_t n = std::min(count, bytes_remaining_);
+    memcpy(out, data_, n);
+    data_ += n;
+    bytes_remaining_ -= n;
+    return n;
+}
 
-/// A block parameter in the IR.
-class BlockParam : public Castable<BlockParam, Value> {
-  public:
-    /// Constructor
-    /// @param type the type of the parameter
-    explicit BlockParam(const core::type::Type* type);
-    ~BlockParam() override;
+bool BufferReader::IsEOF() const {
+    return bytes_remaining_ == 0;
+}
 
-    /// @returns the type of the parameter
-    const core::type::Type* Type() const override { return type_; }
-
-    /// Sets the block that this parameter belongs to.
-    /// @param block the block
-    void SetBlock(MultiInBlock* block) { block_ = block; }
-
-    /// @returns the block that this parameter belongs to, or nullptr
-    MultiInBlock* Block() { return block_; }
-
-    /// @returns the block that this parameter belongs to, or nullptr
-    const MultiInBlock* Block() const { return block_; }
-
-    /// @copydoc Instruction::Clone()
-    BlockParam* Clone(CloneContext& ctx) override;
-
-  private:
-    /// the type of the parameter
-    const core::type::Type* type_ = nullptr;
-    /// the block that the parameter belongs to
-    MultiInBlock* block_ = nullptr;
-};
-
-}  // namespace tint::core::ir
-
-#endif  // SRC_TINT_LANG_CORE_IR_BLOCK_PARAM_H_
+}  // namespace tint::bytes

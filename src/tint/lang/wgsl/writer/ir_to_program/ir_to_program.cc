@@ -68,6 +68,7 @@
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/ir/var.h"
+#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
@@ -75,7 +76,9 @@
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/reference.h"
 #include "src/tint/lang/core/type/sampler.h"
+#include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture.h"
+#include "src/tint/lang/core/type/type.h"
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/lang/wgsl/ir/unary.h"
 #include "src/tint/lang/wgsl/program/program_builder.h"
@@ -968,6 +971,10 @@ class State {
                 return b.ty.sampled_texture(t->dim(), el);
             },
             [&](const core::type::StorageTexture* t) {
+                if (RequiresChromiumInternalGraphite(t)) {
+                    Enable(wgsl::Extension::kChromiumInternalGraphite);
+                }
+
                 return b.ty.storage_texture(t->dim(), t->texel_format(), t->access());
             },
             [&](const core::type::Sampler* s) { return b.ty.sampler(s->kind()); },
@@ -1051,12 +1058,17 @@ class State {
         });
     }
 
-    /// Associates the IR value @p value with the AST expression @p expr.
+    /// Associates the IR value @p value with the AST expression @p expr if it is used, otherwise
+    /// creates a phony assignment with @p expr.
     void Bind(const core::ir::Value* value, const ast::Expression* expr) {
         TINT_ASSERT(value);
-        // Value will be inlined at its place of usage.
-        if (TINT_UNLIKELY(!bindings_.Add(value, InlinedValue{expr}))) {
-            TINT_ICE() << "Bind(" << value->TypeInfo().name << ") called twice for same value";
+        if (value->IsUsed()) {
+            // Value will be inlined at its place of usage.
+            if (TINT_UNLIKELY(!bindings_.Add(value, InlinedValue{expr}))) {
+                TINT_ICE() << "Bind(" << value->TypeInfo().name << ") called twice for same value";
+            }
+        } else {
+            Append(b.Assign(b.Phony(), expr));
         }
     }
 
@@ -1191,6 +1203,12 @@ class State {
             default:
                 return false;
         }
+    }
+
+    /// @returns true if the storage texture type requires the kChromiumInternalGraphite extension
+    /// to be enabled.
+    bool RequiresChromiumInternalGraphite(const core::type::StorageTexture* tex) {
+        return tex->texel_format() == core::TexelFormat::kR8Unorm;
     }
 };
 

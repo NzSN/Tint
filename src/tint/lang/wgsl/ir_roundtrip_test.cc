@@ -196,6 +196,14 @@ fn f(i : i32, u : u32) -> i32 {
 )");
 }
 
+TEST_F(IRToProgramRoundtripTest, SingleFunction_UnrestrictedPointerParameters) {
+    RUN_TEST(R"(
+fn f(p : ptr<uniform, i32>) -> i32 {
+  return *(p);
+}
+)");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Struct declaration
 ////////////////////////////////////////////////////////////////////////////////
@@ -1917,6 +1925,21 @@ fn v() -> i32 {
 
 fn f() {
   v();
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, PhonyAssign_Conversion) {
+    RUN_TEST(R"(
+fn f() {
+  let i = 42i;
+  _ = u32(i);
+}
+)",
+             R"(
+fn f() {
+  let i = 42i;
+  _ = u32(i);
 }
 )");
 }
