@@ -184,7 +184,7 @@ void Disassembler::EmitBlock(const Block* blk, std::string_view comment /* = "" 
     Indent();
 
     SourceMarker sm(this);
-    out_ << "%b" << IdOf(blk) << " = block";
+    out_ << "$B" << IdOf(blk);
     if (auto* merge = blk->As<MultiInBlock>()) {
         if (!merge->Params().IsEmpty()) {
             out_ << " (";
@@ -201,7 +201,7 @@ void Disassembler::EmitBlock(const Block* blk, std::string_view comment /* = "" 
     }
     sm.Store(blk);
 
-    out_ << " {";
+    out_ << ": {";
     if (!comment.empty()) {
         out_ << "  # " << comment;
     }
@@ -340,7 +340,7 @@ void Disassembler::EmitFunction(const Function* func) {
 
     EmitReturnAttributes(func);
 
-    out_ << " -> %b" << IdOf(func->Block()) << " {";
+    out_ << " {";
 
     {  // Add a comment if the function IDs or parameter IDs doesn't match their name
         Vector<std::string, 4> names;
@@ -621,9 +621,9 @@ void Disassembler::EmitIf(const If* if_) {
 
     bool has_false = !if_->False()->IsEmpty();
 
-    out_ << " [t: %b" << IdOf(if_->True());
+    out_ << " [t: $B" << IdOf(if_->True());
     if (has_false) {
-        out_ << ", f: %b" << IdOf(if_->False());
+        out_ << ", f: $B" << IdOf(if_->False());
     }
     out_ << "]";
     sm.Store(if_);
@@ -657,12 +657,12 @@ void Disassembler::EmitIf(const If* if_) {
 void Disassembler::EmitLoop(const Loop* l) {
     Vector<std::string, 3> parts;
     if (!l->Initializer()->IsEmpty()) {
-        parts.Push("i: %b" + std::to_string(IdOf(l->Initializer())));
+        parts.Push("i: $B" + std::to_string(IdOf(l->Initializer())));
     }
-    parts.Push("b: %b" + std::to_string(IdOf(l->Body())));
+    parts.Push("b: $B" + std::to_string(IdOf(l->Body())));
 
     if (!l->Continuing()->IsEmpty()) {
-        parts.Push("c: %b" + std::to_string(IdOf(l->Continuing())));
+        parts.Push("c: $B" + std::to_string(IdOf(l->Continuing())));
     }
     SourceMarker sm(this);
     if (auto results = l->Results(); !results.IsEmpty()) {
@@ -734,7 +734,7 @@ void Disassembler::EmitSwitch(const Switch* s) {
                 EmitValue(selector.val);
             }
         }
-        out_ << ", %b" << IdOf(c.block) << ")";
+        out_ << ", $B" << IdOf(c.block) << ")";
     }
     out_ << "]";
     sm.Store(s);
@@ -760,8 +760,8 @@ void Disassembler::EmitTerminator(const Terminator* b) {
             out_ << "ret";
             args_offset = ir::Return::kArgsOperandOffset;
         },
-        [&](const ir::Continue* cont) {
-            out_ << "continue %b" << IdOf(cont->Loop()->Continuing());
+        [&](const ir::Continue*) {
+            out_ << "continue";
             args_offset = ir::Continue::kArgsOperandOffset;
         },
         [&](const ir::ExitIf*) {
@@ -776,15 +776,14 @@ void Disassembler::EmitTerminator(const Terminator* b) {
             out_ << "exit_loop";
             args_offset = ir::ExitLoop::kArgsOperandOffset;
         },
-        [&](const ir::NextIteration* ni) {
-            out_ << "next_iteration %b" << IdOf(ni->Loop()->Body());
+        [&](const ir::NextIteration*) {
+            out_ << "next_iteration";
             args_offset = ir::NextIteration::kArgsOperandOffset;
         },
         [&](const ir::Unreachable*) { out_ << "unreachable"; },
         [&](const ir::BreakIf* bi) {
             out_ << "break_if ";
             EmitValue(bi->Condition());
-            out_ << " %b" << IdOf(bi->Loop()->Body());
             args_offset = ir::BreakIf::kArgsOperandOffset;
         },
         [&](const ir::TerminateInvocation*) { out_ << "terminate_invocation"; },
@@ -797,10 +796,16 @@ void Disassembler::EmitTerminator(const Terminator* b) {
     sm.Store(b);
 
     tint::Switch(
-        b,                                                                        //
-        [&](const ir::ExitIf* e) { out_ << "  # " << NameOf(e->If()); },          //
-        [&](const ir::ExitSwitch* e) { out_ << "  # " << NameOf(e->Switch()); },  //
-        [&](const ir::ExitLoop* e) { out_ << "  # " << NameOf(e->Loop()); }       //
+        b,  //
+        [&](const ir::BreakIf* bi) {
+            out_ << "  # -> [t: exit_loop " << NameOf(bi->Loop()) << ", f: $B"
+                 << IdOf(bi->Loop()->Body()) << "]";
+        },                                                                                     //
+        [&](const ir::Continue* c) { out_ << "  # -> $B" << IdOf(c->Loop()->Continuing()); },  //
+        [&](const ir::ExitIf* e) { out_ << "  # " << NameOf(e->If()); },                       //
+        [&](const ir::ExitSwitch* e) { out_ << "  # " << NameOf(e->Switch()); },               //
+        [&](const ir::ExitLoop* e) { out_ << "  # " << NameOf(e->Loop()); },                   //
+        [&](const ir::NextIteration* ni) { out_ << "  # -> $B" << IdOf(ni->Loop()->Body()); }  //
     );
 }
 

@@ -51,8 +51,8 @@ TEST_F(WgslWriter_RaiseTest, BuiltinConversion) {
     });
 
     auto* src = R"(
-%f = func():void -> %b1 {
-  %b1 = block {
+%f = func():void {
+  $B1: {
     %2:i32 = max 1i, 2i
     ret
   }
@@ -61,8 +61,8 @@ TEST_F(WgslWriter_RaiseTest, BuiltinConversion) {
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-%f = func():void -> %b1 {
-  %b1 = block {
+%f = func():void {
+  $B1: {
     %2:i32 = wgsl.max 1i, 2i
     %3:i32 = let %2
     ret
@@ -87,12 +87,12 @@ TEST_F(WgslWriter_RaiseTest, WorkgroupBarrier) {
     });
 
     auto* src = R"(
-%b1 = block {  # root
+$B1: {  # root
   %W:ptr<workgroup, i32, read_write> = var
 }
 
-%f = func():i32 -> %b2 {
-  %b2 = block {
+%f = func():i32 {
+  $B2: {
     %3:void = workgroupBarrier
     %4:i32 = load %W
     %5:void = workgroupBarrier
@@ -103,12 +103,12 @@ TEST_F(WgslWriter_RaiseTest, WorkgroupBarrier) {
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-%b1 = block {  # root
+$B1: {  # root
   %W:ref<workgroup, i32, read_write> = var
 }
 
-%f = func():i32 -> %b2 {
-  %b2 = block {
+%f = func():i32 {
+  $B2: {
     %3:ptr<workgroup, i32, read_write> = ref-to-ptr %W
     %4:i32 = wgsl.workgroupUniformLoad %3
     ret %4
@@ -134,12 +134,12 @@ TEST_F(WgslWriter_RaiseTest, WorkgroupBarrier_NoMatch) {
     });
 
     auto* src = R"(
-%b1 = block {  # root
+$B1: {  # root
   %W:ptr<workgroup, i32, read_write> = var
 }
 
-%f = func():i32 -> %b2 {
-  %b2 = block {
+%f = func():i32 {
+  $B2: {
     %3:void = workgroupBarrier
     store %W, 42i
     %4:i32 = load %W
@@ -151,12 +151,12 @@ TEST_F(WgslWriter_RaiseTest, WorkgroupBarrier_NoMatch) {
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-%b1 = block {  # root
+$B1: {  # root
   %W:ref<workgroup, i32, read_write> = var
 }
 
-%f = func():i32 -> %b2 {
-  %b2 = block {
+%f = func():i32 {
+  $B2: {
     %3:void = wgsl.workgroupBarrier
     store %W, 42i
     %4:i32 = load %W

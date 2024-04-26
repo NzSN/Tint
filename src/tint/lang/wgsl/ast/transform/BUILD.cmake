@@ -251,11 +251,23 @@ tint_add_target(tint_lang_wgsl_ast_transform_fuzz fuzz
   lang/wgsl/ast/transform/add_block_attribute_fuzz.cc
   lang/wgsl/ast/transform/add_empty_entry_point_fuzz.cc
   lang/wgsl/ast/transform/array_length_from_uniform_fuzz.cc
+  lang/wgsl/ast/transform/binding_remapper_fuzz.cc
+  lang/wgsl/ast/transform/builtin_polyfill_fuzz.cc
+  lang/wgsl/ast/transform/canonicalize_entry_point_io_fuzz.cc
+  lang/wgsl/ast/transform/clamp_frag_depth_fuzz.cc
+  lang/wgsl/ast/transform/demote_to_helper_fuzz.cc
+  lang/wgsl/ast/transform/direct_variable_access_fuzz.cc
+  lang/wgsl/ast/transform/disable_uniformity_analysis_fuzz.cc
+  lang/wgsl/ast/transform/expand_compound_assignment_fuzz.cc
+  lang/wgsl/ast/transform/first_index_offset_fuzz.cc
+  lang/wgsl/ast/transform/fold_constants_fuzz.cc
+  lang/wgsl/ast/transform/multiplanar_external_texture_fuzz.cc
   lang/wgsl/ast/transform/zero_init_workgroup_memory_fuzz.cc
 )
 
 tint_target_add_dependencies(tint_lang_wgsl_ast_transform_fuzz fuzz
   tint_api_common
+  tint_api_options
   tint_lang_core
   tint_lang_core_constant
   tint_lang_core_type
