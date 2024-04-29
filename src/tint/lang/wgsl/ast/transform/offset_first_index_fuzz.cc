@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,39 +25,42 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_WGSL_AST_TRANSFORM_STD140_H_
-#define SRC_TINT_LANG_WGSL_AST_TRANSFORM_STD140_H_
-
-#include "src/tint/lang/wgsl/ast/transform/transform.h"
+#include "src/tint/cmd/fuzz/wgsl/fuzz.h"
+#include "src/tint/lang/wgsl/ast/transform/offset_first_index.h"
 
 namespace tint::ast::transform {
+namespace {
 
-/// Std140 is a transform that forks types used in the uniform address space that contain
-/// `matNx2<f32>` matrices into `N`x`vec2<f32>` column vectors, and `matNxM<f16>` matrices into
-/// `N`x`vecM<f16>` column vectors. Types that transitively use these forked types are also forked.
-/// `var<uniform>` variables will use these forked types, and expressions loading from these
-/// variables will do appropriate conversions to the regular WGSL types. As `matNx2<f32>` and
-/// `matNxM<f16>` matrices are the only type that violate std140-layout, this transformation is
-/// sufficient to have any WGSL structure be std140-layout conformant.
-///
-/// @note This transform requires the DirectVariableAccess and PromoteSideEffectsToDecl transforms
-/// to have been run first.
-class Std140 final : public Castable<Std140, Transform> {
-  public:
-    /// Constructor
-    Std140();
-    /// Destructor
-    ~Std140() override;
+bool CanRun(const Program& program, const OffsetFirstIndex::Config& config) {
+    if ((config.first_instance_offset.value_or(0) & 3) != 0 ||
+        (config.first_vertex_offset.value_or(0) & 3) != 0) {
+        return false;  // Misaligned
+    }
 
-    /// @copydoc Transform::Apply
-    ApplyResult Apply(const Program& program,
-                      const DataMap& inputs,
-                      DataMap& outputs) const override;
+    if (config.first_instance_offset.has_value() &&
+        config.first_instance_offset == config.first_vertex_offset) {
+        return false;  // Offset collision
+    }
+    return true;
+}
 
-  private:
-    struct State;
-};
+void OffsetFirstIndexFuzzer(const Program& program, const OffsetFirstIndex::Config& config) {
+    if (!CanRun(program, config)) {
+        return;
+    }
 
+    DataMap inputs;
+    inputs.Add<OffsetFirstIndex::Config>(std::move(config));
+
+    DataMap outputs;
+    if (auto result = OffsetFirstIndex{}.Apply(program, inputs, outputs)) {
+        if (!result->IsValid()) {
+            TINT_ICE() << "OffsetFirstIndex returned invalid program:\n" << result->Diagnostics();
+        }
+    }
+}
+
+}  // namespace
 }  // namespace tint::ast::transform
 
-#endif  // SRC_TINT_LANG_WGSL_AST_TRANSFORM_STD140_H_
+TINT_WGSL_PROGRAM_FUZZER(tint::ast::transform::OffsetFirstIndexFuzzer);

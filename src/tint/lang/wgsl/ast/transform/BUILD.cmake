@@ -262,6 +262,19 @@ tint_add_target(tint_lang_wgsl_ast_transform_fuzz fuzz
   lang/wgsl/ast/transform/first_index_offset_fuzz.cc
   lang/wgsl/ast/transform/fold_constants_fuzz.cc
   lang/wgsl/ast/transform/multiplanar_external_texture_fuzz.cc
+  lang/wgsl/ast/transform/offset_first_index_fuzz.cc
+  lang/wgsl/ast/transform/preserve_padding_fuzz.cc
+  lang/wgsl/ast/transform/promote_initializers_to_let_fuzz.cc
+  lang/wgsl/ast/transform/promote_side_effects_to_decl_fuzz.cc
+  lang/wgsl/ast/transform/remove_continue_in_switch_fuzz.cc
+  lang/wgsl/ast/transform/remove_phonies_fuzz.cc
+  lang/wgsl/ast/transform/remove_unreachable_statements_fuzz.cc
+  lang/wgsl/ast/transform/renamer_fuzz.cc
+  lang/wgsl/ast/transform/single_entry_point_fuzz.cc
+  lang/wgsl/ast/transform/std140_fuzz.cc
+  lang/wgsl/ast/transform/unshadow_fuzz.cc
+  lang/wgsl/ast/transform/vectorize_scalar_matrix_initializers_fuzz.cc
+  lang/wgsl/ast/transform/vertex_pulling_fuzz.cc
   lang/wgsl/ast/transform/zero_init_workgroup_memory_fuzz.cc
 )
 
