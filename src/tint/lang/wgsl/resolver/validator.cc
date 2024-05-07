@@ -180,15 +180,15 @@ Validator::Validator(
 Validator::~Validator() = default;
 
 diag::Diagnostic& Validator::AddError(const Source& source) const {
-    return diagnostics_.AddError(diag::System::Resolver, source);
+    return diagnostics_.AddError(source);
 }
 
 diag::Diagnostic& Validator::AddWarning(const Source& source) const {
-    return diagnostics_.AddWarning(diag::System::Resolver, source);
+    return diagnostics_.AddWarning(source);
 }
 
 diag::Diagnostic& Validator::AddNote(const Source& source) const {
-    return diagnostics_.AddNote(diag::System::Resolver, source);
+    return diagnostics_.AddNote(source);
 }
 
 diag::Diagnostic* Validator::MaybeAddDiagnostic(wgsl::DiagnosticRule rule,
@@ -197,7 +197,6 @@ diag::Diagnostic* Validator::MaybeAddDiagnostic(wgsl::DiagnosticRule rule,
     if (severity != wgsl::DiagnosticSeverity::kOff) {
         diag::Diagnostic d{};
         d.severity = ToSeverity(severity);
-        d.system = diag::System::Resolver;
         d.source = source;
         return &diagnostics_.Add(std::move(d));
     }
@@ -1097,8 +1096,8 @@ bool Validator::Function(const sem::Function* func, ast::PipelineStage stage) co
     }
 
     if (decl->params.Length() > kMaxFunctionParameters) {
-        AddError(decl->source) << "function declares " << decl->params.Length()
-                               << " parameters, maximum is " << kMaxFunctionParameters;
+        AddError(decl->name->source) << "function declares " << decl->params.Length()
+                                     << " parameters, maximum is " << kMaxFunctionParameters;
         return false;
     }
 
@@ -1115,7 +1114,9 @@ bool Validator::Function(const sem::Function* func, ast::PipelineStage stage) co
                 behaviors = sem_.Get(last)->Behaviors();
             }
             if (behaviors.Contains(sem::Behavior::kNext)) {
-                AddError(decl->source) << "missing return at end of function";
+                auto end_source = decl->body->source.End();
+                end_source.range.begin.column--;
+                AddError(end_source) << "missing return at end of function";
                 return false;
             }
         } else if (TINT_UNLIKELY(IsValidationEnabled(

@@ -108,6 +108,8 @@ option_if_not_defined(TINT_ENABLE_MSAN "Enable memory sanitizer" OFF)
 option_if_not_defined(TINT_ENABLE_ASAN "Enable address sanitizer" OFF)
 option_if_not_defined(TINT_ENABLE_UBSAN "Enable undefined behaviour sanitizer" OFF)
 
+option_if_not_defined(TINT_WERROR "Build with -Werror (or equivalent)" OFF)
+
 option_if_not_defined(TINT_ENABLE_BREAK_IN_DEBUGGER "Enable tint::debugger::Break()" OFF)
 
 option_if_not_defined(TINT_EMIT_COVERAGE "Emit code coverage information" OFF)
@@ -159,6 +161,10 @@ function(common_compile_options TARGET)
       -Wno-deprecated-builtins
       -Wno-unknown-warning-option
     )
+
+    if (${TINT_WERROR})
+        target_compile_options(${TARGET} PRIVATE -Werror)
+    endif()
 
     if (${TINT_ENABLE_MSAN})
       target_compile_options(${TARGET} PUBLIC -fsanitize=memory)

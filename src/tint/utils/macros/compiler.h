@@ -54,6 +54,10 @@
 #define TINT_DISABLE_WARNING_ZERO_AS_NULLPTR             /* currently no-op */
 #define TINT_DISABLE_WARNING_MISSING_DESTRUCTOR_OVERRIDE /* currently no-op */
 
+#define TINT_BEGIN_DISABLE_ALL_WARNINGS() __pragma(warning(push, 0)) TINT_REQUIRE_SEMICOLON
+
+#define TINT_END_DISABLE_ALL_WARNINGS() __pragma(warning(pop)) TINT_REQUIRE_SEMICOLON
+
 // clang-format off
 #define TINT_BEGIN_DISABLE_WARNING(name)     \
     __pragma(warning(push))                  \
@@ -70,6 +74,10 @@
 
 #define TINT_UNLIKELY(x) x /* currently no-op */
 #define TINT_LIKELY(x) x   /* currently no-op */
+
+#if defined(__SANITIZE_ADDRESS__)
+#define TINT_ASAN_ENABLED
+#endif
 
 #elif defined(__clang__)
 ////////////////////////////////////////////////////////////////////////////////
@@ -123,6 +131,15 @@
     _Pragma("clang diagnostic pop")          \
     TINT_REQUIRE_SEMICOLON
 
+#define TINT_BEGIN_DISABLE_ALL_WARNINGS() \
+    _Pragma("clang diagnostic push")      \
+    _Pragma("clang diagnostic ignored \"-Weverything\"")       \
+    TINT_REQUIRE_SEMICOLON
+
+#define TINT_END_DISABLE_ALL_WARNINGS() \
+    _Pragma("clang diagnostic pop")     \
+    TINT_REQUIRE_SEMICOLON
+
 #define TINT_BEGIN_DISABLE_WARNING(name)     \
     _Pragma("clang diagnostic push")         \
     TINT_CONCAT(TINT_DISABLE_WARNING_, name) \
@@ -135,6 +152,11 @@
 
 #define TINT_UNLIKELY(x) __builtin_expect(!!(x), false)
 #define TINT_LIKELY(x) __builtin_expect(!!(x), true)
+
+#if __has_feature(address_sanitizer)
+#define TINT_ASAN_ENABLED
+#endif
+
 #elif defined(__GNUC__)
 ////////////////////////////////////////////////////////////////////////////////
 // GCC
@@ -164,6 +186,31 @@
 #define TINT_END_DISABLE_PROTOBUF_WARNINGS() _Pragma("GCC diagnostic pop") TINT_REQUIRE_SEMICOLON
 
 // clang-format off
+#define TINT_BEGIN_DISABLE_ALL_WARNINGS()             \
+    _Pragma("GCC diagnostic push")                    \
+    TINT_DISABLE_WARNING_CONSTANT_OVERFLOW            \
+    TINT_DISABLE_WARNING_MAYBE_UNINITIALIZED          \
+    TINT_DISABLE_WARNING_NEWLINE_EOF                  \
+    TINT_DISABLE_WARNING_OLD_STYLE_CAST               \
+    TINT_DISABLE_WARNING_SIGN_CONVERSION              \
+    TINT_DISABLE_WARNING_UNREACHABLE_CODE             \
+    TINT_DISABLE_WARNING_WEAK_VTABLES                 \
+    TINT_DISABLE_WARNING_FLOAT_EQUAL                  \
+    TINT_DISABLE_WARNING_DEPRECATED                   \
+    TINT_DISABLE_WARNING_RESERVED_IDENTIFIER          \
+    TINT_DISABLE_WARNING_RESERVED_MACRO_IDENTIFIER    \
+    TINT_DISABLE_WARNING_UNUSED_VALUE                 \
+    TINT_DISABLE_WARNING_UNUSED_PARAMETER             \
+    TINT_DISABLE_WARNING_SHADOW_FIELD_IN_CONSTRUCTOR  \
+    TINT_DISABLE_WARNING_EXTRA_SEMICOLON              \
+    TINT_DISABLE_WARNING_ZERO_AS_NULLPTR              \
+    TINT_DISABLE_WARNING_MISSING_DESTRUCTOR_OVERRIDE  \
+    TINT_REQUIRE_SEMICOLON
+// clang-format on
+
+#define TINT_END_DISABLE_ALL_WARNINGS() _Pragma("GCC diagnostic pop") TINT_REQUIRE_SEMICOLON
+
+// clang-format off
 #define TINT_BEGIN_DISABLE_WARNING(name)     \
     _Pragma("GCC diagnostic push")           \
     TINT_CONCAT(TINT_DISABLE_WARNING_, name) \
@@ -175,10 +222,17 @@
 
 #define TINT_UNLIKELY(x) __builtin_expect(!!(x), false)
 #define TINT_LIKELY(x) __builtin_expect(!!(x), true)
+
+#if defined(__SANITIZE_ADDRESS__)
+#define TINT_ASAN_ENABLED
+#endif
+
 #else
 ////////////////////////////////////////////////////////////////////////////////
 // Other
 ////////////////////////////////////////////////////////////////////////////////
+#define TINT_BEGIN_DISABLE_ALL_WARNINGS() TINT_REQUIRE_SEMICOLON
+#define TINT_END_DISABLE_ALL_WARNINGS TINT_REQUIRE_SEMICOLON
 #define TINT_BEGIN_DISABLE_WARNING(name) TINT_REQUIRE_SEMICOLON
 #define TINT_END_DISABLE_WARNING(name) TINT_REQUIRE_SEMICOLON
 #define TINT_BEGIN_DISABLE_PROTOBUF_WARNINGS() TINT_REQUIRE_SEMICOLON

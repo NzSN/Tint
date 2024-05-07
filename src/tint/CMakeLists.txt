@@ -82,13 +82,15 @@ function(tint_default_compile_options TARGET)
 
   set(COMMON_GNU_OPTIONS
     -Wall
-    -Werror
     -Wextra
     -Wno-documentation-unknown-command
     -Wno-padded
     -Wno-switch-enum
     -Wno-unknown-pragmas
   )
+  if (${TINT_WERROR})
+      list(APPEND COMMON_GNU_OPTIONS -Werror)
+  endif()
 
   set(COMMON_CLANG_OPTIONS
     -Wno-c++98-compat
@@ -130,7 +132,6 @@ function(tint_default_compile_options TARGET)
       /bigobj
       /EHsc
       /W4
-      /WX
       /wd4068 # unknown pragma
       /wd4127 # conditional expression is constant
       /wd4244 # 'conversion' conversion from 'type1' to 'type2', possible loss of data
@@ -148,6 +149,9 @@ function(tint_default_compile_options TARGET)
       /wd5026 # 'type': move constructor was implicitly defined as deleted
       /wd5027 # 'type': move assignment operator was implicitly defined as deleted
     )
+    if (${TINT_WERROR})
+      target_compile_options(${TARGET} PRIVATE /WX)
+    endif()
 
     # When building with clang-cl on Windows, try to match our clang build
     # options as much as possible.
@@ -501,6 +505,10 @@ function(tint_target_add_external_dependencies TARGET KIND)
       target_link_libraries(${TARGET} PRIVATE
         absl_strings
       )
+    elseif(${DEPENDENCY} STREQUAL "dl")
+      target_link_libraries(${TARGET} PRIVATE ${CMAKE_DL_LIBS})
+    elseif(${DEPENDENCY} STREQUAL "dxc-include")
+      target_include_directories(${TARGET} PRIVATE "${TINT_THIRD_PARTY_DIR}/dxc/include")
     elseif(${DEPENDENCY} STREQUAL "jsoncpp")
       target_link_libraries(${TARGET} PRIVATE jsoncpp_static)
     elseif(${DEPENDENCY} STREQUAL "langsvr")

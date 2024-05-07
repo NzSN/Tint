@@ -32,23 +32,26 @@
 #include <string>
 #include <utility>
 
-#include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/intrinsic/table.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/binary.h"
 #include "src/tint/lang/core/ir/bitcast.h"
+#include "src/tint/lang/core/ir/block_param.h"
 #include "src/tint/lang/core/ir/break_if.h"
+#include "src/tint/lang/core/ir/constant.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
 #include "src/tint/lang/core/ir/convert.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
-#include "src/tint/lang/core/ir/disassembler.h"
+#include "src/tint/lang/core/ir/disassembly.h"
 #include "src/tint/lang/core/ir/discard.h"
 #include "src/tint/lang/core/ir/exit_if.h"
 #include "src/tint/lang/core/ir/exit_loop.h"
 #include "src/tint/lang/core/ir/exit_switch.h"
 #include "src/tint/lang/core/ir/function.h"
+#include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/if.h"
+#include "src/tint/lang/core/ir/instruction_result.h"
 #include "src/tint/lang/core/ir/let.h"
 #include "src/tint/lang/core/ir/load.h"
 #include "src/tint/lang/core/ir/load_vector_element.h"
@@ -72,16 +75,21 @@
 #include "src/tint/lang/core/type/type.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/core/type/void.h"
+#include "src/tint/utils/containers/hashset.h"
 #include "src/tint/utils/containers/reverse.h"
 #include "src/tint/utils/containers/transform.h"
+#include "src/tint/utils/ice/ice.h"
+#include "src/tint/utils/macros/defer.h"
 #include "src/tint/utils/macros/scoped_assignment.h"
 #include "src/tint/utils/rtti/switch.h"
+#include "src/tint/utils/text/styled_text.h"
 #include "src/tint/utils/text/text_style.h"
 
 /// If set to 1 then the Tint will dump the IR when validating.
 #define TINT_DUMP_IR_WHEN_VALIDATING 0
 #if TINT_DUMP_IR_WHEN_VALIDATING
 #include <iostream>
+#include "src/tint/utils/text/styled_text_printer.h"
 #endif
 
 using namespace tint::core::fluent_types;  // NOLINT
@@ -139,7 +147,10 @@ class Validator {
     /// @returns success or failure
     Result<SuccessType> Run();
 
-  protected:
+  private:
+    /// @returns the IR disassembly, performing a disassemble if this is the first call.
+    ir::Disassembly& Disassembly();
+
     /// Adds an error for the @p inst and highlights the instruction in the disassembly
     /// @param inst the instruction
     /// @returns the diagnostic
@@ -147,7 +158,7 @@ class Validator {
 
     /// Adds an error for the @p inst operand at @p idx and highlights the operand in the
     /// disassembly
-    /// @param inst the instaruction
+    /// @param inst the instruction
     /// @param idx the operand index
     /// @returns the diagnostic
     diag::Diagnostic& AddError(const Instruction* inst, size_t idx);
@@ -191,11 +202,15 @@ class Validator {
     /// @param func the function
     diag::Diagnostic& AddNote(const Function* func);
 
-    /// Adds a note to @p inst for operand @p idx and highlights the operand in the
-    /// disassembly
+    /// Adds a note to @p inst for operand @p idx and highlights the operand in the disassembly
     /// @param inst the instruction
     /// @param idx the operand index
-    diag::Diagnostic& AddNote(const Instruction* inst, size_t idx);
+    diag::Diagnostic& AddOperandNote(const Instruction* inst, size_t idx);
+
+    /// Adds a note to @p inst for result @p idx and highlights the result in the disassembly
+    /// @param inst the instruction
+    /// @param idx the result index
+    diag::Diagnostic& AddResultNote(const Instruction* inst, size_t idx);
 
     /// Adds a note to @p blk and highlights the block in the disassembly
     /// @param blk the block
@@ -205,9 +220,14 @@ class Validator {
     /// @param src the source lines to highlight
     diag::Diagnostic& AddNote(Source src = {});
 
+    /// Adds a note to the diagnostics highlighting where the value was declared, if it has a source
+    /// location.
+    /// @param value the value
+    void AddDeclarationNote(const Value* value);
+
     /// @param v the value to get the name for
     /// @returns the name for the given value
-    std::string Name(const Value* v);
+    StyledText NameOf(const Value* v);
 
     /// Checks the given operand is not null
     /// @param inst the instruction
@@ -230,10 +250,6 @@ class Validator {
     /// Validates the given function
     /// @param func the function validate
     void CheckFunction(const Function* func);
-
-    /// Validates the given block
-    /// @param blk the block to validate
-    void CheckBlock(const Block* blk);
 
     /// Validates the given instruction
     /// @param inst the instruction to validate
@@ -334,18 +350,50 @@ class Validator {
     /// @returns the vector pointer type for the given instruction operand
     const core::type::Type* GetVectorPtrElementType(const Instruction* inst, size_t idx);
 
-  private:
+    /// Executes all the pending tasks
+    void ProcessTasks();
+
+    /// Queues the block to be validated with ProcessTasks()
+    /// @param blk the block to validate
+    void QueueBlock(const Block* blk);
+
+    /// Queues the list of instructions starting with @p inst to be validated
+    /// @param inst the first instruction
+    void QueueInstructions(const Instruction* inst);
+
+    /// Begins validation of the block @p blk, and its instructions.
+    /// BeginBlock() pushes a new scope for values.
+    /// Must be paired with a call to EndBlock().
+    void BeginBlock(const Block* blk);
+
+    /// Ends validation of the block opened with BeginBlock() and closes the block's scope for
+    /// values.
+    void EndBlock();
+
+    /// ScopeStack holds a stack of values that are currently in scope
+    struct ScopeStack {
+        void Push() { stack_.Push({}); }
+        void Pop() { stack_.Pop(); }
+        void Add(const Value* value) { stack_.Back().Add(value); }
+        bool Contains(const Value* value) {
+            return stack_.Any([&](auto& v) { return v.Contains(value); });
+        }
+        bool IsEmpty() const { return stack_.IsEmpty(); }
+
+      private:
+        Vector<Hashset<const Value*, 8>, 4> stack_;
+    };
+
     const Module& mod_;
     Capabilities capabilities_;
-    std::shared_ptr<Source::File> disassembly_file;
+    std::optional<ir::Disassembly> disassembly_;  // Use Disassembly()
     diag::List diagnostics_;
-    Disassembler dis_{mod_};
-    const Block* current_block_ = nullptr;
     Hashset<const Function*, 4> all_functions_;
     Hashset<const Instruction*, 4> visited_instructions_;
     Vector<const ControlInstruction*, 8> control_stack_;
-
-    void DisassembleIfNeeded();
+    Vector<const Block*, 8> block_stack_;
+    ScopeStack scope_stack_;
+    Vector<std::function<void()>, 16> tasks_;
 };
 
 Validator::Validator(const Module& mod, Capabilities capabilities)
@@ -353,21 +401,30 @@ Validator::Validator(const Module& mod, Capabilities capabilities)
 
 Validator::~Validator() = default;
 
-void Validator::DisassembleIfNeeded() {
-    if (disassembly_file) {
-        return;
+Disassembly& Validator::Disassembly() {
+    if (!disassembly_) {
+        disassembly_.emplace(Disassemble(mod_));
     }
-    disassembly_file = std::make_unique<Source::File>("", dis_.Disassemble().Plain());
+    return *disassembly_;
 }
 
 Result<SuccessType> Validator::Run() {
+    scope_stack_.Push();
+    TINT_DEFER({
+        scope_stack_.Pop();
+        TINT_ASSERT(scope_stack_.IsEmpty());
+        TINT_ASSERT(tasks_.IsEmpty());
+        TINT_ASSERT(control_stack_.IsEmpty());
+        TINT_ASSERT(block_stack_.IsEmpty());
+    });
     CheckRootBlock(mod_.root_block);
 
     for (auto& func : mod_.functions) {
         if (!all_functions_.Add(func.Get())) {
-            AddError(func) << "function " << style::Function(Name(func.Get()))
+            AddError(func) << "function " << NameOf(func.Get())
                            << " added to module multiple times";
         }
+        scope_stack_.Add(func);
     }
 
     for (auto& func : mod_.functions) {
@@ -384,116 +441,134 @@ Result<SuccessType> Validator::Run() {
     }
 
     if (diagnostics_.ContainsErrors()) {
-        DisassembleIfNeeded();
-        diagnostics_.AddNote(tint::diag::System::IR, Source{}) << "# Disassembly\n"
-                                                               << disassembly_file->content.data;
+        diagnostics_.AddNote(Source{}) << "# Disassembly\n" << Disassembly().Text();
         return Failure{std::move(diagnostics_)};
     }
     return Success;
 }
 
 diag::Diagnostic& Validator::AddError(const Instruction* inst) {
-    DisassembleIfNeeded();
-    auto src = dis_.InstructionSource(inst);
+    auto src = Disassembly().InstructionSource(inst);
     auto& diag = AddError(src) << inst->FriendlyName() << ": ";
 
-    if (current_block_) {
-        AddNote(current_block_) << "In block";
+    if (!block_stack_.IsEmpty()) {
+        AddNote(block_stack_.Back()) << "in block";
     }
     return diag;
 }
 
 diag::Diagnostic& Validator::AddError(const Instruction* inst, size_t idx) {
-    DisassembleIfNeeded();
-    auto src = dis_.OperandSource(Disassembler::IndexedValue{inst, static_cast<uint32_t>(idx)});
+    auto src =
+        Disassembly().OperandSource(Disassembly::IndexedValue{inst, static_cast<uint32_t>(idx)});
     auto& diag = AddError(src) << inst->FriendlyName() << ": ";
 
-    if (current_block_) {
-        AddNote(current_block_) << "In block";
+    if (!block_stack_.IsEmpty()) {
+        AddNote(block_stack_.Back()) << "in block";
     }
-
     return diag;
 }
 
 diag::Diagnostic& Validator::AddResultError(const Instruction* inst, size_t idx) {
-    DisassembleIfNeeded();
-    auto src = dis_.ResultSource(Disassembler::IndexedValue{inst, static_cast<uint32_t>(idx)});
+    auto src =
+        Disassembly().ResultSource(Disassembly::IndexedValue{inst, static_cast<uint32_t>(idx)});
     auto& diag = AddError(src) << inst->FriendlyName() << ": ";
 
-    if (current_block_) {
-        AddNote(current_block_) << "In block";
+    if (!block_stack_.IsEmpty()) {
+        AddNote(block_stack_.Back()) << "in block";
     }
     return diag;
 }
 
 diag::Diagnostic& Validator::AddError(const Block* blk) {
-    DisassembleIfNeeded();
-    auto src = dis_.BlockSource(blk);
+    auto src = Disassembly().BlockSource(blk);
     return AddError(src);
 }
 
 diag::Diagnostic& Validator::AddError(const BlockParam* param) {
-    DisassembleIfNeeded();
-    auto src = dis_.BlockParamSource(param);
+    auto src = Disassembly().BlockParamSource(param);
     return AddError(src);
 }
 
 diag::Diagnostic& Validator::AddError(const Function* func) {
-    DisassembleIfNeeded();
-    auto src = dis_.FunctionSource(func);
+    auto src = Disassembly().FunctionSource(func);
     return AddError(src);
 }
 
 diag::Diagnostic& Validator::AddError(const FunctionParam* param) {
-    DisassembleIfNeeded();
-    auto src = dis_.FunctionParamSource(param);
+    auto src = Disassembly().FunctionParamSource(param);
     return AddError(src);
 }
 
 diag::Diagnostic& Validator::AddNote(const Instruction* inst) {
-    DisassembleIfNeeded();
-    auto src = dis_.InstructionSource(inst);
+    auto src = Disassembly().InstructionSource(inst);
     return AddNote(src);
 }
 
 diag::Diagnostic& Validator::AddNote(const Function* func) {
-    DisassembleIfNeeded();
-    auto src = dis_.FunctionSource(func);
+    auto src = Disassembly().FunctionSource(func);
     return AddNote(src);
 }
 
-diag::Diagnostic& Validator::AddNote(const Instruction* inst, size_t idx) {
-    DisassembleIfNeeded();
-    auto src = dis_.OperandSource(Disassembler::IndexedValue{inst, static_cast<uint32_t>(idx)});
+diag::Diagnostic& Validator::AddOperandNote(const Instruction* inst, size_t idx) {
+    auto src =
+        Disassembly().OperandSource(Disassembly::IndexedValue{inst, static_cast<uint32_t>(idx)});
+    return AddNote(src);
+}
+
+diag::Diagnostic& Validator::AddResultNote(const Instruction* inst, size_t idx) {
+    auto src =
+        Disassembly().ResultSource(Disassembly::IndexedValue{inst, static_cast<uint32_t>(idx)});
     return AddNote(src);
 }
 
 diag::Diagnostic& Validator::AddNote(const Block* blk) {
-    DisassembleIfNeeded();
-    auto src = dis_.BlockSource(blk);
+    auto src = Disassembly().BlockSource(blk);
     return AddNote(src);
 }
 
 diag::Diagnostic& Validator::AddError(Source src) {
-    auto& diag = diagnostics_.AddError(tint::diag::System::IR, src);
-    if (src.range != Source::Range{{}}) {
-        diag.source.file = disassembly_file.get();
-        diag.owned_file = disassembly_file;
-    }
+    auto& diag = diagnostics_.AddError(src);
+    diag.owned_file = Disassembly().File();
     return diag;
 }
 
 diag::Diagnostic& Validator::AddNote(Source src) {
-    auto& diag = diagnostics_.AddNote(tint::diag::System::IR, src);
-    if (src.range != Source::Range{{}}) {
-        diag.source.file = disassembly_file.get();
-        diag.owned_file = disassembly_file;
-    }
+    auto& diag = diagnostics_.AddNote(src);
+    diag.owned_file = Disassembly().File();
     return diag;
 }
 
-std::string Validator::Name(const Value* v) {
-    return mod_.NameOf(v).Name();
+void Validator::AddDeclarationNote(const Value* value) {
+    tint::Switch(
+        value,  //
+        [&](const InstructionResult* res) {
+            if (auto* inst = res->Instruction()) {
+                auto results = inst->Results();
+                for (size_t i = 0; i < results.Length(); i++) {
+                    if (results[i] == value) {
+                        AddResultNote(res->Instruction(), i) << NameOf(value) << " declared here";
+                        return;
+                    }
+                }
+            }
+        },
+        [&](const FunctionParam* param) {
+            auto src = Disassembly().FunctionParamSource(param);
+            if (src.file) {
+                AddNote(src) << NameOf(value) << " declared here";
+            }
+        },
+        [&](const BlockParam* param) {
+            auto src = Disassembly().BlockParamSource(param);
+            if (src.file) {
+                AddNote(src) << NameOf(value) << " declared here";
+            }
+        },
+        [&](const Function* fn) { AddNote(fn) << NameOf(value) << " declared here"; });
+}
+
+StyledText Validator::NameOf(const Value* value) {
+    return Disassembly().NameOf(value);
 }
 
 void Validator::CheckOperandNotNull(const Instruction* inst, const ir::Value* operand, size_t idx) {
@@ -512,7 +587,8 @@ void Validator::CheckOperandsNotNull(const Instruction* inst,
 }
 
 void Validator::CheckRootBlock(const Block* blk) {
-    TINT_SCOPED_ASSIGNMENT(current_block_, blk);
+    block_stack_.Push(blk);
+    TINT_DEFER(block_stack_.Pop());
 
     for (auto* inst : *blk) {
         if (inst->Block() != blk) {
@@ -529,7 +605,9 @@ void Validator::CheckRootBlock(const Block* blk) {
 }
 
 void Validator::CheckFunction(const Function* func) {
-    CheckBlock(func->Block());
+    // Scope holds the parameters and block
+    scope_stack_.Push();
+    TINT_DEFER(scope_stack_.Pop());
 
     for (auto* param : func->Params()) {
         if (!param->Alive()) {
@@ -549,14 +627,31 @@ void Validator::CheckFunction(const Function* func) {
         if (HoldsType<type::Reference>(param->Type())) {
             AddError(param) << "references are not permitted as parameter types";
         }
+
+        scope_stack_.Add(param);
     }
     if (HoldsType<type::Reference>(func->ReturnType())) {
         AddError(func) << "references are not permitted as return types";
     }
+
+    QueueBlock(func->Block());
+    ProcessTasks();
 }
 
-void Validator::CheckBlock(const Block* blk) {
-    TINT_SCOPED_ASSIGNMENT(current_block_, blk);
+void Validator::ProcessTasks() {
+    while (!tasks_.IsEmpty()) {
+        tasks_.Pop()();
+    }
+}
+
+void Validator::QueueBlock(const Block* blk) {
+    tasks_.Push([this] { EndBlock(); });
+    tasks_.Push([this, blk] { BeginBlock(blk); });
+}
+
+void Validator::BeginBlock(const Block* blk) {
+    scope_stack_.Push();
+    block_stack_.Push(blk);
 
     if (auto* mb = blk->As<MultiInBlock>()) {
         for (auto* param : mb->Params()) {
@@ -572,26 +667,45 @@ void Validator::CheckBlock(const Block* blk) {
                 AddNote(param->Block()) << "parent block declared here";
                 return;
             }
+            scope_stack_.Add(param);
         }
     }
 
     if (!blk->Terminator()) {
-        AddError(blk) << "block: does not end in a terminator instruction";
+        AddError(blk) << "block does not end in a terminator instruction";
     }
 
+    // Validate the instructions w.r.t. the parent block
     for (auto* inst : *blk) {
         if (inst->Block() != blk) {
             AddError(inst) << "block instruction does not have same block as parent";
-            AddNote(current_block_) << "In block";
+            AddNote(blk) << "in block";
             continue;
         }
         if (inst->Is<ir::Terminator>() && inst != blk->Terminator()) {
-            AddError(inst) << "block: terminator which isn't the final instruction";
+            AddError(inst) << "block terminator which isn't the final instruction";
             continue;
         }
-
-        CheckInstruction(inst);
     }
+
+    // Enqueue validation of the instructions of the block
+    if (!blk->IsEmpty()) {
+        QueueInstructions(blk->Instructions());
+    }
+}
+
+void Validator::EndBlock() {
+    scope_stack_.Pop();
+    block_stack_.Pop();
+}
+
+void Validator::QueueInstructions(const Instruction* inst) {
+    tasks_.Push([this, inst] {
+        CheckInstruction(inst);
+        if (inst->next) {
+            QueueInstructions(inst->next);
+        }
+    });
 }
 
 void Validator::CheckInstruction(const Instruction* inst) {
@@ -632,10 +746,13 @@ void Validator::CheckInstruction(const Instruction* inst) {
         // for `nullptr` here.
         if (!op->Alive()) {
             AddError(inst, i) << "operand is not alive";
-        }
-
-        if (!op->HasUsage(inst, i)) {
+        } else if (!op->HasUsage(inst, i)) {
             AddError(inst, i) << "operand missing usage";
+        } else if (auto fn = op->As<Function>(); fn && !all_functions_.Contains(fn)) {
+            AddError(inst, i) << NameOf(op) << " is not part of the module";
+        } else if (!op->Is<Constant>() && !scope_stack_.Contains(op)) {
+            AddError(inst, i) << NameOf(op) << " is not in scope";
+            AddDeclarationNote(op);
         }
 
         if (!capabilities_.Contains(Capability::kAllowRefTypes)) {
@@ -663,6 +780,10 @@ void Validator::CheckInstruction(const Instruction* inst) {
         [&](const Unary* u) { CheckUnary(u); },                            //
         [&](const Var* var) { CheckVar(var); },                            //
         [&](const Default) { AddError(inst) << "missing validation"; });
+
+    for (auto* result : results) {
+        scope_stack_.Add(result);
+    }
 }
 
 void Validator::CheckVar(const Var* var) {
@@ -721,10 +842,6 @@ void Validator::CheckBuiltinCall(const BuiltinCall* call) {
 }
 
 void Validator::CheckUserCall(const UserCall* call) {
-    if (!all_functions_.Contains(call->Target())) {
-        AddError(call, UserCall::kFunctionOperandOffset) << "call target is not part of the module";
-    }
-
     if (call->Target()->Stage() != Function::PipelineStage::kUndefined) {
         AddError(call, UserCall::kFunctionOperandOffset)
             << "call target must not have a pipeline stage";
@@ -778,7 +895,7 @@ void Validator::CheckAccess(const Access* a) {
             return AddError(a, i + Access::kIndicesOperandOffset);
         };
         auto note = [&]() -> diag::Diagnostic& {
-            return AddNote(a, i + Access::kIndicesOperandOffset);
+            return AddOperandNote(a, i + Access::kIndicesOperandOffset);
         };
 
         auto* index = a->Indices()[i];
@@ -912,36 +1029,50 @@ void Validator::CheckIf(const If* if_) {
         AddError(if_, If::kConditionOperandOffset) << "condition must be a `bool` type";
     }
 
-    control_stack_.Push(if_);
-    TINT_DEFER(control_stack_.Pop());
+    tasks_.Push([this] { control_stack_.Pop(); });
 
-    CheckBlock(if_->True());
     if (!if_->False()->IsEmpty()) {
-        CheckBlock(if_->False());
+        QueueBlock(if_->False());
     }
+
+    QueueBlock(if_->True());
+
+    tasks_.Push([this, if_] { control_stack_.Push(if_); });
 }
 
 void Validator::CheckLoop(const Loop* l) {
-    control_stack_.Push(l);
-    TINT_DEFER(control_stack_.Pop());
-
+    // Note: Tasks are queued in reverse order of their execution
+    tasks_.Push([this] { control_stack_.Pop(); });
     if (!l->Initializer()->IsEmpty()) {
-        CheckBlock(l->Initializer());
+        tasks_.Push([this] { EndBlock(); });
     }
-    CheckBlock(l->Body());
+    tasks_.Push([this] { EndBlock(); });
+    if (!l->Continuing()->IsEmpty()) {
+        tasks_.Push([this] { EndBlock(); });
+    }
+
+    // ⎡Initializer              ⎤
+    // ⎢    ⎡Body               ⎤⎥
+    // ⎣    ⎣    [Continuing ]  ⎦⎦
 
     if (!l->Continuing()->IsEmpty()) {
-        CheckBlock(l->Continuing());
+        tasks_.Push([this, l] { BeginBlock(l->Continuing()); });
     }
+    tasks_.Push([this, l] { BeginBlock(l->Body()); });
+    if (!l->Initializer()->IsEmpty()) {
+        tasks_.Push([this, l] { BeginBlock(l->Initializer()); });
+    }
+    tasks_.Push([this, l] { control_stack_.Push(l); });
 }
 
 void Validator::CheckSwitch(const Switch* s) {
-    control_stack_.Push(s);
-    TINT_DEFER(control_stack_.Pop());
+    tasks_.Push([this] { control_stack_.Pop(); });
 
     for (auto& cse : s->Cases()) {
-        CheckBlock(cse.block);
+        QueueBlock(cse.block);
     }
+
+    tasks_.Push([this, s] { control_stack_.Push(s); });
 }
 
 void Validator::CheckTerminator(const Terminator* b) {
@@ -1169,10 +1300,11 @@ Result<SuccessType> ValidateAndDumpIfNeeded([[maybe_unused]] const Module& ir,
                                             [[maybe_unused]] const char* msg,
                                             [[maybe_unused]] Capabilities capabilities) {
 #if TINT_DUMP_IR_WHEN_VALIDATING
+    auto printer = StyledTextPrinter::Create(stdout);
     std::cout << "=========================================================" << std::endl;
     std::cout << "== IR dump before " << msg << ":" << std::endl;
     std::cout << "=========================================================" << std::endl;
-    std::cout << Disassemble(ir);
+    printer->Print(Disassemble(ir).Text());
 #endif
 
 #ifndef NDEBUG

@@ -1156,9 +1156,10 @@ sem::Function* Resolver::Function(const ast::Function* decl) {
     }
 
     if (auto* str = return_type->As<core::type::Struct>()) {
-        if (!ApplyAddressSpaceUsageToType(core::AddressSpace::kUndefined, str, decl->source)) {
-            AddNote(decl->source) << "while instantiating return type for "
-                                  << decl->name->symbol.NameView();
+        if (!ApplyAddressSpaceUsageToType(core::AddressSpace::kUndefined, str,
+                                          decl->return_type->source)) {
+            AddNote(decl->return_type->source)
+                << "while instantiating return type for " << decl->name->symbol.NameView();
             return nullptr;
         }
 
@@ -5048,22 +5049,21 @@ void Resolver::AddICE(std::string_view msg, const Source& source) const {
         TINT_ICE() << msg;
     }
     diag::Diagnostic err{};
-    err.severity = diag::Severity::InternalCompilerError;
-    err.system = diag::System::Resolver;
+    err.severity = diag::Severity::Error;
     err.source = source;
     diagnostics_.Add(std::move(err)) << msg;
 }
 
 diag::Diagnostic& Resolver::AddError(const Source& source) const {
-    return diagnostics_.AddError(diag::System::Resolver, source);
+    return diagnostics_.AddError(source);
 }
 
 diag::Diagnostic& Resolver::AddWarning(const Source& source) const {
-    return diagnostics_.AddWarning(diag::System::Resolver, source);
+    return diagnostics_.AddWarning(source);
 }
 
 diag::Diagnostic& Resolver::AddNote(const Source& source) const {
-    return diagnostics_.AddNote(diag::System::Resolver, source);
+    return diagnostics_.AddNote(source);
 }
 
 }  // namespace tint::resolver

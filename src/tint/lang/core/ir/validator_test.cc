@@ -71,7 +71,7 @@ TEST_F(IR_ValidatorTest, RootBlock_NonVar) {
   loop [b: $B2] {  # loop_1
   ^^^^^^^^^^^^^
 
-:1:1 note: In block
+:1:1 note: in block
 $B1: {  # root
 ^^^
 
@@ -102,7 +102,7 @@ TEST_F(IR_ValidatorTest, RootBlock_VarBlockMismatch) {
   %1:ptr<private, i32, read_write> = var
                                      ^^^
 
-:1:1 note: In block
+:1:1 note: in block
 $B1: {  # root
 ^^^
 
@@ -139,7 +139,7 @@ TEST_F(IR_ValidatorTest, Function_Duplicate) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:1:1 error: function 'my_func' added to module multiple times
+              R"(:1:1 error: function %my_func added to module multiple times
 %my_func = func(%2:i32, %3:f32):void {
 ^^^^^^^^
 
@@ -253,11 +253,11 @@ TEST_F(IR_ValidatorTest, CallToFunctionOutsideModule) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:3:20 error: call: call target is not part of the module
+              R"(:3:20 error: call: %g is not part of the module
     %2:void = call %g
                    ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -288,7 +288,7 @@ TEST_F(IR_ValidatorTest, CallToEntryPointFunction) {
     %2:void = call %g
                    ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -325,7 +325,7 @@ TEST_F(IR_ValidatorTest, CallToFunctionTooFewArguments) {
     %5:void = call %g, 42i
                    ^^
 
-:7:3 note: In block
+:7:3 note: in block
   $B2: {
   ^^^
 
@@ -362,7 +362,7 @@ TEST_F(IR_ValidatorTest, CallToFunctionTooManyArguments) {
     %5:void = call %g, 1i, 2i, 3i
                    ^^
 
-:7:3 note: In block
+:7:3 note: in block
   $B2: {
   ^^^
 
@@ -399,7 +399,7 @@ TEST_F(IR_ValidatorTest, CallToFunctionWrongArgType) {
     %6:void = call %g, 1i, 2.0f, 3i
                            ^^^^
 
-:7:3 note: In block
+:7:3 note: in block
   $B2: {
   ^^^
 
@@ -424,7 +424,7 @@ TEST_F(IR_ValidatorTest, Block_NoTerminator) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:2:3 error: block: does not end in a terminator instruction
+              R"(:2:3 error: block does not end in a terminator instruction
   $B1: {
   ^^^
 
@@ -455,11 +455,11 @@ TEST_F(IR_ValidatorTest, Block_VarBlockMismatch) {
     %2:ptr<function, i32, read_write> = var
                                         ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -496,7 +496,7 @@ TEST_F(IR_ValidatorTest, Block_DeadParameter) {
     EXPECT_EQ(res.Failure().reason.Str(),
               R"(:4:12 error: destroyed parameter found in block parameter list
       $B2 (%my_param:f32): {  # body
-           ^^^^^^^^^^^^^
+           ^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void {
@@ -530,7 +530,7 @@ TEST_F(IR_ValidatorTest, Block_ParameterWithNullBlock) {
     EXPECT_EQ(res.Failure().reason.Str(),
               R"(:4:12 error: block parameter has nullptr parent block
       $B2 (%my_param:f32): {  # body
-           ^^^^^^^^^^^^^
+           ^^^^^^^^^
 
 note: # Disassembly
 %my_func = func():void {
@@ -564,7 +564,7 @@ TEST_F(IR_ValidatorTest, Block_ParameterUsedInMultipleBlocks) {
     EXPECT_EQ(res.Failure().reason.Str(),
               R"(:4:12 error: block parameter has incorrect parent block
       $B2 (%my_param:f32): {  # body
-           ^^^^^^^^^^^^^
+           ^^^^^^^^^
 
 :7:7 note: parent block declared here
       $B3 (%my_param:f32): {  # continuing
@@ -575,10 +575,10 @@ note: # Disassembly
   $B1: {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2 (%my_param:f32): {  # body
-        continue %my_param:f32  # -> $B3
+        continue %my_param  # -> $B3
       }
       $B3 (%my_param:f32): {  # continuing
-        next_iteration %my_param:f32  # -> $B2
+        next_iteration %my_param  # -> $B2
       }
     }
     ret
@@ -604,7 +604,7 @@ TEST_F(IR_ValidatorTest, Access_NegativeIndex) {
     %3:f32 = access %2, -1i
                         ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -635,7 +635,7 @@ TEST_F(IR_ValidatorTest, Access_OOB_Index_Value) {
     %3:f32 = access %2, 1u, 3u
                             ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -671,7 +671,7 @@ TEST_F(IR_ValidatorTest, Access_OOB_Index_Ptr) {
     %3:ptr<private, f32, read_write> = access %2, 1u, 3u
                                                       ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -705,7 +705,7 @@ TEST_F(IR_ValidatorTest, Access_StaticallyUnindexableType_Value) {
     %3:f32 = access %2, 1u
                         ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -736,7 +736,7 @@ TEST_F(IR_ValidatorTest, Access_StaticallyUnindexableType_Ptr) {
     %3:ptr<private, f32, read_write> = access %2, 1u
                                                   ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -773,7 +773,7 @@ TEST_F(IR_ValidatorTest, Access_DynamicallyUnindexableType_Value) {
     %4:i32 = access %2, %3
                         ^^
 
-:7:3 note: In block
+:7:3 note: in block
   $B1: {
   ^^^
 
@@ -816,7 +816,7 @@ TEST_F(IR_ValidatorTest, Access_DynamicallyUnindexableType_Ptr) {
     %4:i32 = access %2, %3
                         ^^
 
-:7:3 note: In block
+:7:3 note: in block
   $B1: {
   ^^^
 
@@ -852,7 +852,7 @@ TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Value_Value) {
     %3:i32 = access %2, 1u, 1u
              ^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -884,7 +884,7 @@ TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Ptr_Ptr) {
     %3:ptr<private, i32, read_write> = access %2, 1u, 1u
                                        ^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -916,7 +916,7 @@ TEST_F(IR_ValidatorTest, Access_Incorrect_Type_Ptr_Value) {
     %3:f32 = access %2, 1u, 1u
              ^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -947,7 +947,7 @@ TEST_F(IR_ValidatorTest, Access_IndexVectorPtr) {
     %3:f32 = access %2, 1u
                         ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -992,7 +992,7 @@ TEST_F(IR_ValidatorTest, Access_IndexVectorPtr_ViaMatrixPtr) {
     %3:f32 = access %2, 1u, 1u
                             ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1038,7 +1038,7 @@ TEST_F(IR_ValidatorTest, Access_Incorrect_Ptr_AddressSpace) {
     %3:ptr<uniform, f32, read> = access %2, 1u
                                  ^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1070,7 +1070,7 @@ TEST_F(IR_ValidatorTest, Access_Incorrect_Ptr_Access) {
     %3:ptr<storage, f32, read_write> = access %2, 1u
                                        ^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1123,11 +1123,11 @@ TEST_F(IR_ValidatorTest, Block_TerminatorInMiddle) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:3:5 error: return: block: terminator which isn't the final instruction
+              R"(:3:5 error: return: block terminator which isn't the final instruction
     ret
     ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1165,7 +1165,7 @@ TEST_F(IR_ValidatorTest, If_EmptyTrue) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:4:7 error: block: does not end in a terminator instruction
+              R"(:4:7 error: block does not end in a terminator instruction
       $B2: {  # true
       ^^^
 
@@ -1201,7 +1201,7 @@ TEST_F(IR_ValidatorTest, If_ConditionIsBool) {
     if 1i [t: $B2, f: $B3] {  # if_1
        ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1238,7 +1238,7 @@ TEST_F(IR_ValidatorTest, If_ConditionIsNullptr) {
     if undef [t: $B2, f: $B3] {  # if_1
        ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1277,7 +1277,7 @@ TEST_F(IR_ValidatorTest, If_NullResult) {
     undef = if true [t: $B2, f: $B3] {  # if_1
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1321,7 +1321,7 @@ TEST_F(IR_ValidatorTest, Loop_EmptyBody) {
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(),
-              R"(:4:7 error: block: does not end in a terminator instruction
+              R"(:4:7 error: block does not end in a terminator instruction
       $B2: {  # body
       ^^^
 
@@ -1348,7 +1348,7 @@ TEST_F(IR_ValidatorTest, Var_RootBlock_NullResult) {
   undef = var
   ^^^^^
 
-:1:1 note: In block
+:1:1 note: in block
 $B1: {  # root
 ^^^
 
@@ -1375,7 +1375,7 @@ TEST_F(IR_ValidatorTest, Var_Function_NullResult) {
     undef = var
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1392,27 +1392,26 @@ note: # Disassembly
 TEST_F(IR_ValidatorTest, Var_Init_WrongType) {
     auto* f = b.Function("my_func", ty.void_());
 
-    auto sb = b.Append(f->Block());
-    auto* v = sb.Var(ty.ptr<function, f32>());
-    sb.Return(f);
-
-    auto* result = sb.InstructionResult(ty.i32());
-    v->SetInitializer(result);
+    b.Append(f->Block(), [&] {
+        auto* v = b.Var<function, f32>();
+        v->SetInitializer(b.Constant(1_i));
+        b.Return(f);
+    });
 
     auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_EQ(res.Failure().reason.Str(), R"(:3:41 error: var: initializer has incorrect type
-    %2:ptr<function, f32, read_write> = var, %3
+    %2:ptr<function, f32, read_write> = var, 1i
                                         ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
 note: # Disassembly
 %my_func = func():void {
   $B1: {
-    %2:ptr<function, f32, read_write> = var, %3
+    %2:ptr<function, f32, read_write> = var, 1i
     ret
   }
 }
@@ -1434,7 +1433,7 @@ TEST_F(IR_ValidatorTest, Let_NullResult) {
     undef = let 1i
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1463,7 +1462,7 @@ TEST_F(IR_ValidatorTest, Let_NullValue) {
     %2:f32 = let undef
                  ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1493,7 +1492,7 @@ TEST_F(IR_ValidatorTest, Let_WrongType) {
     %2:f32 = let 1i
              ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1524,7 +1523,7 @@ TEST_F(IR_ValidatorTest, Instruction_AppendedDead) {
     <destroyed tint::core::ir::Var $ADDRESS>
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^$ARROWS^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1561,7 +1560,7 @@ TEST_F(IR_ValidatorTest, Instruction_NullInstruction) {
     %2:ptr<function, f32, read_write> = var
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1592,7 +1591,7 @@ TEST_F(IR_ValidatorTest, Instruction_DeadOperand) {
     %2:ptr<function, f32, read_write> = var, %3
                                              ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1623,7 +1622,7 @@ TEST_F(IR_ValidatorTest, Instruction_OperandUsageRemoved) {
     %2:ptr<function, f32, read_write> = var, %3
                                              ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1673,7 +1672,7 @@ TEST_F(IR_ValidatorTest, Binary_LHS_Nullptr) {
     %2:i32 = add undef, 2i
                  ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1700,7 +1699,7 @@ TEST_F(IR_ValidatorTest, Binary_RHS_Nullptr) {
     %2:i32 = add 2i, undef
                      ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1730,7 +1729,7 @@ TEST_F(IR_ValidatorTest, Binary_Result_Nullptr) {
     undef = add 3i, 2i
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1757,7 +1756,7 @@ TEST_F(IR_ValidatorTest, Unary_Value_Nullptr) {
     %2:i32 = negation undef
                       ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1787,7 +1786,7 @@ TEST_F(IR_ValidatorTest, Unary_Result_Nullptr) {
     undef = negation 2i
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1818,7 +1817,7 @@ TEST_F(IR_ValidatorTest, Unary_ResultTypeNotMatchValueType) {
     %2:f32 = complement 2i
     ^^^^^^^^^^^^^^^^^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -1859,7 +1858,7 @@ TEST_F(IR_ValidatorTest, ExitIf_NullIf) {
         exit_if  # undef
         ^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # true
       ^^^
 
@@ -1898,7 +1897,7 @@ TEST_F(IR_ValidatorTest, ExitIf_LessOperandsThenIfParams) {
         exit_if 1i  # if_1
         ^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # true
       ^^^
 
@@ -1942,7 +1941,7 @@ TEST_F(IR_ValidatorTest, ExitIf_MoreOperandsThenIfParams) {
         exit_if 1i, 2.0f, 3i  # if_1
         ^^^^^^^^^^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # true
       ^^^
 
@@ -2003,7 +2002,7 @@ TEST_F(IR_ValidatorTest, ExitIf_IncorrectResultType) {
         exit_if 1i, 2i  # if_1
                     ^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # true
       ^^^
 
@@ -2043,7 +2042,7 @@ TEST_F(IR_ValidatorTest, ExitIf_NotInParentIf) {
     exit_if  # if_1
     ^^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -2086,7 +2085,7 @@ TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpsOverIf) {
             exit_if  # if_1
             ^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B3: {  # true
           ^^^
 
@@ -2139,7 +2138,7 @@ TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpOverSwitch) {
             exit_if  # if_1
             ^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B3: {  # case
           ^^^
 
@@ -2191,7 +2190,7 @@ TEST_F(IR_ValidatorTest, ExitIf_InvalidJumpOverLoop) {
             exit_if  # if_1
             ^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B3: {  # body
           ^^^
 
@@ -2250,7 +2249,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_NullSwitch) {
         exit_switch  # undef
         ^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # case
       ^^^
 
@@ -2291,7 +2290,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_LessOperandsThenSwitchParams) {
         exit_switch 1i  # switch_1
         ^^^^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # case
       ^^^
 
@@ -2335,7 +2334,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_MoreOperandsThenSwitchParams) {
         exit_switch 1i, 2.0f, 3i  # switch_1
         ^^^^^^^^^^^^^^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # case
       ^^^
 
@@ -2397,7 +2396,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_IncorrectResultType) {
         exit_switch 1i, 2i  # switch_1
                         ^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # case
       ^^^
 
@@ -2441,7 +2440,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_NotInParentSwitch) {
         exit_switch  # switch_1
         ^^^^^^^^^^^
 
-:9:7 note: In block
+:9:7 note: in block
       $B3: {  # true
       ^^^
 
@@ -2522,7 +2521,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_InvalidJumpOverSwitch) {
             exit_switch  # switch_1
             ^^^^^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B3: {  # case
           ^^^
 
@@ -2573,7 +2572,7 @@ TEST_F(IR_ValidatorTest, ExitSwitch_InvalidJumpOverLoop) {
             exit_switch  # switch_1
             ^^^^^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B3: {  # body
           ^^^
 
@@ -2630,7 +2629,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_NullLoop) {
         exit_loop  # undef
         ^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # body
       ^^^
 
@@ -2673,7 +2672,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_LessOperandsThenLoopParams) {
         exit_loop 1i  # loop_1
         ^^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # body
       ^^^
 
@@ -2720,7 +2719,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_MoreOperandsThenLoopParams) {
         exit_loop 1i, 2.0f, 3i  # loop_1
         ^^^^^^^^^^^^^^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # body
       ^^^
 
@@ -2785,7 +2784,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_IncorrectResultType) {
         exit_loop 1i, 2i  # loop_1
                       ^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # body
       ^^^
 
@@ -2831,7 +2830,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_NotInParentLoop) {
         exit_loop  # loop_1
         ^^^^^^^^^
 
-:12:7 note: In block
+:12:7 note: in block
       $B4: {  # true
       ^^^
 
@@ -2914,7 +2913,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidJumpOverSwitch) {
             exit_loop  # loop_1
             ^^^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B4: {  # case
           ^^^
 
@@ -2969,7 +2968,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidJumpOverLoop) {
             exit_loop  # loop_1
             ^^^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B4: {  # body
           ^^^
 
@@ -3019,7 +3018,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideContinuing) {
         exit_loop  # loop_1
         ^^^^^^^^^
 
-:7:7 note: In block
+:7:7 note: in block
       $B3: {  # continuing
       ^^^
 
@@ -3065,7 +3064,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideContinuingNested) {
             exit_loop  # loop_1
             ^^^^^^^^^
 
-:9:11 note: In block
+:9:11 note: in block
           $B4: {  # true
           ^^^
 
@@ -3117,7 +3116,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideInitializer) {
         exit_loop  # loop_1
         ^^^^^^^^^
 
-:4:7 note: In block
+:4:7 note: in block
       $B2: {  # initializer
       ^^^
 
@@ -3167,7 +3166,7 @@ TEST_F(IR_ValidatorTest, ExitLoop_InvalidInsideInitializerNested) {
             exit_loop  # loop_1
             ^^^^^^^^^
 
-:6:11 note: In block
+:6:11 note: in block
           $B5: {  # true
           ^^^
 
@@ -3230,7 +3229,7 @@ TEST_F(IR_ValidatorTest, Return_NullFunction) {
     ret
     ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3255,7 +3254,7 @@ TEST_F(IR_ValidatorTest, Return_UnexpectedValue) {
     ret 42i
     ^^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3280,7 +3279,7 @@ TEST_F(IR_ValidatorTest, Return_MissingValue) {
     ret
     ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3306,7 +3305,7 @@ TEST_F(IR_ValidatorTest, Return_WrongValueType) {
     ret 42.0f
     ^^^^^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3334,7 +3333,7 @@ TEST_F(IR_ValidatorTest, Load_NullFrom) {
     %2:i32 = load undef
                   ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3365,7 +3364,7 @@ TEST_F(IR_ValidatorTest, Load_SourceNotMemoryView) {
     %3:f32 = load %l
                   ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3397,7 +3396,7 @@ TEST_F(IR_ValidatorTest, Load_TypeMismatch) {
     %3:f32 = load %2
                   ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3426,7 +3425,7 @@ TEST_F(IR_ValidatorTest, Store_NullTo) {
     store undef, 42i
           ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3455,7 +3454,7 @@ TEST_F(IR_ValidatorTest, Store_NullFrom) {
     store %2, undef
               ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3486,7 +3485,7 @@ TEST_F(IR_ValidatorTest, Store_TargetNotMemoryView) {
     store %l, 42u
               ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3517,7 +3516,7 @@ TEST_F(IR_ValidatorTest, Store_TypeMismatch) {
     store %2, 42u
               ^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3549,7 +3548,7 @@ TEST_F(IR_ValidatorTest, LoadVectorElement_NullResult) {
     undef = load_vector_element %2, 1i
     ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3579,7 +3578,7 @@ TEST_F(IR_ValidatorTest, LoadVectorElement_NullFrom) {
     %2:f32 = load_vector_element undef, 1i
                                  ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3609,7 +3608,7 @@ TEST_F(IR_ValidatorTest, LoadVectorElement_NullIndex) {
     %3:f32 = load_vector_element %2, undef
                                      ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3639,7 +3638,7 @@ TEST_F(IR_ValidatorTest, StoreVectorElement_NullTo) {
     store_vector_element undef, 1i, 2i
                          ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3669,7 +3668,7 @@ TEST_F(IR_ValidatorTest, StoreVectorElement_NullIndex) {
     store_vector_element %2, undef, 2i
                              ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3677,7 +3676,7 @@ TEST_F(IR_ValidatorTest, StoreVectorElement_NullIndex) {
     store_vector_element %2, undef, 2i
                                     ^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3708,7 +3707,7 @@ TEST_F(IR_ValidatorTest, StoreVectorElement_NullValue) {
     store_vector_element %2, 1i, undef
                                  ^^^^^
 
-:2:3 note: In block
+:2:3 note: in block
   $B1: {
   ^^^
 
@@ -3717,6 +3716,42 @@ note: # Disassembly
   $B1: {
     %2:ptr<function, vec3<f32>, read_write> = var
     store_vector_element %2, 1i, undef
+    ret
+  }
+}
+)");
+}
+
+TEST_F(IR_ValidatorTest, Scoping_UseBeforeDecl) {
+    auto* f = b.Function("my_func", ty.void_());
+
+    auto* y = b.Add<i32>(2_i, 3_i);
+    auto* x = b.Add<i32>(y, 1_i);
+
+    f->Block()->Append(x);
+    f->Block()->Append(y);
+    f->Block()->Append(b.Return(f));
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason.Str(),
+              R"(:3:18 error: binary: %3 is not in scope
+    %2:i32 = add %3, 1i
+                 ^^
+
+:2:3 note: in block
+  $B1: {
+  ^^^
+
+:4:5 note: %3 declared here
+    %3:i32 = add 2i, 3i
+    ^^^^^^
+
+note: # Disassembly
+%my_func = func():void {
+  $B1: {
+    %2:i32 = add %3, 1i
+    %3:i32 = add 2i, 3i
     ret
   }
 }

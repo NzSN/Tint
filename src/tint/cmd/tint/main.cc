@@ -43,7 +43,7 @@
 #include "src/tint/api/tint.h"
 #include "src/tint/cmd/common/generate_external_texture_bindings.h"
 #include "src/tint/cmd/common/helper.h"
-#include "src/tint/lang/core/ir/disassembler.h"
+#include "src/tint/lang/core/ir/disassembly.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/ast/transform/first_index_offset.h"
@@ -1009,8 +1009,9 @@ bool GenerateHlsl(const tint::Program& program, const Options& options) {
         tint::hlsl::validate::Result dxc_res;
         bool dxc_found = false;
         if (options.validate || must_validate_dxc) {
-            auto dxc = tint::Command::LookPath(
-                options.dxc_path.empty() ? "dxc" : std::string(options.dxc_path));
+            auto dxc =
+                tint::Command::LookPath(options.dxc_path.empty() ? tint::hlsl::validate::kDxcDLLName
+                                                                 : std::string(options.dxc_path));
             if (dxc.Found()) {
                 dxc_found = true;
 
@@ -1053,7 +1054,7 @@ bool GenerateHlsl(const tint::Program& program, const Options& options) {
                 fxc_res.output = "FXC DLL '" + options.fxc_path + "' not found. Cannot validate";
             }
 #else
-            if (must_validate_dxc) {
+            if (must_validate_fxc) {
                 fxc_res.failed = true;
                 fxc_res.output = "FXC can only be used on Windows.";
             }
@@ -1222,7 +1223,7 @@ bool GenerateIr([[maybe_unused]] const tint::Program& program,
         std::cerr << "Failed to build IR from program: " << result.Failure() << "\n";
         return false;
     }
-    options.printer->Print(tint::core::ir::Disassemble(result.Get()));
+    options.printer->Print(tint::core::ir::Disassemble(result.Get()).Text());
     options.printer->Print(tint::StyledText{} << "\n");
     return true;
 #endif
