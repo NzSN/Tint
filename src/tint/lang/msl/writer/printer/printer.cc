@@ -158,37 +158,6 @@ class Printer : public tint::TextGenerator {
     /// Non-empty only if the template has been generated.
     std::string array_template_name_;
 
-    /// The representation for an IR pointer type
-    enum class PtrKind {
-        kPtr,  // IR pointer is represented in a pointer
-        kRef,  // IR pointer is represented in a reference
-    };
-
-    /// The structure for a value held by a 'let', 'var' or parameter.
-    struct VariableValue {
-        Symbol name;  // Name of the variable
-        PtrKind ptr_kind = PtrKind::kRef;
-    };
-
-    /// The structure for an inlined value
-    struct InlinedValue {
-        std::string expr;
-        PtrKind ptr_kind = PtrKind::kRef;
-    };
-
-    /// Empty struct used as a sentinel value to indicate that an string expression has been
-    /// consumed by its single place of usage. Attempting to use this value a second time should
-    /// result in an ICE.
-    struct ConsumedValue {};
-
-    using ValueBinding = std::variant<VariableValue, InlinedValue, ConsumedValue>;
-
-    /// IR values to their representation
-    Hashmap<core::ir::Value*, ValueBinding, 32> bindings_;
-
-    /// Values that can be inlined.
-    Hashset<core::ir::Value*, 64> can_inline_;
-
     /// Block to emit for a continuing
     std::function<void()> emit_continuing_;
 
@@ -303,6 +272,20 @@ class Printer : public tint::TextGenerator {
                             break;
                     }
                     out << "]]";
+                }
+
+                if (auto binding_point = param->BindingPoint()) {
+                    auto ptr = param->Type()->As<core::type::Pointer>();
+                    TINT_ASSERT(binding_point->group == 0);
+                    switch (ptr->AddressSpace()) {
+                        case core::AddressSpace::kStorage:
+                        case core::AddressSpace::kUniform:
+                            out << " [[buffer(" << binding_point->binding << ")]]";
+                            break;
+                        default:
+                            TINT_UNREACHABLE() << "invalid address space with binding point: "
+                                               << ptr->AddressSpace();
+                    }
                 }
             }
 
