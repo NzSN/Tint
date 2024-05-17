@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,27 +25,26 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_IR_BINARY_ENCODE_H_
-#define SRC_TINT_LANG_CORE_IR_BINARY_ENCODE_H_
+#ifndef SRC_TINT_LANG_MSL_WRITER_RAISE_MODULE_SCOPE_VARS_H_
+#define SRC_TINT_LANG_MSL_WRITER_RAISE_MODULE_SCOPE_VARS_H_
 
 #include <string>
 
-#include "src/tint/utils/containers/vector.h"
 #include "src/tint/utils/result/result.h"
 
-// Forward declaration
+// Forward declarations.
 namespace tint::core::ir {
 class Module;
 }  // namespace tint::core::ir
 
-namespace tint::core::ir::binary {
+namespace tint::msl::writer::raise {
 
-// Encode the module into a binary representation.
-Result<Vector<std::byte, 0>> Encode(const Module& module);
+/// ModuleScopeVars is a transform that replaces module-scope variables with entry-point
+/// declarations that are wrapped in a structure and passed to functions that need them.
+/// @param module the module to transform
+/// @returns success or failure
+Result<SuccessType> ModuleScopeVars(core::ir::Module& module);
 
-// Encode the module into a human readable debug representation.
-Result<std::string> EncodeDebug(const Module& module);
+}  // namespace tint::msl::writer::raise
 
-}  // namespace tint::core::ir::binary
-
-#endif  // SRC_TINT_LANG_CORE_IR_BINARY_ENCODE_H_
+#endif  // SRC_TINT_LANG_MSL_WRITER_RAISE_MODULE_SCOPE_VARS_H_
