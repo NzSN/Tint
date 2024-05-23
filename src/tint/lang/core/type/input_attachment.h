@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,37 +25,43 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/constant/splat.h"
+#ifndef SRC_TINT_LANG_CORE_TYPE_INPUT_ATTACHMENT_H_
+#define SRC_TINT_LANG_CORE_TYPE_INPUT_ATTACHMENT_H_
 
-#include "src/tint/lang/core/constant/manager.h"
+#include <string>
 
-TINT_INSTANTIATE_TYPEINFO(tint::core::constant::Splat);
+#include "src/tint/lang/core/type/texture.h"
 
-namespace tint::core::constant {
+namespace tint::core::type {
 
-namespace {
+/// An input attachment type.
+class InputAttachment final : public Castable<InputAttachment, Texture> {
+  public:
+    /// Constructor
+    /// @param type the data type of the input attachment
+    explicit InputAttachment(const Type* type);
+    /// Destructor
+    ~InputAttachment() override;
 
-/// Asserts that the element type of @p in_type matches the type of @p value, and that the type has
-/// at least one element.
-/// @returns the number of elements in @p in_type
-inline size_t GetCountAndAssertType(const core::type::Type* in_type, const constant::Value* value) {
-    auto elements = in_type->Elements();
-    TINT_ASSERT(!elements.type || elements.type == value->Type());
-    TINT_ASSERT(elements.count > 0);
-    return elements.count;
-}
+    /// @param other the other node to compare against
+    /// @returns true if the this type is equal to @p other
+    bool Equals(const UniqueNode& other) const override;
 
-}  // namespace
+    /// @returns the subtype of the input attachment
+    Type* type() const { return const_cast<Type*>(type_); }
 
-Splat::Splat(const core::type::Type* t, const constant::Value* e)
-    : type(t), el(e), count(GetCountAndAssertType(t, e)) {}
+    /// @returns the name for this type that closely resembles how it would be
+    /// declared in WGSL.
+    std::string FriendlyName() const override;
 
-Splat::~Splat() = default;
+    /// @param ctx the clone context
+    /// @returns a clone of this type
+    InputAttachment* Clone(CloneContext& ctx) const override;
 
-const Splat* Splat::Clone(CloneContext& ctx) const {
-    auto* ty = type->Clone(ctx.type_ctx);
-    auto* element = el->Clone(ctx);
-    return ctx.dst.Splat(ty, element);
-}
+  private:
+    const Type* const type_;
+};
 
-}  // namespace tint::core::constant
+}  // namespace tint::core::type
+
+#endif  // SRC_TINT_LANG_CORE_TYPE_INPUT_ATTACHMENT_H_

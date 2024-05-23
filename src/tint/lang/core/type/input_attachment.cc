@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,37 +25,43 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/constant/splat.h"
+#include "src/tint/lang/core/type/input_attachment.h"
 
-#include "src/tint/lang/core/constant/manager.h"
+#include "src/tint/lang/core/type/manager.h"
+#include "src/tint/lang/core/type/texture_dimension.h"
+#include "src/tint/utils/diagnostic/diagnostic.h"
+#include "src/tint/utils/ice/ice.h"
+#include "src/tint/utils/math/hash.h"
+#include "src/tint/utils/text/string_stream.h"
 
-TINT_INSTANTIATE_TYPEINFO(tint::core::constant::Splat);
+TINT_INSTANTIATE_TYPEINFO(tint::core::type::InputAttachment);
 
-namespace tint::core::constant {
+namespace tint::core::type {
 
-namespace {
-
-/// Asserts that the element type of @p in_type matches the type of @p value, and that the type has
-/// at least one element.
-/// @returns the number of elements in @p in_type
-inline size_t GetCountAndAssertType(const core::type::Type* in_type, const constant::Value* value) {
-    auto elements = in_type->Elements();
-    TINT_ASSERT(!elements.type || elements.type == value->Type());
-    TINT_ASSERT(elements.count > 0);
-    return elements.count;
+InputAttachment::InputAttachment(const Type* type)
+    : Base(Hash(TypeCode::Of<InputAttachment>().bits, type), TextureDimension::k2d), type_(type) {
+    TINT_ASSERT(type_);
 }
 
-}  // namespace
+InputAttachment::~InputAttachment() = default;
 
-Splat::Splat(const core::type::Type* t, const constant::Value* e)
-    : type(t), el(e), count(GetCountAndAssertType(t, e)) {}
-
-Splat::~Splat() = default;
-
-const Splat* Splat::Clone(CloneContext& ctx) const {
-    auto* ty = type->Clone(ctx.type_ctx);
-    auto* element = el->Clone(ctx);
-    return ctx.dst.Splat(ty, element);
+bool InputAttachment::Equals(const UniqueNode& other) const {
+    if (auto* o = other.As<InputAttachment>()) {
+        return o->type_ == type_;
+    }
+    return false;
 }
 
-}  // namespace tint::core::constant
+std::string InputAttachment::FriendlyName() const {
+    StringStream out;
+    out << "input_attachment"
+        << "<" << type_->FriendlyName() << ">";
+    return out.str();
+}
+
+InputAttachment* InputAttachment::Clone(CloneContext& ctx) const {
+    auto* ty = type_->Clone(ctx);
+    return ctx.dst.mgr->Get<InputAttachment>(ty);
+}
+
+}  // namespace tint::core::type
