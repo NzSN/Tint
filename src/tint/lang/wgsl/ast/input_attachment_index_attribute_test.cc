@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
-#define SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+#include "src/tint/lang/wgsl/ast/input_attachment_index_attribute.h"
+#include "src/tint/lang/wgsl/ast/helper_test.h"
 
-#include <string>
+using namespace tint::core::number_suffixes;  // NOLINT
 
-#include "src/tint/lang/core/type/texture.h"
-#include "src/tint/lang/core/type/texture_dimension.h"
+namespace tint::ast {
+namespace {
 
-namespace tint::core::type {
+using InputAttachmentIndexAttributeTest = TestHelper;
 
-/// A multisampled depth texture type.
-class DepthMultisampledTexture final : public Castable<DepthMultisampledTexture, Texture> {
-  public:
-    /// Constructor
-    /// @param dim the dimensionality of the texture
-    explicit DepthMultisampledTexture(TextureDimension dim);
+TEST_F(InputAttachmentIndexAttributeTest, Creation) {
+    auto* expr = Expr(1_u);
+    auto* c = InputAttachmentIndex(expr);
+    EXPECT_EQ(c->expr, expr);
+}
 
-    /// Destructor
-    ~DepthMultisampledTexture() override;
-
-    /// @param other the other node to compare against
-    /// @returns true if the this type is equal to @p other
-    bool Equals(const UniqueNode& other) const override;
-
-    /// @returns the name for this type that closely resembles how it would be
-    /// declared in WGSL.
-    std::string FriendlyName() const override;
-
-    /// @param ctx the clone context
-    /// @returns a clone of this type
-    DepthMultisampledTexture* Clone(CloneContext& ctx) const override;
-
-    /// @returns true if @p dim is a valid TextureDimension for a DepthMultisampledTexture
-    static bool IsValidDimension(TextureDimension dim);
-};
-
-}  // namespace tint::core::type
-
-#endif  // SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+}  // namespace
+}  // namespace tint::ast

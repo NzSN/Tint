@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
-#define SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+#include "src/tint/lang/core/constant/invalid.h"
 
-#include <string>
+#include "src/tint/lang/core/constant/manager.h"
+#include "src/tint/lang/core/type/invalid.h"
 
-#include "src/tint/lang/core/type/texture.h"
-#include "src/tint/lang/core/type/texture_dimension.h"
+TINT_INSTANTIATE_TYPEINFO(tint::core::constant::Invalid);
 
-namespace tint::core::type {
+namespace tint::core::constant {
 
-/// A multisampled depth texture type.
-class DepthMultisampledTexture final : public Castable<DepthMultisampledTexture, Texture> {
-  public:
-    /// Constructor
-    /// @param dim the dimensionality of the texture
-    explicit DepthMultisampledTexture(TextureDimension dim);
+Invalid::Invalid(const core::type::Invalid* ty) : type(ty) {}
 
-    /// Destructor
-    ~DepthMultisampledTexture() override;
+Invalid::~Invalid() = default;
 
-    /// @param other the other node to compare against
-    /// @returns true if the this type is equal to @p other
-    bool Equals(const UniqueNode& other) const override;
+const Invalid* Invalid::Clone(CloneContext& ctx) const {
+    return ctx.dst.Invalid();
+}
 
-    /// @returns the name for this type that closely resembles how it would be
-    /// declared in WGSL.
-    std::string FriendlyName() const override;
-
-    /// @param ctx the clone context
-    /// @returns a clone of this type
-    DepthMultisampledTexture* Clone(CloneContext& ctx) const override;
-
-    /// @returns true if @p dim is a valid TextureDimension for a DepthMultisampledTexture
-    static bool IsValidDimension(TextureDimension dim);
-};
-
-}  // namespace tint::core::type
-
-#endif  // SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+}  // namespace tint::core::constant

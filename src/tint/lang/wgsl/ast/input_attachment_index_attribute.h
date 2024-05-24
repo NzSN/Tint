@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,48 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
-#define SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+#ifndef SRC_TINT_LANG_WGSL_AST_INPUT_ATTACHMENT_INDEX_ATTRIBUTE_H_
+#define SRC_TINT_LANG_WGSL_AST_INPUT_ATTACHMENT_INDEX_ATTRIBUTE_H_
 
 #include <string>
 
-#include "src/tint/lang/core/type/texture.h"
-#include "src/tint/lang/core/type/texture_dimension.h"
+#include "src/tint/lang/wgsl/ast/attribute.h"
 
-namespace tint::core::type {
+// Forward declarations
+namespace tint::ast {
+class Expression;
+}
 
-/// A multisampled depth texture type.
-class DepthMultisampledTexture final : public Castable<DepthMultisampledTexture, Texture> {
+namespace tint::ast {
+
+/// An input attachment attribute (enabled with the input attachments extension)
+class InputAttachmentIndexAttribute final
+    : public Castable<InputAttachmentIndexAttribute, Attribute> {
   public:
-    /// Constructor
-    /// @param dim the dimensionality of the texture
-    explicit DepthMultisampledTexture(TextureDimension dim);
+    /// constructor
+    /// @param pid the identifier of the program that owns this node
+    /// @param nid the unique node identifier
+    /// @param src the source of this node
+    /// @param expr the input attachment index value
+    InputAttachmentIndexAttribute(GenerationID pid,
+                                  NodeID nid,
+                                  const Source& src,
+                                  const Expression* expr);
+    ~InputAttachmentIndexAttribute() override;
 
-    /// Destructor
-    ~DepthMultisampledTexture() override;
+    /// @returns the WGSL name for the attribute
+    std::string Name() const override;
 
-    /// @param other the other node to compare against
-    /// @returns true if the this type is equal to @p other
-    bool Equals(const UniqueNode& other) const override;
-
-    /// @returns the name for this type that closely resembles how it would be
-    /// declared in WGSL.
-    std::string FriendlyName() const override;
-
+    /// Clones this node and all transitive child nodes using the `CloneContext`
+    /// `ctx`.
     /// @param ctx the clone context
-    /// @returns a clone of this type
-    DepthMultisampledTexture* Clone(CloneContext& ctx) const override;
+    /// @return the newly cloned node
+    const InputAttachmentIndexAttribute* Clone(CloneContext& ctx) const override;
 
-    /// @returns true if @p dim is a valid TextureDimension for a DepthMultisampledTexture
-    static bool IsValidDimension(TextureDimension dim);
+    /// The index value expression
+    const Expression* const expr;
 };
 
-}  // namespace tint::core::type
+}  // namespace tint::ast
 
-#endif  // SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+#endif  // SRC_TINT_LANG_WGSL_AST_INPUT_ATTACHMENT_INDEX_ATTRIBUTE_H_

@@ -1,4 +1,4 @@
-// Copyright 2023 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,27 +25,43 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_IR_BINARY_DECODE_H_
-#define SRC_TINT_LANG_CORE_IR_BINARY_DECODE_H_
+#ifndef SRC_TINT_LANG_CORE_IR_TRANSFORM_ARRAY_LENGTH_FROM_UNIFORM_H_
+#define SRC_TINT_LANG_CORE_IR_TRANSFORM_ARRAY_LENGTH_FROM_UNIFORM_H_
 
+#include <unordered_map>
+
+#include "src/tint/api/common/binding_point.h"
 #include "src/tint/utils/result/result.h"
 
-// Forward declarations
+// Forward declarations.
 namespace tint::core::ir {
 class Module;
-}  // namespace tint::core::ir
-namespace tint::core::ir::binary::pb {
-class Module;
-}  // namespace tint::core::ir::binary::pb
+}
 
-namespace tint::core::ir::binary {
+namespace tint::core::ir::transform {
 
-/// @returns the decoded Module from the serialized protobuf.
-Result<Module> Decode(Slice<const std::byte> encoded);
+/// ArrayLengthFromUniform is a transform that replaces calls to the arrayLength() builtin by
+/// calculating the array length from the total size of the storage buffer, which is received via a
+/// uniform buffer.
+///
+/// The generated uniform buffer will have the form:
+/// ```
+/// @group(0) @binding(30)
+/// var<uniform> buffer_size_ubo : array<vec4<u32>, 8>;
+/// ```
+/// The binding group and number used for this uniform buffer is provided via the transform config.
+/// The transform config also defines the mapping from a storage buffer's `BindingPoint` to the
+/// element index that will be used to get the size of that buffer.
+///
+/// @param module the module to transform
+/// @param ubo_binding the binding point to use for the uniform buffer
+/// @param bindpoint_to_size_index the map from binding point to an index which holds the size
+/// @returns success or failure
+Result<SuccessType> ArrayLengthFromUniform(
+    Module& module,
+    BindingPoint ubo_binding,
+    const std::unordered_map<BindingPoint, uint32_t>& bindpoint_to_size_index);
 
-/// @returns the decoded Module from the protobuf.
-Result<Module> Decode(const pb::Module& module);
+}  // namespace tint::core::ir::transform
 
-}  // namespace tint::core::ir::binary
-
-#endif  // SRC_TINT_LANG_CORE_IR_BINARY_DECODE_H_
+#endif  // SRC_TINT_LANG_CORE_IR_TRANSFORM_ARRAY_LENGTH_FROM_UNIFORM_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,49 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
-#define SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+#include "src/tint/lang/core/constant/invalid.h"
 
-#include <string>
+#include "src/tint/lang/core/constant/helper_test.h"
+#include "src/tint/lang/core/constant/scalar.h"
+#include "src/tint/lang/core/fluent_types.h"
 
-#include "src/tint/lang/core/type/texture.h"
-#include "src/tint/lang/core/type/texture_dimension.h"
+using namespace tint::core::number_suffixes;  // NOLINT
+using namespace tint::core::fluent_types;     // NOLINT
 
-namespace tint::core::type {
+namespace tint::core::constant {
+namespace {
 
-/// A multisampled depth texture type.
-class DepthMultisampledTexture final : public Castable<DepthMultisampledTexture, Texture> {
-  public:
-    /// Constructor
-    /// @param dim the dimensionality of the texture
-    explicit DepthMultisampledTexture(TextureDimension dim);
+using ConstantTest_Invalid = TestHelper;
 
-    /// Destructor
-    ~DepthMultisampledTexture() override;
+TEST_F(ConstantTest_Invalid, AllZero) {
+    auto* invalid = constants.Invalid();
+    EXPECT_FALSE(invalid->AllZero());
+}
 
-    /// @param other the other node to compare against
-    /// @returns true if the this type is equal to @p other
-    bool Equals(const UniqueNode& other) const override;
+TEST_F(ConstantTest_Invalid, AnyZero) {
+    auto* invalid = constants.Invalid();
+    EXPECT_FALSE(invalid->AnyZero());
+}
 
-    /// @returns the name for this type that closely resembles how it would be
-    /// declared in WGSL.
-    std::string FriendlyName() const override;
+TEST_F(ConstantTest_Invalid, Index) {
+    auto* invalid = constants.Invalid();
+    EXPECT_EQ(invalid->Index(0), nullptr);
+    EXPECT_EQ(invalid->Index(1), nullptr);
+    EXPECT_EQ(invalid->Index(2), nullptr);
+}
 
-    /// @param ctx the clone context
-    /// @returns a clone of this type
-    DepthMultisampledTexture* Clone(CloneContext& ctx) const override;
+TEST_F(ConstantTest_Invalid, Clone) {
+    auto* invalid = constants.Invalid();
 
-    /// @returns true if @p dim is a valid TextureDimension for a DepthMultisampledTexture
-    static bool IsValidDimension(TextureDimension dim);
-};
+    constant::Manager mgr;
+    constant::CloneContext ctx{core::type::CloneContext{{nullptr}, {nullptr, &mgr.types}}, mgr};
 
-}  // namespace tint::core::type
+    auto* cloned = invalid->Clone(ctx);
+    EXPECT_NE(cloned, invalid);
+    ASSERT_NE(cloned, nullptr);
+    EXPECT_TRUE(cloned->type->Is<core::type::Invalid>());
+    EXPECT_TRUE(cloned->Is<core::constant::Invalid>());
+}
 
-#endif  // SRC_TINT_LANG_CORE_TYPE_DEPTH_MULTISAMPLED_TEXTURE_H_
+}  // namespace
+}  // namespace tint::core::constant
