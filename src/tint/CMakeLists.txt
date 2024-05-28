@@ -553,6 +553,8 @@ function(tint_target_add_external_dependencies TARGET KIND)
     elseif(${DEPENDENCY} STREQUAL "gtest")
       target_include_directories(${TARGET} PRIVATE ${gmock_SOURCE_DIR}/include)
       target_link_libraries(${TARGET} PRIVATE gmock)
+    elseif(${DEPENDENCY} STREQUAL "libprotobuf-mutator")
+      target_link_libraries(${TARGET} PRIVATE libprotobuf-mutator)
     elseif(${DEPENDENCY} STREQUAL "metal")
       find_library(CoreGraphicsFramework CoreGraphics REQUIRED)
       find_library(FoundationFramework Foundation REQUIRED)
@@ -673,7 +675,8 @@ endif(TINT_BUILD_FUZZERS)
 foreach(PROTO_TARGET ${TINT_PROTO_TARGETS})
   generate_protos(
     TARGET ${PROTO_TARGET}
-    PROTOC_OUT_DIR "${DAWN_BUILD_GEN_DIR}/src/tint/")
+    IMPORT_DIRS "${TINT_ROOT_SOURCE_DIR}"
+    PROTOC_OUT_DIR "${DAWN_BUILD_GEN_DIR}")
   target_include_directories(${PROTO_TARGET} PRIVATE "${DAWN_BUILD_GEN_DIR}/src/tint/")
   target_include_directories(${PROTO_TARGET} PUBLIC "${DAWN_BUILD_GEN_DIR}")
   target_link_libraries(${PROTO_TARGET} libprotobuf)

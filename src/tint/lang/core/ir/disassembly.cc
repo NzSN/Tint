@@ -386,12 +386,6 @@ void Disassembly::EmitValue(const Value* val) {
                 [&](const core::constant::Value* c) {
                     tint::Switch(
                         c,
-                        [&](const core::constant::Scalar<AFloat>* scalar) {
-                            out_ << StyleLiteral(scalar->ValueAs<AFloat>().value);
-                        },
-                        [&](const core::constant::Scalar<AInt>* scalar) {
-                            out_ << StyleLiteral(scalar->ValueAs<AInt>().value);
-                        },
                         [&](const core::constant::Scalar<i32>* scalar) {
                             out_ << StyleLiteral(scalar->ValueAs<i32>().value, "i");
                         },
@@ -423,7 +417,8 @@ void Disassembly::EmitValue(const Value* val) {
                                 need_comma = true;
                             }
                             out_ << ")";
-                        });
+                        },
+                        TINT_ICE_ON_NO_MATCH);
                 };
             emit(constant->Value());
         },
@@ -567,7 +562,7 @@ void Disassembly::EmitInstruction(const Instruction* inst) {
 
 void Disassembly::EmitOperand(const Instruction* inst, size_t index) {
     SourceMarker marker(this);
-    EmitValue(inst->Operands()[index]);
+    EmitValue(inst->Operand(index));
     marker.Store(IndexedValue{inst, static_cast<uint32_t>(index)});
 }
 
