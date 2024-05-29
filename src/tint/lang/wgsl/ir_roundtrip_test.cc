@@ -260,7 +260,7 @@ var<private> v : S;
 
 TEST_F(IRToProgramRoundtripTest, StructDecl_MemberIndex) {
     RUN_TEST(R"(
-enable chromium_internal_dual_source_blending;
+enable dual_source_blending;
 
 struct S {
   a : i32,
@@ -3310,6 +3310,22 @@ fn f() -> i32 {
       return i;
     }
   }
+}
+)");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// chromium_internal_input_attachments
+////////////////////////////////////////////////////////////////////////////////
+TEST_F(IRToProgramRoundtripTest, Call_InputAttachmentLoad) {
+    RUN_TEST(R"(
+enable chromium_internal_input_attachments;
+
+@group(0u) @binding(0u) @input_attachment_index(3u) var input_tex : input_attachment<f32>;
+
+@fragment
+fn main() -> @location(0u) vec4<f32> {
+  return inputAttachmentLoad(input_tex);
 }
 )");
 }
