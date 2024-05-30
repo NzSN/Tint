@@ -1,4 +1,4 @@
-// Copyright 2022 The Dawn & Tint Authors
+// Copyright 2024 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,40 +25,30 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SRC_TINT_LANG_WGSL_SEM_LOAD_H_
-#define SRC_TINT_LANG_WGSL_SEM_LOAD_H_
+#ifndef SRC_TINT_LANG_MSL_WRITER_RAISE_SHADER_IO_H_
+#define SRC_TINT_LANG_MSL_WRITER_RAISE_SHADER_IO_H_
 
-#include "src/tint/lang/core/type/reference.h"
-#include "src/tint/lang/wgsl/sem/value_expression.h"
+#include "src/tint/utils/result/result.h"
 
-namespace tint::sem {
+// Forward declarations.
+namespace tint::core::ir {
+class Module;
+}
 
-/// Load is a semantic expression which represents the load of a reference to a non-reference value.
-/// Loads from reference types are implicit in WGSL, so the Load semantic node shares the same AST
-/// node as the inner semantic node.
-class Load final : public Castable<Load, ValueExpression> {
-  public:
-    /// Constructor
-    /// @param reference the reference expression being loaded
-    /// @param statement the statement that owns this expression
-    /// @param stage the earliest evaluation stage for the expression
-    Load(const ValueExpression* reference, const Statement* statement, core::EvaluationStage stage);
+namespace tint::msl::writer::raise {
 
-    /// Destructor
-    ~Load() override;
-
-    /// @return the reference being loaded
-    const ValueExpression* Reference() const { return reference_; }
-
-    /// @returns the type of the loaded reference.
-    const core::type::Reference* ReferenceType() const {
-        return static_cast<const core::type::Reference*>(reference_->Type());
-    }
-
-  private:
-    ValueExpression const* const reference_;
+/// ShaderIOConfig describes the set of configuration options for the ShaderIO transform.
+struct ShaderIOConfig {
+    /// true if a vertex point size builtin output should be added
+    bool emit_vertex_point_size = false;
 };
 
-}  // namespace tint::sem
+/// ShaderIO is a transform that prepares entry point inputs and outputs for MSL codegen.
+/// @param module the module to transform
+/// @param config the configuration
+/// @returns success or failure
+Result<SuccessType> ShaderIO(core::ir::Module& module, const ShaderIOConfig& config);
 
-#endif  // SRC_TINT_LANG_WGSL_SEM_LOAD_H_
+}  // namespace tint::msl::writer::raise
+
+#endif  // SRC_TINT_LANG_MSL_WRITER_RAISE_SHADER_IO_H_
