@@ -25,57 +25,26 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// GEN_BUILD:CONDITION(tint_build_wgsl_reader)
+#include "src/tint/lang/core/ir/transform/remove_terminator_args.h"
 
-#include "src/tint/cmd/fuzz/wgsl/fuzz.h"
-#include "src/tint/lang/glsl/writer/writer.h"
-#include "src/tint/lang/wgsl/ast/module.h"
-#include "src/tint/lang/wgsl/inspector/inspector.h"
+#include "src/tint/cmd/fuzz/ir/fuzz.h"
+#include "src/tint/lang/core/ir/validator.h"
 
-namespace tint::glsl::writer {
+namespace tint::core::ir::transform {
 namespace {
 
-bool CanRun(const tint::Program& program, const Options& options) {
-    if (program.AST().HasOverrides()) {
-        return false;  // Overrides are not supported.
-    }
-
-    // Excessive values can cause OOM / timeouts in the PadStructs transform.
-    static constexpr uint32_t kMaxOffset = 0x1000;
-
-    if (options.first_instance_offset && options.first_instance_offset > kMaxOffset) {
-        return false;
-    }
-
-    if (options.first_vertex_offset && options.first_vertex_offset > kMaxOffset) {
-        return false;
-    }
-
-    if (options.depth_range_offsets) {
-        if (options.depth_range_offsets->max > kMaxOffset ||
-            options.depth_range_offsets->min > kMaxOffset) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void ASTFuzzer(const tint::Program& program, const Options& options) {
-    if (!CanRun(program, options)) {
+void RemoveTerminatorArgsFuzzer(Module& module) {
+    if (auto res = RemoveTerminatorArgs(module); res != Success) {
         return;
     }
 
-    auto inspector = tint::inspector::Inspector(program);
-    auto entrypoints = inspector.GetEntryPoints();
-
-    // Test all of the entry points as GLSL requires specifying which one to generate.
-    for (const auto& ep : entrypoints) {
-        [[maybe_unused]] auto res = tint::glsl::writer::Generate(program, options, ep.name);
+    Capabilities capabilities;
+    if (auto res = Validate(module, capabilities); res != Success) {
+        TINT_ICE() << "result of RemoveTerminatorArgs failed IR validation\n" << res.Failure();
     }
 }
 
 }  // namespace
-}  // namespace tint::glsl::writer
+}  // namespace tint::core::ir::transform
 
-TINT_WGSL_PROGRAM_FUZZER(tint::glsl::writer::ASTFuzzer);
+TINT_IR_MODULE_FUZZER(tint::core::ir::transform::RemoveTerminatorArgsFuzzer);
