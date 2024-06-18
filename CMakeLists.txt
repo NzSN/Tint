@@ -26,6 +26,8 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+message(WARNING "Note: https://dawn.googlesource.com/tint is deprecated and the auto-mirroring has been turned off. No more updates will appear in this mirror. Please switch to the Dawn repo (https://dawn.googlesource.com/dawn) to retrieve the Tint source code. If there are any issues integrating the Dawn repo with your build, please file bugs at (https://crbug.com/dawn).")
+
 set(DAWN_BUILD_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
 
 # TINT_IS_SUBPROJECT is 1 if added via add_subdirectory() from another project.
