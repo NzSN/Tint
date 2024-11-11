@@ -64,6 +64,8 @@ class Token {
         kIntLiteral_I,
         /// An integer literal with a 'u' suffix
         kIntLiteral_U,
+        /// An path literal
+        kPathLiteral,
 
         /// A '&'
         kAnd,
@@ -218,6 +220,10 @@ class Token {
         kVar,
         /// A 'while'
         kWhile,
+        /// A 'import'
+        kImport,
+        /// A 'from'
+        kFrom,
     };
 
     /// Converts a token type to a name

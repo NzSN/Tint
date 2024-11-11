@@ -35,6 +35,19 @@ TEST_F(WGSLParserTest, Empty) {
     ASSERT_TRUE(p->Parse()) << p->error();
 }
 
+TEST_F(WGSLParserTest, Import) {
+  auto p = parser(R"(
+import { A } from './mod';
+
+@fragment
+fn main() -> @location(0) vec4<f32> {
+  return vec4<f32>(.4, .2, .3, 1);
+}
+)");
+
+    ASSERT_TRUE(p->Parse()) << p->error();
+}
+
 TEST_F(WGSLParserTest, Parses) {
     auto p = parser(R"(
 @fragment

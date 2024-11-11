@@ -1030,6 +1030,13 @@ std::optional<Token> Lexer::try_ident() {
     return Token{Token::Type::kIdentifier, source, str};
 }
 
+std::optional<Token> Lexer::try_pathstring() {
+  auto source = begin_source();
+  auto start = pos();
+
+
+}
+
 std::optional<Token> Lexer::try_punctuation() {
     auto source = begin_source();
     auto type = Token::Type::kUninitialized;
@@ -1290,6 +1297,15 @@ std::optional<Token::Type> Lexer::parse_keyword(std::string_view str) {
     }
     if (str == "while") {
         return Token::Type::kWhile;
+    }
+    if (str == "import") {
+        return Token::Type::kImport;
+    }
+    if (str == "from") {
+        return Token::Type::kFrom;
+    }
+    if (str == "'") {
+        return Token::Type::kQuote;
     }
     if (str == "_") {
         return Token::Type::kUnderscore;

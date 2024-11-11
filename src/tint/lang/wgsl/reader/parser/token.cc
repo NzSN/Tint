@@ -204,6 +204,12 @@ std::string_view Token::TypeToName(Type type) {
             return "var";
         case Token::Type::kWhile:
             return "while";
+        case Token::Type::kImport:
+            return "import";
+        case Token::Type::kFrom:
+            return "from";
+        case Token::Type::kQuote:
+            return "'";
     }
 
     return "<unknown>";

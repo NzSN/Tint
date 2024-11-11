@@ -79,6 +79,7 @@ class Lexer {
     std::optional<Token> try_hex_float();
     std::optional<Token> try_hex_integer();
     std::optional<Token> try_ident();
+    std::optional<Token> try_pathstring();
     std::optional<Token> try_integer();
     std::optional<Token> try_punctuation();
 

@@ -1149,7 +1149,9 @@ INSTANTIATE_TEST_SUITE_P(LexerTest,
                                          TokenData{"switch", Token::Type::kSwitch},
                                          TokenData{"true", Token::Type::kTrue},
                                          TokenData{"var", Token::Type::kVar},
-                                         TokenData{"while", Token::Type::kWhile}));
+                                         TokenData{"while", Token::Type::kWhile},
+                                         TokenData{"import", Token::Type::kImport},
+                                         TokenData{"from", Token::Type::kFrom}));
 
 }  // namespace
 }  // namespace tint::wgsl::reader

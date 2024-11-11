@@ -271,6 +271,13 @@ class Parser {
         AttributeList return_type_attributes;
     };
 
+    struct ImportStmt {
+      ImportStmt() {}
+
+      Vector<const ast::Identifier*, 8> imports;
+      std::string from;
+    };
+
     /// VarDeclInfo contains the parsed information for variable declaration.
     struct VarDeclInfo {
         /// Variable declaration source
@@ -467,6 +474,7 @@ class Parser {
     /// Parses a `function_header` grammar element
     /// @returns the parsed function header
     Maybe<FunctionHeader> function_header();
+    Maybe<ImportStmt> import_stmt();
     /// Parses a `param_list` grammar element, erroring on parse failure.
     /// @returns the parsed variables
     Expect<ParameterList> expect_param_list();

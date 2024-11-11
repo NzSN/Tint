@@ -27,6 +27,7 @@
 
 #include "src/tint/lang/wgsl/reader/parser/parser.h"
 
+#include <iostream>
 #include <limits>
 #include <utility>
 
@@ -596,6 +597,15 @@ Maybe<Void> Parser::global_decl() {
             return kSuccess;
         }
 
+        auto import = import_stmt();
+        if (import.matched) {
+          if (!expect("import", Token::Type::kSemicolon)) {
+            return Failure::kErrored;
+          }
+          return kSuccess;
+        }
+
+
         return Failure::kNoMatch;
     });
 
@@ -1103,6 +1113,41 @@ Maybe<const ast::Function*> Parser::function_decl(AttributeList& attrs) {
 
     return builder_.Func(source, header->name, header->params, header->return_type, body.value,
                          std::move(attrs), header->return_type_attributes);
+}
+
+Maybe<Parser::ImportStmt> Parser::import_stmt() {
+  Source source;
+  if (!match(Token::Type::kImport, &source)) {
+    return Failure::kNoMatch;
+  }
+
+  if (!match(Token::Type::kBraceLeft, &source)) {
+    return Failure::kNoMatch;
+  }
+
+  auto imported_ident = expect_ident("import statement");
+  if (imported_ident.errored) {
+    return Failure::kErrored;
+  }
+
+  if (!match(Token::Type::kBraceRight, &source)) {
+    return Failure::kNoMatch;
+  }
+
+  if (!match(Token::Type::kFrom)) {
+    return Failure::kNoMatch;
+  }
+
+  auto imported_path = expect_path("import statement");
+  if (imported_path.errored) {
+    return Failure::kErrored;
+  }
+
+  auto stmt = Parser::ImportStmt{};
+  stmt.imports.Push(imported_ident.value);
+
+  return stmt;
+
 }
 
 // function_header
